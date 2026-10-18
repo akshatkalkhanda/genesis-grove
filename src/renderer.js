@@ -123,10 +123,11 @@ export class Renderer {
             this.house(c, v.x * CELL, v.y * CELL, v.color, true);
         }
         for (const a of world.animals) {
-            const x = Math.round(a.x * CELL), y = Math.round(a.y * CELL), wolf = a.species === 'wolf';
+            const x = Math.round(a.x * CELL), y = Math.round(a.y * CELL), wolf = a.species === 'wolf' || a.species === 'bear';
             c.fillStyle = '#13291f55'; c.fillRect(x - 2, y + 2, 6, 2);
-            c.fillStyle = wolf ? '#4b5054' : '#e6e5ca'; c.fillRect(x - 2, y - 1, 5, 3);
-            c.fillStyle = wolf ? '#a3a2a0' : '#f5eed9'; c.fillRect(x + (a.dx < 0 ? -3 : 2), y - 2, 2, 2);
+            const coats = { wolf: '#747a7b', bear: '#885c3d', deer: '#c69a60', rabbit: '#ddd3c2', chicken: '#e3bd53', sheep: '#e6e5ca' };
+            c.fillStyle = coats[a.species] || '#e6e5ca'; c.fillRect(x - (a.species === 'bear' ? 3 : 2), y - 1, a.species === 'bear' ? 7 : 5, 3);
+            c.fillStyle = a.species === 'wolf' ? '#a3a2a0' : '#f5eed9'; c.fillRect(x + (a.dx < 0 ? -3 : 2), y - 2, 2, 2);
             c.fillStyle = '#46483a'; c.fillRect(x - 1, y + 2, 1, 1); c.fillRect(x + 2, y + 2, 1, 1);
         }
         for (const p of world.people) {
@@ -136,6 +137,8 @@ export class Renderer {
             c.fillStyle = v?.color || '#e4dfb2'; c.fillRect(x - 1, y - 1, 2, 3);
             c.fillStyle = '#f0cc9e'; c.fillRect(x - 1, y - 3, 2, 2);
             c.fillStyle = '#433c2a'; c.fillRect(x - 1, y - 4, 2, 1);
+            if (p.race === 'elf') { c.fillStyle = '#d8edc0'; c.fillRect(x - 3, y - 3, 2, 1); c.fillRect(x + 1, y - 3, 2, 1); }
+            if (p.race === 'dwarf') { c.fillStyle = '#d59b74'; c.fillRect(x - 1, y - 1, 2, 1); }
             c.fillStyle = '#3c4639'; c.fillRect(x + Math.round(Math.sin(now / 160 + p.id)), y + 2, 1, 1);
         }
         for (let i = 0; i < world.fire.length; i++) if (world.fire[i] > 0) {
