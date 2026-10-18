@@ -1,0 +1,8 @@
+@media(max-height:850px){.tool-panel,.info-panel{padding-top:20px}h1{font-size:28px;margin-bottom:18px}.tools{gap:6px;margin:12px 0 16px}.tool{height:57px}.tool-description{padding:12px}.tool-description small{margin-top:10px}.panel-bottom{padding-top:12px}.year{margin:16px 0}.stats>div{margin:9px 0}.section-heading{margin-top:18px}#chronicle{max-height:115px}.overview{padding-top:16px}}
+@media(max-width:1150px){main{grid-template-columns:200px minmax(300px,1fr) 210px}.tool-panel,.info-panel{padding-inline:15px}.world-title .tag{display:none}.footer-message{display:none}.map-hint{font-size:8px}.map-hint span{padding:0 2px}.map-top{left:14px;right:14px}.map-actions button{padding:7px}.time-label{display:none}}
+@media(max-width:900px){main{grid-template-columns:170px minmax(280px,1fr)}.info-panel{display:none}.topbar{padding:0 16px;height:72px}.brand{min-width:180px}.brand span{font-size:13px}.brand small{font-size:6px}.world-title{display:none}main{height:calc(100vh - 128px)}.tool-panel{padding:20px 12px}h1{font-size:26px}.tool{height:56px}.panel-bottom{display:none}.tool-description{padding:10px}nav{gap:5px}.map-hint{display:none}}
+@media(max-height:680px){h1{font-size:25px;margin:10px 0 12px}.tool-panel{padding-top:14px}.tool{height:46px;gap:3px}.tool .glyph{font-size:18px}.tool-description{display:none}.brush-section{padding-top:12px}.panel-bottom{display:none}.stats>div{margin:6px 0}.year>span:first-child{font-size:38px}.year{margin:13px 0}.overview{display:none}#chronicle{max-height:90px}}
+/* Let panel contents scroll together instead of compressing their lists. */
+.tool-panel>*,.info-panel>*{flex-shrink:0}
+@media(min-height:851px){#civilizations{min-height:112px}#chronicle{height:138px}}
+@media(max-width:900px){.info-panel{display:none}}

@@ -1,0 +1,288 @@
+import { World, WIDTH, HEIGHT, TERRAIN_NAMES } from './simulation.js';
+import { Renderer } from './renderer.js';
+const $ = id => document.getElementById(id);
+const TOOLS = {
+    terrain: [
+        ['grass', 'Meadow', '◆', '#a7c47b', 'Lay down fertile ground. Every great civilization starts somewhere.'],
+        ['forest', 'Forest', '♠', '#8eb66c', 'Plant a living forest. Trees spread naturally and give villagers wood.'],
+        ['ocean', 'Deep ocean', '≈', '#6aafc4', 'Carve oceans and separate continents. Land creatures cannot cross water.'],
+        ['shallow', 'Shallows', '≋', '#82c7bb', 'Shape gentle coastlines with clear, shallow water.'],
+        ['sand', 'Sand', '⠿', '#dfcb93', 'Paint golden beaches and quiet deserts. Life grows slowly here.'],
+        ['hill', 'Highlands', '▰', '#a6b18b', 'Raise rolling highlands. A rugged home for adventurous settlers.'],
+        ['mountain', 'Mountain', '▲', '#c3cec3', 'Raise impassable peaks. Nature has its own boundaries.'],
+        ['lava', 'Lava', '♨', '#e8a26e', 'Pour molten rock. It cools to ash, and eventually life returns.']
+    ],
+    life: [
+        ['human', 'People', '♟', '#e3cf9a', 'Place three settlers on land. They found villages, gather food, build, and grow.'],
+        ['sheep', 'Sheep', '♧', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
+        ['wolf', 'Wolves', '♜', '#b9bec4', 'A little wildness. Wolves hunt nearby sheep to survive.'],
+        ['forest', 'Forest', '♠', '#8eb66c', 'Bring a woodland to life. Villagers gather timber here.'],
+        ['bless', 'Blessing', '✦', '#e1e9a4', 'Heal creatures and restore the fertility of their home.'],
+        ['erase', 'Remove life', '◇', '#c2aaa0', 'Remove creatures and buildings within the brush. The land remains.']
+    ],
+    powers: [
+        ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
+        ['fire', 'Fire', '♨', '#e3a16a', 'Spark a wildfire. Flames spread through meadows and forests.'],
+        ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike the earth with thunder. Nearby creatures and forests feel its power.'],
+        ['meteor', 'Meteor', '☄', '#e7a288', 'Bring down a star. Leave a crater of ash and molten rock.'],
+        ['bless', 'Blessing', '✦', '#e1e9a4', 'A gentler touch. Restore health and fertility to a patch of the world.'],
+        ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
+    ]
+};
+let world = new World();
+const renderer = new Renderer($('world'), $('minimap'));
+let category = 'terrain', tool = 'grass', previous_tool = 'grass', brush = 4, paused = false, speed = 1;
+let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
+let toast_timer, audio_context, audio_gain, sound_on = false;
+const storage_key = 'genesis-grove-world-v1';
+function toast(message) {
+    $('toast').textContent = message; $('toast').hidden = false;
+    clearTimeout(toast_timer); toast_timer = setTimeout(() => { $('toast').hidden = true; }, 3300);
+}
+function select_tool(id) {
+    tool = id; renderer.tool = id;
+    $('inspect').classList.toggle('active', id === 'inspect');
+    $('world-tooltip').hidden = true;
+    if (id === 'inspect') {
+        $('selected-icon').textContent = '⌕'; $('selected-name').textContent = 'Inspect world';
+        $('selected-description').textContent = 'Move over the world to discover its terrain, creatures, and nearby villages.';
+    } else {
+        previous_tool = id;
+        const item = Object.values(TOOLS).flat().find(t => t[0] === id);
+        $('selected-icon').textContent = item[2]; $('selected-name').textContent = item[1]; $('selected-description').textContent = item[4];
+    }
+    for (const button of $('tools').children) button.classList.toggle('active', button.dataset.tool === id);
+}
+function show_tools() {
+    $('tools').replaceChildren();
+    for (const [id, name, glyph, color] of TOOLS[category]) {
+        const button = document.createElement('button'); button.className = 'tool'; button.dataset.tool = id;
+        button.style.setProperty('--tool-color', color); button.title = name;
+        const icon = document.createElement('span'); icon.className = 'glyph'; icon.textContent = glyph;
+        const label = document.createElement('span'); label.textContent = name;
+        button.append(icon, label); button.onclick = () => select_tool(id); $('tools').append(button);
+    }
+    select_tool(TOOLS[category].some(t => t[0] === tool) ? tool : TOOLS[category][0][0]);
+}
+for (const tab of document.querySelectorAll('[data-category]')) tab.onclick = () => {
+    category = tab.dataset.category;
+    for (const other of document.querySelectorAll('[data-category]')) other.setAttribute('aria-selected', String(other === tab));
+    show_tools();
+};
+$('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
+function set_pause(value) {
+    paused = value; $('pause').textContent = paused ? '▶' : 'Ⅱ'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
+}
+$('pause').onclick = () => set_pause(!paused);
+function set_speed(value) {
+    speed = value;
+    for (const button of document.querySelectorAll('[data-speed]')) button.classList.toggle('active', Number(button.dataset.speed) === speed);
+}
+for (const button of document.querySelectorAll('[data-speed]')) button.onclick = () => { set_speed(Number(button.dataset.speed)); set_pause(false); };
+function update_zoom() { $('zoom-reset').textContent = `${Math.round(renderer.zoom * 100)}%`; }
+$('zoom-in').onclick = () => { renderer.zoom_at(1.25); update_zoom(); };
+$('zoom-out').onclick = () => { renderer.zoom_at(0.8); update_zoom(); };
+$('zoom-reset').onclick = $('fit').onclick = () => { renderer.fit(); update_zoom(); };
+$('borders').onclick = () => { renderer.borders = !renderer.borders; $('borders').classList.toggle('active', renderer.borders); };
+$('inspect').onclick = () => select_tool(tool === 'inspect' ? previous_tool : 'inspect');
+function local_point(event) {
+    const rect = $('world').getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+function paint(p, continuous = false) {
+    if (tool === 'inspect') return;
+    if (continuous && ['meteor', 'lightning', 'human', 'sheep', 'wolf'].includes(tool)) return;
+    const tile = renderer.world_point(p.x, p.y);
+    if (!world.inside(tile.x, tile.y)) return;
+    if (['human', 'sheep', 'wolf'].includes(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on meadows, forests, sand, or highlands.'); return; }
+    if (last_paint && !['meteor', 'lightning', 'human', 'sheep', 'wolf', 'rain', 'bless'].includes(tool)) {
+        const distance = Math.hypot(tile.x - last_paint.x, tile.y - last_paint.y);
+        const steps = Math.min(100, Math.ceil(distance / Math.max(1, brush / 2)));
+        for (let i = 1; i < steps; i++) world.apply(tool, last_paint.x + (tile.x - last_paint.x) * i / steps, last_paint.y + (tile.y - last_paint.y) * i / steps, brush);
+    }
+    world.apply(tool, tile.x, tile.y, brush); last_paint = tile;
+    if (['meteor', 'lightning'].includes(tool)) power_sound(tool);
+}
+const canvas = $('world');
+canvas.oncontextmenu = event => event.preventDefault();
+canvas.onpointerdown = event => {
+    if (![0, 1, 2].includes(event.button)) return;
+    const p = local_point(event); last_pointer = p; renderer.pointer = p;
+    panning = event.button !== 0 || event.altKey;
+    pointer_down = !panning; last_paint = null; paint_elapsed = 0;
+    canvas.setPointerCapture(event.pointerId);
+    if (pointer_down) paint(p);
+    if (panning) canvas.style.cursor = 'grabbing';
+};
+canvas.onpointermove = event => {
+    const p = local_point(event);
+    if (panning && last_pointer) { renderer.pan_x += p.x - last_pointer.x; renderer.pan_y += p.y - last_pointer.y; }
+    last_pointer = p; renderer.pointer = p;
+    if (tool === 'inspect') inspect(p);
+};
+function end_pointer(event) {
+    pointer_down = false; panning = false; last_paint = null; canvas.style.cursor = 'crosshair';
+    if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+}
+canvas.onpointerup = canvas.onpointercancel = end_pointer;
+canvas.onpointerleave = () => { if (!pointer_down && !panning) renderer.pointer = null; $('world-tooltip').hidden = true; };
+window.addEventListener('blur', () => end_pointer());
+canvas.onwheel = event => { event.preventDefault(); const p = local_point(event); renderer.zoom_at(Math.exp(-event.deltaY * 0.0015), p.x, p.y); update_zoom(); };
+$('minimap').onclick = event => {
+    const rect = $('minimap').getBoundingClientRect();
+    renderer.focus((event.clientX - rect.left) / rect.width * WIDTH, (event.clientY - rect.top) / rect.height * HEIGHT); update_zoom();
+};
+function inspect(p) {
+    const tile = renderer.world_point(p.x, p.y);
+    if (!world.inside(tile.x, tile.y)) { $('world-tooltip').hidden = true; return; }
+    const box = $('world-tooltip'); box.replaceChildren();
+    const heading = document.createElement('strong'); heading.textContent = TERRAIN_NAMES[world.tile(tile.x, tile.y)]; box.append(heading);
+    const add = text => { const line = document.createElement('div'); line.textContent = text; box.append(line); };
+    add(`Position ${Math.floor(tile.x)}, ${Math.floor(tile.y)}`);
+    const people = world.people.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
+    const animals = world.animals.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
+    add(`${people} people · ${animals} animals nearby`);
+    const village = world.villages.filter(v => v.alive).find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 18);
+    if (village) { add(village.name); add(`${Math.floor(village.food)} food · ${Math.floor(village.wood)} wood`); add(`${village.houses.length} homes`); }
+    if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
+    box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
+}
+function update_ui() {
+    const stats = world.stats();
+    for (const id of ['population', 'wildlife', 'villages', 'trees']) $(id).textContent = stats[id].toLocaleString();
+    $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
+    $('world-name').textContent = world.name; $('year').textContent = world.year;
+    const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
+    $('season').textContent = `${seasons[Math.floor(world.time / 5) % 4]} · Year ${world.year}`;
+    const age = world.year < 10 ? ['AGE OF BEGINNINGS', 'The first chapter'] : world.year < 30 ? ['AGE OF SETTLEMENT', 'Roots run deeper'] : ['AGE OF STORIES', 'A world with a past'];
+    $('age-label').textContent = age[0]; $('era').textContent = age[1];
+    $('civilizations').replaceChildren();
+    for (const v of world.villages.filter(v => v.alive)) {
+        const pop = world.people.filter(p => p.village_id === v.id).length;
+        const button = document.createElement('button'); button.className = 'civilization'; button.title = `Visit ${v.name}`;
+        button.style.setProperty('--civ-color', v.color);
+        const dot = document.createElement('span'); dot.className = 'civ-dot';
+        const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
+        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food`; name.append(small);
+        const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
+        button.append(dot, name, count); button.onclick = () => { renderer.focus(v.x, v.y); update_zoom(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
+        $('civilizations').append(button);
+    }
+    if (!stats.villages) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Place people on land to begin a civilization.'; $('civilizations').append(p); }
+    const signature = JSON.stringify(world.events.slice(0, 6));
+    if ($('chronicle').dataset.signature !== signature) {
+        $('chronicle').dataset.signature = signature; $('chronicle').replaceChildren();
+        for (const event of world.events.slice(0, 6)) {
+            const item = document.createElement('div'); item.className = 'event';
+            const when = document.createElement('small'); when.textContent = `YEAR ${event.year}`;
+            const text = document.createElement('p'); text.textContent = event.text; item.append(when, text); $('chronicle').append(item);
+        }
+    }
+}
+function replace_world(next) {
+    world = next; renderer.last_revision = -1; renderer.fit(); renderer.pointer = null;
+    end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
+}
+$('new-world').onclick = () => $('new-dialog').showModal();
+$('help').onclick = () => $('help-dialog').showModal();
+for (const button of document.querySelectorAll('[data-close]')) button.onclick = () => button.closest('dialog').close();
+$('new-form').onsubmit = event => {
+    event.preventDefault(); const data = new FormData(event.currentTarget);
+    const name = String(data.get('name')).trim() || 'An Unwritten World';
+    const seed = String(data.get('seed')).trim() || String(Date.now());
+    replace_world(new World({ name, seed, preset: data.get('preset'), inhabited: data.has('inhabited') }));
+    $('new-dialog').close(); toast('A new chapter. This one is yours.');
+};
+$('save').onclick = () => {
+    try {
+        localStorage.setItem(storage_key, JSON.stringify({ saved_at: new Date().toISOString(), world: world.serialize() }));
+        toast('World saved on this device.');
+    } catch { toast('Device storage is unavailable. Use Load → Export to save a file.'); }
+};
+$('load').onclick = () => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(storage_key) || 'null');
+        if (saved) {
+            const checked = World.deserialize(saved.world);
+            $('saved-world').textContent = `${checked.name} · Year ${checked.year} · ${checked.people.length} people · saved ${new Date(saved.saved_at).toLocaleString()}`;
+        } else $('saved-world').textContent = 'No device save yet. You can import a world file below.';
+        $('restore').disabled = !saved;
+    } catch { $('saved-world').textContent = 'The device save could not be read. Import a world file instead.'; $('restore').disabled = true; }
+    $('load-dialog').showModal();
+};
+$('restore').onclick = () => {
+    try { replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world)); $('load-dialog').close(); toast('Welcome back to your world.'); }
+    catch { toast('That save could not be loaded. Your current world is safe.'); }
+};
+$('export').onclick = () => {
+    const blob = new Blob([JSON.stringify(world.serialize())], { type: 'application/json' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url;
+    a.download = `${world.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'world'}-year-${world.year}.json`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); toast('World file exported. Keep it for your next adventure.');
+};
+$('import').onchange = async event => {
+    const file = event.target.files[0]; if (!file) return;
+    try {
+        if (file.size > 4_000_000) throw new Error('World files must be smaller than 4 MB.');
+        const next = World.deserialize(JSON.parse(await file.text()));
+        replace_world(next); $('load-dialog').close(); toast('Your world has arrived.');
+    } catch (error) { toast(error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message); }
+    event.target.value = '';
+};
+window.addEventListener('keydown', event => {
+    if (document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); $('save').click(); return; }
+    if (event.metaKey || event.ctrlKey) return;
+    if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) set_pause(!paused); }
+    if (['1', '2', '3'].includes(event.key)) { set_speed({ 1: 1, 2: 2, 3: 5 }[event.key]); set_pause(false); }
+    if (event.key.toLowerCase() === 'i') select_tool(tool === 'inspect' ? previous_tool : 'inspect');
+    if (event.key === 'Escape') select_tool(previous_tool);
+    if (event.key === '+' || event.key === '=') renderer.zoom_at(1.2);
+    if (event.key === '-') renderer.zoom_at(1 / 1.2);
+    if (['[', ']'].includes(event.key)) { $('brush').value = Math.max(1, Math.min(12, brush + (event.key === ']' ? 1 : -1))); $('brush').oninput(); }
+    const movement = { a: [45, 0], d: [-45, 0], w: [0, 45], s: [0, -45] }[event.key.toLowerCase()];
+    if (movement) { renderer.pan_x += movement[0]; renderer.pan_y += movement[1]; }
+    update_zoom();
+});
+async function toggle_sound() {
+    try {
+        if (!audio_context) {
+            audio_context = new AudioContext(); audio_gain = audio_context.createGain(); audio_gain.gain.value = 0; audio_gain.connect(audio_context.destination);
+            for (const [i, frequency] of [130.81, 196, 261.63, 329.63].entries()) {
+                const oscillator = audio_context.createOscillator(), gain = audio_context.createGain();
+                oscillator.type = 'sine'; oscillator.frequency.value = frequency;
+                gain.gain.value = 0.06 / (i + 1); oscillator.connect(gain); gain.connect(audio_gain); oscillator.start();
+                const lfo = audio_context.createOscillator(), depth = audio_context.createGain(); lfo.frequency.value = 0.08 + i * 0.023; depth.gain.value = 0.018 / (i + 1); lfo.connect(depth); depth.connect(gain.gain); lfo.start();
+            }
+        }
+        await audio_context.resume(); sound_on = !sound_on;
+        audio_gain.gain.setTargetAtTime(sound_on ? 0.3 : 0, audio_context.currentTime, 0.6);
+        $('sound').textContent = sound_on ? '♫ Sound on' : '♫ Sound off';
+    } catch { toast('Sound is unavailable in this browser.'); }
+}
+function power_sound(type) {
+    if (!sound_on || !audio_context) return;
+    const oscillator = audio_context.createOscillator(), gain = audio_context.createGain(), time = audio_context.currentTime;
+    oscillator.type = 'triangle'; oscillator.frequency.setValueAtTime(type === 'meteor' ? 100 : 260, time); oscillator.frequency.exponentialRampToValueAtTime(25, time + 0.35);
+    gain.gain.setValueAtTime(0.15, time); gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+    oscillator.connect(gain); gain.connect(audio_gain); oscillator.start(); oscillator.stop(time + 0.5);
+}
+$('sound').onclick = toggle_sound;
+let last_frame = performance.now(), accumulator = 0, ui_elapsed = 0;
+function frame(now) {
+    const dt = Math.min((now - last_frame) / 1000, 0.1); last_frame = now;
+    const dialog_open = Boolean(document.querySelector('dialog[open]'));
+    if (!document.hidden && !dialog_open) {
+        if (!paused) {
+            accumulator += dt * speed;
+            while (accumulator >= 0.125) { world.step(0.125); accumulator -= 0.125; }
+        }
+        if (pointer_down && last_pointer) { paint_elapsed += dt; if (paint_elapsed > 0.085) { paint(last_pointer, true); paint_elapsed = 0; } }
+    }
+    renderer.render(world, now);
+    ui_elapsed += dt;
+    if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }
+    requestAnimationFrame(frame);
+}
+show_tools(); update_ui(); requestAnimationFrame(frame);
+// A narrow, read-only diagnostic hook for the desktop smoke test.
+window.genesis = Object.freeze({ snapshot: () => world.serialize(), stats: () => world.stats(), camera: () => ({ width: renderer.width, height: renderer.height, base: renderer.base, zoom: renderer.zoom, origin: renderer.origin }) });

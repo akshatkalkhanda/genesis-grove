@@ -1,0 +1,82 @@
+const { app, BrowserWindow } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs/promises');
+const assert = require('node:assert/strict');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+app.setPath('userData', path.join(app.getPath('temp'), `genesis-smoke-${process.pid}`));
+app.whenReady().then(async () => {
+    const errors = [], checks = [];
+    const win = new BrowserWindow({ width: 1440, height: 940, show: false, webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true } });
+    win.webContents.on('console-message', (_event, details) => { if (details.level === 'error') errors.push(details.message); });
+    win.webContents.on('render-process-gone', (_event, details) => errors.push(`Renderer stopped: ${details.reason}`));
+    const js = code => win.webContents.executeJavaScript(code, true);
+    const click = async selector => {
+        const rect = await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        await delay(80);
+    };
+    try {
+        const game_index = process.env.GENESIS_SMOKE_INDEX || path.join(__dirname, '..', 'index.html');
+        await win.loadFile(game_index); await delay(750);
+        assert.equal(await js('window.genesis.stats().villages'), 3); checks.push('Initial populated world renders');
+        assert.equal(await js('document.querySelectorAll("#tools button").length'), 8);
+        const artifact_dir = path.join(__dirname, '..', 'artifacts'); await fs.mkdir(artifact_dir, { recursive: true });
+        await fs.writeFile(path.join(artifact_dir, 'world-desktop.png'), (await win.webContents.capturePage()).toPNG());
+        await click('#pause'); const before = await js('genesis.snapshot().time'); await delay(400);
+        assert.equal(await js('genesis.snapshot().time'), before); checks.push('Pause freezes simulation');
+        await click('[data-category="powers"]'); assert.equal(await js('document.querySelector("[data-tool=meteor]").textContent.includes("Meteor")'), true);
+        await click('[data-tool="meteor"]');
+        const target = await js(`(()=>{const w=genesis.snapshot(),i=w.tiles.findIndex((t,i)=>t===3&&i%192>60&&i%192<130&&Math.floor(i/192)>30&&Math.floor(i/192)<95),c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect();return {i,x:r.x+c.origin.x+(i%192)*6*c.base*c.zoom,y:r.y+c.origin.y+Math.floor(i/192)*6*c.base*c.zoom}})()`);
+        assert.ok(target.i >= 0);
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(target.x), y: Math.round(target.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(target.x), y: Math.round(target.y), button: 'left', clickCount: 1 });
+        await delay(100);
+        assert.equal(await js(`genesis.snapshot().tiles[${target.i}]`), 7); checks.push('Native pointer input applies meteor to the map');
+        await click('#zoom-in'); assert.ok(await js('genesis.camera().zoom > 1')); await click('#zoom-reset');
+        assert.equal(await js('genesis.camera().zoom'), 1); checks.push('Zoom and fit controls work');
+        await click('#save'); assert.ok(await js('localStorage.getItem("genesis-grove-world-v1") !== null')); checks.push('Device save persists world');
+        await click('#new-world');
+        await js(`document.querySelector('#new-form [name=name]').value='Smoke Ocean';document.querySelector('#new-form [name=preset]').value='empty';document.querySelector('#new-form').requestSubmit()`);
+        assert.equal(await js('genesis.stats().population'), 0); assert.equal(await js('genesis.stats().land'), 0); checks.push('New-world form creates empty ocean');
+        await click('[data-category="terrain"]'); await click('[data-tool="grass"]');
+        const middle = await js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect();return{x:r.x+c.width/2,y:r.y+c.height/2}})()`);
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(middle.x), y: Math.round(middle.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(middle.x), y: Math.round(middle.y), button: 'left', clickCount: 1 });
+        await delay(150); assert.equal(await js('genesis.snapshot().tiles[64*192+96]'), 3); checks.push('Terrain painting works on blank world');
+        await click('#load'); await click('#restore');
+        assert.equal(await js('genesis.snapshot().name'), 'The Emerald Isles'); assert.ok(await js('genesis.stats().population > 0')); checks.push('Load restores saved populated world');
+        await click('#inspect');
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(middle.x), y: Math.round(middle.y) }); await delay(100);
+        assert.equal(await js('document.getElementById("world-tooltip").hidden'), false); checks.push('Inspect shows live tile details');
+        await click('#help'); assert.equal(await js('document.getElementById("help-dialog").open'), true); await click('#help-dialog [data-close]');
+        checks.push('Help dialog opens and closes');
+        // Verify export reaches Electron's download flow and produces a valid portable save.
+        const export_path = path.join(artifact_dir, 'exported-world.json');
+        const downloaded = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Export did not download')), 5000);
+            win.webContents.session.once('will-download', (_event, item) => {
+                item.setSavePath(export_path);
+                item.once('done', (_event, state) => { clearTimeout(timer); state === 'completed' ? resolve() : reject(new Error(state)); });
+            });
+        });
+        await click('#load'); await click('#export'); await downloaded;
+        const exported = JSON.parse(await fs.readFile(export_path, 'utf8')); assert.equal(exported.format, 'genesis-grove'); checks.push('Export writes a portable world JSON file');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([JSON.stringify({format:'wrong'})],'corrupt.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(100);
+        assert.equal(await js('genesis.snapshot().name'), 'The Emerald Isles');
+        assert.ok(await js('document.getElementById("toast").textContent.includes("not a valid")')); checks.push('Invalid import preserves current world');
+        const imported = { ...exported, name: 'Imported Adventure' };
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(imported))}],'world.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150);
+        assert.equal(await js('genesis.snapshot().name'), 'Imported Adventure'); checks.push('Valid world file imports through the file-input handler');
+        await win.setSize(900, 680); await delay(200);
+        assert.equal(await js('document.documentElement.scrollWidth <= window.innerWidth'), true); checks.push('Compact layout fits a smaller window');
+        assert.equal(await js('getComputedStyle(document.querySelector(".info-panel")).display'), 'none');
+        await fs.writeFile(path.join(artifact_dir, 'world-compact.png'), (await win.webContents.capturePage()).toPNG());
+        assert.deepEqual(errors, []); checks.push('No renderer errors');
+        await fs.writeFile(path.join(artifact_dir, 'smoke-results.json'), JSON.stringify({ checks, errors }, null, 2));
+        console.log(JSON.stringify({ passed: checks.length, checks, errors }, null, 2));
+        win.destroy(); app.quit();
+    } catch (error) { console.error(error); console.error({ errors, checks }); win.destroy(); app.exit(1); }
+});
