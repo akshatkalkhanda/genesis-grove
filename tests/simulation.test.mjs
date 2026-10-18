@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { World, T, WIDTH, HEIGHT } from '../src/simulation.js';
+import { World, T, WIDTH, HEIGHT, TECH_AGES, technology_level } from '../src/simulation.js';
 const blank = () => new World({ preset: 'empty', inhabited: false });
 test('same seed gives identical terrain, settlements and deterministic evolution', () => {
     const a = new World({ seed: 'known world' }), b = new World({ seed: 'known world' });
@@ -8,6 +8,33 @@ test('same seed gives identical terrain, settlements and deterministic evolution
     for (let i = 0; i < 120; i++) { a.step(0.125); b.step(0.125); }
     assert.deepEqual(a.serialize(), b.serialize());
     assert.notDeepEqual(a.tiles, new World({ seed: 'different world' }).tiles);
+});
+test('kingdom banners differ and technology upgrades weapons over time', () => {
+    const world = new World();
+    assert.equal(new Set(world.villages.map(v => v.color)).size, 3);
+    const kingdom = world.villages[0];
+    kingdom.tech_points = 7.999;
+    world.step(0.125);
+    assert.equal(technology_level(kingdom), 1);
+    assert.ok(world.events.some(event => event.text.includes('Copper Age')));
+    assert.deepEqual(TECH_AGES.map(age => age.name), ['Stone Age', 'Copper Age', 'Bronze Age', 'Iron Age', 'Steel Age']);
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
+    assert.equal(loaded.villages[0].tech_points, kingdom.tech_points);
+    const legacy = world.serialize(); delete legacy.villages[0].tech_points;
+    assert.ok(Number.isFinite(World.deserialize(legacy).villages[0].tech_points));
+});
+test('advanced weapons inflict more damage in the same fight', () => {
+    const basic = blank(); basic.apply('grass', 40, 40, 16);
+    basic.apply('human', 36, 40, 1); basic.apply('orc', 45, 40, 1);
+    const [attacker, defender] = basic.villages;
+    basic.set_relation(attacker.id, defender.id, 'war');
+    for (const person of basic.people.filter(p => p.village_id === attacker.id)) { person.x = 40; person.y = 40; person.gather = 0; }
+    for (const person of basic.people.filter(p => p.village_id === defender.id)) { person.x = 41; person.y = 40; person.gather = 0; }
+    const advanced = World.deserialize(JSON.parse(JSON.stringify(basic.serialize())));
+    advanced.villages[0].tech_points = 100;
+    basic.step(0.125); advanced.step(0.125);
+    const health = world => world.people.filter(p => p.village_id === defender.id).map(p => p.health);
+    assert.ok(health(advanced).some((value, index) => value < health(basic)[index]));
 });
 test('default world has viable civilizations that build and grow without intervention', () => {
     const w = new World();

@@ -17,3 +17,28 @@
 .kingdom-profile{display:grid;gap:5px;background:#263725;border:1px solid #40553d;border-radius:6px;padding:12px;margin:10px 0 16px;font-size:11px;color:#a9c29e}
 .kingdom-profile strong{color:#e2edce;font-size:12px}
 .kingdom-profile small{color:#90a98a;line-height:1.5;max-height:44px;overflow:auto}
+
+/* Give the chronology and each kingdom a visual identity. */
+.topbar{background:linear-gradient(110deg,#18231f 0%,#172721 56%,#202c26 100%);box-shadow:0 5px 24px #07140e44;z-index:2}
+.tool-panel{background:linear-gradient(155deg,#1b2922,#142019 76%)}
+.info-panel{background:linear-gradient(205deg,#1b2923,#142019 82%)}
+.brand img{filter:drop-shadow(0 0 10px #b8dc9050)}
+.map-label{min-width:258px;border-color:#a5bca557;box-shadow:0 10px 30px #081c1f55,inset 0 1px #ffffff16}
+.map-label b{color:var(--age-color,#b2a18a);font-size:10px;letter-spacing:1.9px}
+.age-track{grid-column:1/-1;height:4px;border-radius:4px;background:#52625785;overflow:hidden;margin-top:4px}
+.age-track i{display:block;width:0;height:100%;border-radius:4px;background:var(--age-color,#b2a18a);box-shadow:0 0 10px var(--age-color,#b2a18a);transition:width .4s}
+.age-stages{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:100%}
+.age-stages span{font-size:7px;letter-spacing:.2px;color:#839c8c;text-align:center}
+.age-stages span.active{color:var(--age-color,#b2a18a);font-weight:750}
+.age-stages span.reached{color:#c1d5b5}
+.civilization{background:#202e26;border:1px solid #3a4e3d;border-left:4px solid var(--civ-color);border-radius:7px;padding:7px 8px;margin-bottom:5px;box-shadow:inset 0 1px #ffffff09}
+.civilization:hover,.civilization.active{background:#2d4032;border-color:#6e916e;border-left-color:var(--civ-color)}
+.civ-dot{width:11px;height:11px;flex-shrink:0;background:var(--civ-color);box-shadow:0 0 10px var(--civ-color)}
+.civ-name{font-weight:600;color:#e1e9da}
+.civ-name small{font-weight:400;color:#9eb59d}
+.kingdom-profile{border-left:5px solid var(--kingdom-color,#8fb689);background:linear-gradient(100deg,#2b3c2d,#233529)}
+.kingdom-profile strong{color:var(--kingdom-color,#e2edce);font-size:14px}
+.kingdom-profile .technology-detail{color:var(--technology-color,#b2a18a);font-weight:650}
+.tool{box-shadow:inset 0 1px #ffffff0b,0 3px 8px #0a1b1125}
+.tool:hover{transform:translateY(-1px)}
+@media(max-width:1150px){.map-label{min-width:225px;padding:9px 11px}.age-stages span{font-size:6px}}

@@ -1,4 +1,4 @@
-import { WIDTH, HEIGHT, T } from './simulation.js';
+import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
@@ -97,12 +97,9 @@ export class Renderer {
     cache_territory(world) {
         const kingdoms = new Map(world.villages.map(v => [v.id, v]));
         const living = [...world.villages.filter(v => v.alive), ...world.colonies];
-        const owners = new Int16Array(WIDTH * HEIGHT).fill(-1);
+        const owners = new Int32Array(WIDTH * HEIGHT).fill(-1);
         const image = this.territory_ctx.createImageData(WIDTH, HEIGHT);
-        const colors = living.map(site => {
-            const color = (site.kingdom_id ? kingdoms.get(site.kingdom_id)?.color : site.color) || '#d7dbc4';
-            return [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
-        });
+        const colors = new Map([...kingdoms].map(([id, kingdom]) => [id, [1, 3, 5].map(i => parseInt(kingdom.color.slice(i, i + 2), 16))]));
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x;
             if (world.tiles[i] < T.SAND || world.tiles[i] > T.HILL) continue;
@@ -112,7 +109,7 @@ export class Renderer {
                 const candidate = dx * dx + dy * dy;
                 if (candidate < distance) { distance = candidate; owner = k; }
             }
-            owners[i] = owner;
+            owners[i] = owner < 0 ? -1 : living[owner].kingdom_id || living[owner].id;
         }
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x, owner = owners[i];
@@ -120,8 +117,9 @@ export class Renderer {
             const edge = (x > 0 && owners[i - 1] !== owner) || (x < WIDTH - 1 && owners[i + 1] !== owner)
                 || (y > 0 && owners[i - WIDTH] !== owner) || (y < HEIGHT - 1 && owners[i + WIDTH] !== owner);
             const j = i * 4;
-            image.data[j] = colors[owner][0]; image.data[j + 1] = colors[owner][1];
-            image.data[j + 2] = colors[owner][2]; image.data[j + 3] = edge ? 190 : 35;
+            const color = colors.get(owner) || [215, 219, 196];
+            image.data[j] = color[0]; image.data[j + 1] = color[1];
+            image.data[j + 2] = color[2]; image.data[j + 3] = edge ? 225 : 82;
         }
         this.territory_ctx.putImageData(image, 0, 0);
     }
@@ -132,18 +130,11 @@ export class Renderer {
         c.fillStyle = '#143e4b'; c.fillRect(0, 0, this.width, this.height);
         c.save(); c.translate(o.x, o.y); c.scale(s, s); c.imageSmoothingEnabled = false;
         c.drawImage(this.terrain, 0, 0);
-        const dense_kingdoms = world.villages.length >= 20;
-        if (this.borders && dense_kingdoms) {
+        if (this.borders) {
             if (now - this.territory_last > 1500) { this.cache_territory(world); this.territory_last = now; }
             c.drawImage(this.territory, 0, 0, WIDTH * CELL, HEIGHT * CELL);
         }
-        const populations = new Map();
         const kingdoms = new Map(world.villages.map(v => [v.id, v]));
-        const warring = new Set();
-        for (const relation of world.relations) if (relation.status === 'war') {
-            warring.add(relation.a); warring.add(relation.b);
-        }
-        for (const person of world.people) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
         // Slow glints make the sea feel alive without moving the terrain itself.
         for (let i = 0; i < 85; i++) {
             const x = (i * 73 + 19) % WIDTH, y = (i * 31 + 9) % HEIGHT;
@@ -154,12 +145,6 @@ export class Renderer {
         c.globalAlpha = 1;
         for (const v of world.villages) {
             if (!v.alive) continue;
-            const pop = populations.get(v.id) || 0;
-            if (this.borders && !dense_kingdoms) {
-                const at_war = warring.has(v.id);
-                c.strokeStyle = at_war ? '#e7816dbb' : v.color + '85'; c.fillStyle = at_war ? '#e7816d12' : v.color + '0d'; c.lineWidth = 1 / s;
-                c.setLineDash([3, 5]); c.beginPath(); c.arc(v.x * CELL, v.y * CELL, (9 + Math.sqrt(pop) * 1.1) * CELL, 0, Math.PI * 2); c.fill(); c.stroke(); c.setLineDash([]);
-            }
             // Trails lead to homes, then little farms grow around the settlement.
             for (const h of v.houses) {
                 c.strokeStyle = '#c1b17e9c'; c.lineWidth = 2;
@@ -172,14 +157,14 @@ export class Renderer {
                     c.fillStyle = '#c2ad60'; for (let k = 1; k < 8; k += 2) c.fillRect(x + k, y + 1, 1, 5);
                 }
             }
-            for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false);
-            this.house(c, v.x * CELL, v.y * CELL, v.color, true);
+            for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
+            this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v));
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
             if (!kingdom?.alive) continue;
-            for (const house of colony.houses) this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false);
-            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true);
+            for (const house of colony.houses) this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false, technology_level(kingdom));
+            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom));
         }
         for (const voyage of world.voyages) {
             const x = (voyage.x + (voyage.target_x - voyage.x) * voyage.progress) * CELL;
@@ -189,25 +174,10 @@ export class Renderer {
             c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
             c.fillStyle = kingdoms.get(voyage.kingdom_id)?.color || '#e8e3c9'; c.fillRect(x - 5, y, 11, 2);
         }
-        for (const a of world.animals) {
-            const x = Math.round(a.x * CELL), y = Math.round(a.y * CELL), wolf = a.species === 'wolf' || a.species === 'bear';
-            c.fillStyle = '#13291f55'; c.fillRect(x - 2, y + 2, 6, 2);
-            const coats = { wolf: '#747a7b', bear: '#885c3d', deer: '#c69a60', rabbit: '#ddd3c2', chicken: '#e3bd53', sheep: '#e6e5ca' };
-            c.fillStyle = coats[a.species] || '#e6e5ca'; c.fillRect(x - (a.species === 'bear' ? 3 : 2), y - 1, a.species === 'bear' ? 7 : 5, 3);
-            c.fillStyle = a.species === 'wolf' ? '#a3a2a0' : '#f5eed9'; c.fillRect(x + (a.dx < 0 ? -3 : 2), y - 2, 2, 2);
-            c.fillStyle = '#46483a'; c.fillRect(x - 1, y + 2, 1, 1); c.fillRect(x + 2, y + 2, 1, 1);
-        }
+        for (const animal of world.animals) this.animal(c, animal);
         for (const p of world.people) {
             if (p.voyage_id) continue;
-            const x = Math.round(p.x * CELL), y = Math.round(p.y * CELL);
-            const v = kingdoms.get(p.village_id);
-            c.fillStyle = '#22342466'; c.fillRect(x - 1, y + 2, 3, 1);
-            c.fillStyle = v?.color || '#e4dfb2'; c.fillRect(x - 1, y - 1, 2, 3);
-            c.fillStyle = '#f0cc9e'; c.fillRect(x - 1, y - 3, 2, 2);
-            c.fillStyle = '#433c2a'; c.fillRect(x - 1, y - 4, 2, 1);
-            if (p.race === 'elf') { c.fillStyle = '#d8edc0'; c.fillRect(x - 3, y - 3, 2, 1); c.fillRect(x + 1, y - 3, 2, 1); }
-            if (p.race === 'dwarf') { c.fillStyle = '#d59b74'; c.fillRect(x - 1, y - 1, 2, 1); }
-            c.fillStyle = '#3c4639'; c.fillRect(x + Math.round(Math.sin(now / 160 + p.id)), y + 2, 1, 1);
+            this.person(c, p, kingdoms.get(p.village_id), now);
         }
         for (let i = 0; i < world.fire.length; i++) if (world.fire[i] > 0) {
             const x = (i % WIDTH) * CELL, y = Math.floor(i / WIDTH) * CELL;
@@ -252,16 +222,71 @@ export class Renderer {
             c.fillText(colony.name.slice(0, 14), x, y + 2);
         }
     }
-    house(c, x, y, color, town) {
+    animal(c, animal) {
+        const x = Math.round(animal.x * CELL), y = Math.round(animal.y * CELL);
+        const face = animal.dx < 0 ? -1 : 1;
+        c.fillStyle = '#10262277'; c.fillRect(x - 5, y + 4, 10, 2);
+        if (animal.species === 'bear') {
+            c.fillStyle = '#65432f'; c.fillRect(x - 6, y - 4, 11, 8); c.fillRect(x + face * 5 - 2, y - 3, 4, 5);
+            c.fillStyle = '#9c7048'; c.fillRect(x - 5, y - 6, 3, 3); c.fillRect(x + 2, y - 6, 3, 3);
+            c.fillStyle = '#30251e'; c.fillRect(x + face * 7 - 1, y - 1, 2, 1);
+        } else if (animal.species === 'wolf') {
+            c.fillStyle = '#7e8990'; c.fillRect(x - 5, y - 2, 9, 5); c.fillRect(x + face * 5 - 2, y - 5, 4, 5);
+            c.fillStyle = '#c2c7c2'; c.fillRect(x + face * 5 - 2, y - 8, 2, 3); c.fillRect(x + face * 7 - 2, y - 7, 2, 3);
+            c.fillStyle = '#52585c'; c.fillRect(x - face * 6, y - 3, 3, 2);
+        } else if (animal.species === 'deer') {
+            c.fillStyle = '#a8794b'; c.fillRect(x - 4, y - 3, 8, 5); c.fillRect(x + face * 4 - 1, y - 7, 3, 5);
+            c.fillStyle = '#d6b37f'; c.fillRect(x + face * 5 - 1, y - 11, 1, 5); c.fillRect(x + face * 7 - 1, y - 10, 1, 3);
+            c.fillStyle = '#e7c99b'; c.fillRect(x - 2, y + 1, 4, 1);
+        } else if (animal.species === 'rabbit') {
+            c.fillStyle = '#f3e6d6'; c.fillRect(x - 3, y - 2, 6, 5); c.fillRect(x + face * 3 - 1, y - 4, 3, 4);
+            c.fillStyle = '#d7a7aa'; c.fillRect(x + face * 2 - 1, y - 9, 1, 6); c.fillRect(x + face * 4 - 1, y - 8, 1, 5);
+            c.fillStyle = '#ffffff'; c.fillRect(x - face * 4, y, 2, 2);
+        } else if (animal.species === 'chicken') {
+            c.fillStyle = '#f2df9b'; c.fillRect(x - 3, y - 2, 6, 5); c.fillRect(x + face * 3 - 1, y - 4, 3, 3);
+            c.fillStyle = '#d75e45'; c.fillRect(x + face * 2 - 1, y - 7, 2, 3);
+            c.fillStyle = '#edaa4e'; c.fillRect(x + face * 5 - 1, y - 2, 3, 1);
+        } else {
+            c.fillStyle = '#e8e9df'; c.fillRect(x - 5, y - 3, 9, 6); c.fillRect(x - 4, y - 5, 3, 3); c.fillRect(x, y - 5, 3, 3);
+            c.fillStyle = '#454a42'; c.fillRect(x + face * 5 - 2, y - 4, 4, 5);
+        }
+        c.fillStyle = '#2e302b'; c.fillRect(x + face * 6 - 1, y - 4, 1, 1);
+        c.fillStyle = '#473b2e'; c.fillRect(x - 3, y + 2, 1, 3); c.fillRect(x + 2, y + 2, 1, 3);
+    }
+    person(c, person, kingdom, now) {
+        const x = Math.round(person.x * CELL), y = Math.round(person.y * CELL);
+        const level = technology_level(kingdom), face = person.dx < 0 ? -1 : 1;
+        const skin = person.race === 'orc' ? '#8fbc6c' : person.race === 'dwarf' ? '#d69b75' : '#f0c9a0';
+        c.fillStyle = '#172a2266'; c.fillRect(x - 3, y + 3, 7, 2);
+        c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1, 2, 4); c.fillRect(x + 1, y + 1, 2, 4);
+        c.fillStyle = kingdom?.color || '#e4dfb2'; c.fillRect(x - 3, y - 4, 6, 6);
+        c.fillStyle = '#213129'; c.fillRect(x - 3, y, 6, 1);
+        c.fillStyle = skin; c.fillRect(x - 2, y - 8, 4, 4);
+        c.fillStyle = person.race === 'elf' ? '#e5d9a2' : person.race === 'orc' ? '#344330' : '#493d32';
+        c.fillRect(x - 2, y - 9, 4, 2);
+        if (person.race === 'elf') { c.fillStyle = skin; c.fillRect(x - 4, y - 7, 2, 1); c.fillRect(x + 2, y - 7, 2, 1); }
+        if (person.race === 'dwarf') { c.fillStyle = '#a5683f'; c.fillRect(x - 2, y - 5, 4, 3); }
+        if (person.race === 'orc') { c.fillStyle = '#e9dfb8'; c.fillRect(x - 3, y - 5, 1, 2); c.fillRect(x + 2, y - 5, 1, 2); }
+        c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
+        const metal = TECH_AGES[level].color;
+        const sway = Math.round(Math.sin(now / 250 + person.id) * 1);
+        c.fillStyle = level === 0 ? '#705845' : '#554735'; c.fillRect(x + face * 4 - 1, y - 8 + sway, 2, 9);
+        c.fillStyle = metal;
+        if (level === 0) c.fillRect(x + face * 4 - 2, y - 9 + sway, 4, 3);
+        else { c.fillRect(x + face * 4 - 1, y - 12 + sway, 2, 6); c.fillRect(x + face * 4 - 3, y - 6 + sway, 6, 1); }
+        if (level >= 2) { c.fillStyle = metal; c.fillRect(x - face * 4 - 2, y - 3, 3, 5); }
+    }
+    house(c, x, y, color, town, level = 0) {
         const w = town ? 13 : 8, h = town ? 10 : 7;
         c.fillStyle = '#29392766'; c.fillRect(x - w / 2 + 2, y + 2, w + 2, 3);
-        c.fillStyle = '#e3cd9c'; c.fillRect(x - w / 2, y - h, w, h);
+        c.fillStyle = level >= 3 ? '#b9c0bd' : level >= 2 ? '#ddc99d' : '#e3cd9c'; c.fillRect(x - w / 2, y - h, w, h);
         c.fillStyle = '#b0a075'; c.fillRect(x + w / 2 - 3, y - h, 3, h);
-        c.fillStyle = '#855b3d'; c.fillRect(x - w / 2 - 1, y - h - 3, w + 2, 4);
+        c.fillStyle = level >= 4 ? '#6198a9' : level >= 3 ? '#596b77' : level >= 2 ? '#a47444' : '#855b3d'; c.fillRect(x - w / 2 - 1, y - h - 3, w + 2, 4);
         c.fillStyle = color; c.fillRect(x - w / 2 + 1, y - h - 5, w - 2, 3);
         c.fillStyle = '#574d38'; c.fillRect(x - 1, y - 4, 2, 4);
         c.fillStyle = '#f7dd8d'; c.fillRect(x - w / 2 + 1, y - 5, 1, 2);
         if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 20, 1, 10); c.fillStyle = color; c.fillRect(x + 4, y - 20, 5, 3); }
+        if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
     }
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = e.radius * CELL;

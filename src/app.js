@@ -1,4 +1,4 @@
-import { World, WIDTH, HEIGHT, TERRAIN_NAMES } from './simulation.js';
+import { World, WIDTH, HEIGHT, TERRAIN_NAMES, TECH_AGES, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
 const $ = id => document.getElementById(id);
 const TOOLS = {
@@ -20,12 +20,12 @@ const TOOLS = {
         ['forest', 'Forest', '♠', '#8eb66c', 'Bring a woodland to life. Villagers gather timber here.'],
     ],
     creatures: [
-        ['sheep', 'Sheep', '♧', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
-        ['wolf', 'Wolves', '♜', '#b9bec4', 'Pack hunters that chase sheep and deer.'],
-        ['deer', 'Deer', '♘', '#c79d69', 'Shy forest grazers that flee from predators.'],
-        ['bear', 'Bears', '♟', '#b6825b', 'Powerful, territorial predators that hunt nearby wildlife.'],
-        ['rabbit', 'Rabbits', '♧', '#e0d7c5', 'Quick little grazers that multiply in fertile meadows.'],
-        ['chicken', 'Chickens', '♧', '#e8c866', 'Peaceful birds that forage and grow their flocks.']
+        ['sheep', 'Sheep', '🐑', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
+        ['wolf', 'Wolves', '🐺', '#b9bec4', 'Pack hunters that chase sheep and deer.'],
+        ['deer', 'Deer', '🦌', '#c79d69', 'Shy forest grazers that flee from predators.'],
+        ['bear', 'Bears', '🐻', '#b6825b', 'Powerful, territorial predators that hunt nearby wildlife.'],
+        ['rabbit', 'Rabbits', '🐇', '#e0d7c5', 'Quick little grazers that multiply in fertile meadows.'],
+        ['chicken', 'Chickens', '🐓', '#e8c866', 'Peaceful birds that forage and grow their flocks.']
     ],
     powers: [
         ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
@@ -177,15 +177,20 @@ function update_diplomacy(preferred_source = null) {
     const status = source && target ? world.relation_status(source.id, target.id) : null;
     const profile = $('kingdom-profile'); profile.replaceChildren();
     if (source) {
+        profile.style.setProperty('--kingdom-color', source.color);
         const colonies = world.colonies.filter(c => c.kingdom_id === source.id);
         const population = world.people.filter(p => p.village_id === source.id).length;
         const alliances = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'alliance').length;
         const wars = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'war').length;
-        const heading = document.createElement('strong'); heading.textContent = source.name;
+        const heading = document.createElement('strong'); heading.textContent = source.name; heading.style.setProperty('--kingdom-color', source.color);
         const details = document.createElement('span'); details.textContent = `${population} people · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
+        const technology = document.createElement('span');
+        const level = technology_level(source);
+        technology.className = 'technology-detail'; technology.style.setProperty('--technology-color', TECH_AGES[level].color);
+        technology.textContent = `${TECH_AGES[level].name} · ${TECH_AGES[level].weapon} · +${level * 28}% weapon damage`;
         const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · ${source.deaths || 0} deaths`;
         const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
-        profile.append(heading, details, resources, relations);
+        profile.append(heading, details, technology, resources, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);
@@ -223,8 +228,20 @@ function update_ui() {
     $('world-name').textContent = world.name; $('world-type').textContent = world.scenario === 'hundred' ? '100 KINGDOMS' : 'SANDBOX'; $('year').textContent = world.year;
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
     $('season').textContent = `${seasons[Math.floor(world.time / 5) % 4]} · Year ${world.year}`;
-    const age = world.year < 10 ? ['AGE OF BEGINNINGS', 'The first chapter'] : world.year < 30 ? ['AGE OF SETTLEMENT', 'Roots run deeper'] : ['AGE OF STORIES', 'A world with a past'];
-    $('age-label').textContent = age[0]; $('era').textContent = age[1];
+    const living_kingdoms = world.villages.filter(v => v.alive);
+    const average_technology = living_kingdoms.length
+        ? living_kingdoms.reduce((sum, v) => sum + (v.tech_points || 0), 0) / living_kingdoms.length : 0;
+    const age_level = technology_level({ tech_points: average_technology });
+    const age = TECH_AGES[age_level], next_age = TECH_AGES[age_level + 1];
+    const progress = next_age ? (average_technology - age.threshold) / (next_age.threshold - age.threshold) : 1;
+    $('age-label').textContent = age.name.toUpperCase();
+    $('era').textContent = `${age.name} · ${age.weapon.toLowerCase()}s`;
+    $('age-progress').style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
+    document.querySelector('.map-label').style.setProperty('--age-color', age.color);
+    for (const [index, step] of [...document.querySelectorAll('.age-stages span')].entries()) {
+        step.classList.toggle('active', index === age_level);
+        step.classList.toggle('reached', index < age_level);
+    }
     $('civilizations').replaceChildren();
     const populations = new Map();
     for (const person of world.people) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
@@ -242,7 +259,7 @@ function update_ui() {
         const dot = document.createElement('span'); dot.className = 'civ-dot';
         const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
         const towns = world.colonies.filter(c => c.kingdom_id === v.id).length + 1;
-        const small = document.createElement('small'); small.textContent = `${towns} towns · ${Math.floor(v.food)} food${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
+        const small = document.createElement('small'); small.textContent = `${towns} ${towns === 1 ? 'town' : 'towns'} · ${TECH_AGES[technology_level(v)].name}${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
         button.append(dot, name, count); button.onclick = () => { focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
         $('civilizations').append(button);

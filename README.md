@@ -21,13 +21,15 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-The current build includes `dist/Genesis Grove-0.4.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.4.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
+The current build includes `dist/Genesis Grove-0.5.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.5.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
 
 ## A living sandbox
 
 - Eight terrain brushes: meadow, forest, ocean, shallows, sand, highlands, mountains, lava.
 - Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
+- Each kingdom has its own banner color, clear territory borders, and a matching color in the kingdom list. Creatures have different pixel silhouettes and selection icons.
+- Kingdoms advance through Stone, Copper, Bronze, Iron, and Steel Ages. Their weapons visibly change and deal increasing damage in combat; later buildings gain stronger-looking materials and towers. The world-age display tracks the average progress of living kingdoms.
 - Settlers found kingdoms, gather supplies, build houses, raise families, and age. With expansion enabled, kingdoms send caravans and ships to found more towns. Use Kingdoms to inspect their people, towns, resources, deaths, and relations, or set peace, alliances, and wars. Nearby enemies fight and can capture towns or capitals by siege.
 - A 100-kingdom challenge starts across four landmasses with 300 settlers, autonomous diplomacy and expansion, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy, expansion, or rebellions under Kingdoms at any time.
 - Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
@@ -36,7 +38,7 @@ The current build includes `dist/Genesis Grove-0.4.0-arm64-mac.zip` for Apple si
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers between landmasses; armies still fight locally and do not launch naval invasions. The map stays 192 × 128 tiles, and the economy, diplomacy, and sieges are simpler than WorldBox. Seasons and age names are visual time markers. There are no genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers between landmasses; armies still fight locally and do not launch naval invasions. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no genetics, branching research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
 
 ## Controls
 

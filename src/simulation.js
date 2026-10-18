@@ -2,6 +2,18 @@ export const WIDTH = 192;
 export const HEIGHT = 128;
 export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8 });
 export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash'];
+export const TECH_AGES = Object.freeze([
+    { name: 'Stone Age', threshold: 0, weapon: 'Stone club', color: '#b2a18a' },
+    { name: 'Copper Age', threshold: 8, weapon: 'Copper spear', color: '#e59b65' },
+    { name: 'Bronze Age', threshold: 22, weapon: 'Bronze blade', color: '#e2bd70' },
+    { name: 'Iron Age', threshold: 50, weapon: 'Iron sword', color: '#aab8c4' },
+    { name: 'Steel Age', threshold: 100, weapon: 'Steel sword', color: '#85d9e2' }
+]);
+export function technology_level(kingdom) {
+    const points = kingdom?.tech_points || 0;
+    for (let i = TECH_AGES.length - 1; i >= 0; i--) if (points >= TECH_AGES[i].threshold) return i;
+    return 0;
+}
 export const CIV_COLORS = ['#e9c87b', '#b9a4e6', '#e58f83', '#83c5cd', '#c3da89', '#efb6d0', '#95acdf', '#dfae76'];
 const NAMES = ['Amberwick', 'Willowmere', 'Rosehaven', 'Tidewatch', 'Mossvale', 'Sunhollow', 'Briarford', 'Cloudrest'];
 const MAX_VILLAGES = 120;
@@ -12,6 +24,8 @@ const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: 
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function kingdom_color(index) {
+    const first = ['#f07165', '#65d58c', '#7ca9ef', '#e8bf62', '#bc89e8', '#63d2d3', '#ee82b5', '#de996d'];
+    if (index < first.length) return first[index];
     const hue = (index * 137.508) % 360;
     const channel = n => {
         const k = (n + hue / 30) % 12;
@@ -194,8 +208,8 @@ export class World {
         const n = this.villages.length;
         const profile = RACES[race] || RACES.human;
         const name = n < NAMES.length ? NAMES[n] : `${NAMES[n % NAMES.length]} ${Math.floor(n / NAMES.length) + 1}`;
-        const color = this.scenario === 'hundred' ? kingdom_color(n) : profile.color;
-        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true, founded_year: this.year, deaths: 0, siege: 0 };
+        const color = kingdom_color(n);
+        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, tech_points: 0, houses: [], alive: true, founded_year: this.year, deaths: 0, siege: 0 };
         this.villages.push(village);
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
@@ -551,7 +565,13 @@ export class World {
                 if (foe) {
                     const angle = Math.atan2(foe.y - p.y, foe.x - p.x);
                     p.dx = Math.cos(angle); p.dy = Math.sin(angle);
-                    if (nearest < 2.25) foe.health -= dt * (p.race === 'orc' ? 16 : 12) * (foe.race === 'orc' ? 0.75 : 1);
+                    if (nearest < 2.25) {
+                        const attacker = this.villages.find(v => v.id === p.village_id);
+                        const defender = this.villages.find(v => v.id === foe.village_id);
+                        const weapon = 1 + technology_level(attacker) * 0.28;
+                        const armor = 1 + technology_level(defender) * 0.10;
+                        foe.health -= dt * (p.race === 'orc' ? 16 : 12) * weapon / armor * (foe.race === 'orc' ? 0.75 : 1);
+                    }
                 }
             }
             this.move(p, dt, 1.3);
@@ -604,6 +624,10 @@ export class World {
         for (const v of this.villages) {
             if (!v.alive) continue;
             v.age += dt; v.birth_timer += dt; v.expansion_timer += dt;
+            const before_technology = technology_level(v);
+            v.tech_points = Math.min(1000, (v.tech_points || 0) + dt / this.year_length * (1 + Math.min(v.houses.length, 10) * 0.04));
+            const after_technology = technology_level(v);
+            if (after_technology > before_technology) this.log(`${v.name} enters the ${TECH_AGES[after_technology].name} and equips ${TECH_AGES[after_technology].weapon.toLowerCase()}s.`, 'village');
             const sites = this.settlements_of(v.id);
             const pop = kingdom_populations.get(v.id) || 0;
             const house_cost = v.race === 'dwarf' ? 4 : 5;
@@ -702,7 +726,7 @@ export class World {
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
-            if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000))) invalid();
+            if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000)) || (v.tech_points !== undefined && !num(v.tech_points, 0, 1000))) invalid();
             id(v.id);
         }
         const villages = new Set(data.villages.map(v => v.id));
@@ -744,7 +768,7 @@ export class World {
         w.milestone = data.milestone || 0;
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; p.home_id ||= p.village_id; p.voyage_id ||= null; }
         for (const a of w.animals) a.infection ||= 0;
-        for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; }
+        for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); }
         w.tiles = Uint8Array.from(data.tiles); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
         return w;
     }

@@ -14,5 +14,8 @@ Its description says the run spawns 100 kingdoms, disables rebellions, and follo
 | Settlements | One village per kingdom | Kingdoms can found additional towns with caravan or ship settlers |
 | War | Local fighting and raids | Local fighting plus town and capital sieges that transfer ownership |
 | Kingdom details | Population list | Profile with population, towns, resources, deaths, alliances, and wars |
+| Kingdom identity | One race color shared by same-race kingdoms | Unique kingdom banners, stronger territory colors, and matching kingdom cards |
+| Creatures | Similar tiny animal marks | Species-specific pixel silhouettes and selection icons |
+| Ages and weapons | Decorative age names | Stone, Copper, Bronze, Iron, and Steel progression with visible equipment and stronger combat |
 
 The challenge uses Genesis Grove's own terrain, art, and simulation. It does not reproduce the video's downloadable workshop map or the full WorldBox mechanics. Ships carry settlers, while battles remain local to land and naval invasions are not simulated.

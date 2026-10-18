@@ -20,6 +20,9 @@ app.whenReady().then(async () => {
         const game_index = process.env.GENESIS_SMOKE_INDEX || path.join(__dirname, '..', 'index.html');
         await win.loadFile(game_index); await delay(750);
         assert.equal(await js('window.genesis.stats().villages'), 3); checks.push('Initial populated world renders');
+        assert.equal(await js('new Set(genesis.snapshot().villages.map(v => v.color)).size'), 3);
+        assert.equal(await js('document.getElementById("age-label").textContent'), 'STONE AGE');
+        checks.push('Kingdom banners and Stone Age display are distinct');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 8);
         const artifact_dir = path.join(__dirname, '..', 'artifacts'); await fs.mkdir(artifact_dir, { recursive: true });
         await fs.writeFile(path.join(artifact_dir, 'world-desktop.png'), (await win.webContents.capturePage()).toPNG());
@@ -54,6 +57,7 @@ app.whenReady().then(async () => {
         await click('#diplomacy');
         assert.equal(await js('document.getElementById("diplomacy-dialog").open'), true);
         assert.ok(await js('document.querySelectorAll("#source-kingdom option").length >= 2'));
+        assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("Stone club")'));
         await click('[data-relation="war"]');
         assert.equal(await js('genesis.snapshot().relations[0].status'), 'war');
         await click('[data-relation="alliance"]');
@@ -76,9 +80,16 @@ app.whenReady().then(async () => {
         assert.equal(await js('genesis.snapshot().name'), 'The Emerald Isles');
         assert.ok(await js('document.getElementById("toast").textContent.includes("not a valid")')); checks.push('Invalid import preserves current world');
         const imported = { ...exported, name: 'Imported Adventure' };
+        imported.villages.forEach(kingdom => { kingdom.tech_points = 100; });
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(imported))}],'world.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
         await delay(150);
         assert.equal(await js('genesis.snapshot().name'), 'Imported Adventure'); checks.push('Valid world file imports through the file-input handler');
+        assert.equal(await js('document.getElementById("age-label").textContent'), 'STEEL AGE');
+        await click('#diplomacy');
+        assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("Steel sword")'));
+        await click('#diplomacy-dialog [data-close]');
+        await fs.writeFile(path.join(artifact_dir, 'world-steel-age.png'), (await win.webContents.capturePage()).toPNG());
+        checks.push('Imported technology updates the age display and kingdom equipment');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         assert.equal(await js('genesis.snapshot().villages.length'), 100);
