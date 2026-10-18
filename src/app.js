@@ -177,7 +177,14 @@ function update_diplomacy(preferred_source = null) {
         button.classList.toggle('active', button.dataset.relation === status);
     }
 }
-$('diplomacy').onclick = () => { update_diplomacy(focused_village_id); $('diplomacy-dialog').showModal(); };
+$('diplomacy').onclick = () => {
+    update_diplomacy(focused_village_id);
+    $('law-diplomacy').checked = world.laws.diplomacy;
+    $('law-rebellions').checked = world.laws.rebellions;
+    $('diplomacy-dialog').showModal();
+};
+$('law-diplomacy').onchange = event => { world.laws.diplomacy = event.target.checked; toast(`Autonomous diplomacy ${event.target.checked ? 'enabled' : 'disabled'}.`); };
+$('law-rebellions').onchange = event => { world.laws.rebellions = event.target.checked; toast(`Rebellions ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('source-kingdom').onchange = event => update_diplomacy(Number(event.currentTarget.value));
 $('target-kingdom').onchange = () => update_diplomacy();
 for (const button of document.querySelectorAll('[data-relation]')) button.onclick = () => {
@@ -188,21 +195,31 @@ function update_ui() {
     const stats = world.stats();
     for (const id of ['population', 'wildlife', 'villages', 'trees']) $(id).textContent = stats[id].toLocaleString();
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
-    $('world-name').textContent = world.name; $('year').textContent = world.year;
+    $('survival').hidden = world.scenario !== 'hundred';
+    const founders = world.villages.slice(0, 100).filter(v => v.alive).length;
+    $('survival').textContent = `${founders} of 100 founding kingdoms survive · ${Math.min(world.year, 1000)} / 1,000 years`;
+    $('world-name').textContent = world.name; $('world-type').textContent = world.scenario === 'hundred' ? '100 KINGDOMS' : 'SANDBOX'; $('year').textContent = world.year;
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
     $('season').textContent = `${seasons[Math.floor(world.time / 5) % 4]} · Year ${world.year}`;
     const age = world.year < 10 ? ['AGE OF BEGINNINGS', 'The first chapter'] : world.year < 30 ? ['AGE OF SETTLEMENT', 'Roots run deeper'] : ['AGE OF STORIES', 'A world with a past'];
     $('age-label').textContent = age[0]; $('era').textContent = age[1];
     $('civilizations').replaceChildren();
-    for (const v of world.villages.filter(v => v.alive)) {
-        const pop = world.people.filter(p => p.village_id === v.id).length;
+    const populations = new Map();
+    for (const person of world.people) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
+    const warring = new Set();
+    for (const relation of world.relations) if (relation.status === 'war') {
+        warring.add(relation.a); warring.add(relation.b);
+    }
+    const living = world.villages.filter(v => v.alive);
+    if (world.scenario === 'hundred') living.sort((a, b) => (populations.get(b.id) || 0) - (populations.get(a.id) || 0));
+    for (const v of living) {
+        const pop = populations.get(v.id) || 0;
         const button = document.createElement('button'); button.className = 'civilization'; button.title = `Visit ${v.name}`;
         button.classList.toggle('active', focused_village_id === v.id);
         button.style.setProperty('--civ-color', v.color);
         const dot = document.createElement('span'); dot.className = 'civ-dot';
         const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
-        const wars = world.villages.filter(other => other.alive && other.id !== v.id && world.relation_status(v.id, other.id) === 'war').length;
-        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food${wars ? ' · ⚔ at war' : ''}`; name.append(small);
+        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
         button.append(dot, name, count); button.onclick = () => { focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
         $('civilizations').append(button);
@@ -219,17 +236,23 @@ function update_ui() {
     }
 }
 function replace_world(next) {
-    world = next; focused_village_id = null; renderer.last_revision = -1; renderer.fit(); renderer.pointer = null;
+    world = next; focused_village_id = null; renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
 $('new-world').onclick = () => $('new-dialog').showModal();
+$('scenario').onchange = () => {
+    const challenge = $('scenario').value === 'hundred';
+    $('scenario-note').hidden = !challenge;
+    if (challenge) { $('preset').value = 'continent'; $('inhabited').checked = true; }
+    $('preset').disabled = $('inhabited').disabled = challenge;
+};
 $('help').onclick = () => $('help-dialog').showModal();
 for (const button of document.querySelectorAll('[data-close]')) button.onclick = () => button.closest('dialog').close();
 $('new-form').onsubmit = event => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const name = String(data.get('name')).trim() || 'An Unwritten World';
     const seed = String(data.get('seed')).trim() || String(Date.now());
-    replace_world(new World({ name, seed, preset: data.get('preset'), inhabited: data.has('inhabited') }));
+    replace_world(new World({ name, seed, preset: data.get('preset'), inhabited: data.has('inhabited'), scenario: data.get('scenario') }));
     $('new-dialog').close(); toast('A new chapter. This one is yours.');
 };
 $('save').onclick = () => {
@@ -262,7 +285,7 @@ $('export').onclick = () => {
 $('import').onchange = async event => {
     const file = event.target.files[0]; if (!file) return;
     try {
-        if (file.size > 4_000_000) throw new Error('World files must be smaller than 4 MB.');
+        if (file.size > 8_000_000) throw new Error('World files must be smaller than 8 MB.');
         const next = World.deserialize(JSON.parse(await file.text()));
         replace_world(next); $('load-dialog').close(); toast('Your world has arrived.');
     } catch (error) { toast(error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message); }
@@ -273,7 +296,7 @@ window.addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); $('save').click(); return; }
     if (event.metaKey || event.ctrlKey) return;
     if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) set_pause(!paused); }
-    if (['1', '2', '3'].includes(event.key)) { set_speed({ 1: 1, 2: 2, 3: 5 }[event.key]); set_pause(false); }
+    if (['1', '2', '3', '4'].includes(event.key)) { set_speed({ 1: 1, 2: 2, 3: 5, 4: 20 }[event.key]); set_pause(false); }
     if (event.key.toLowerCase() === 'i') select_tool(tool === 'inspect' ? previous_tool : 'inspect');
     if (event.key === 'Escape') select_tool(previous_tool);
     if (event.key === '+' || event.key === '=') renderer.zoom_at(1.2);
@@ -314,7 +337,9 @@ function frame(now) {
     if (!document.hidden && !dialog_open) {
         if (!paused) {
             accumulator += dt * speed;
-            while (accumulator >= 0.125) { world.step(0.125); accumulator -= 0.125; }
+            let steps = 0;
+            while (accumulator >= 0.125 && steps < 16) { world.step(0.125); accumulator -= 0.125; steps++; }
+            accumulator = Math.min(accumulator, 2);
         }
         if (pointer_down && last_pointer) { paint_elapsed += dt; if (paint_elapsed > 0.085) { paint(last_pointer, true); paint_elapsed = 0; } }
     }

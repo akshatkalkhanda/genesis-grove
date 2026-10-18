@@ -4,9 +4,20 @@ export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST
 export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash'];
 export const CIV_COLORS = ['#e9c87b', '#b9a4e6', '#e58f83', '#83c5cd', '#c3da89', '#efb6d0', '#95acdf', '#dfae76'];
 const NAMES = ['Amberwick', 'Willowmere', 'Rosehaven', 'Tidewatch', 'Mossvale', 'Sunhollow', 'Briarford', 'Cloudrest'];
+const MAX_VILLAGES = 120;
+const MAX_PEOPLE = 1200;
 const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' } });
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function kingdom_color(index) {
+    const hue = (index * 137.508) % 360;
+    const channel = n => {
+        const k = (n + hue / 30) % 12;
+        const value = 0.68 - 0.22 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        return Math.round(value * 255).toString(16).padStart(2, '0');
+    };
+    return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
 function hash_string(text) {
     let h = 2166136261;
     for (const c of text) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
@@ -26,7 +37,7 @@ function noise(x, y, seed) {
     return a * (1 - sy) + b * sy;
 }
 export class World {
-    constructor({ seed = 'emerald-17', name = 'The Emerald Isles', preset = 'islands', inhabited = true } = {}) {
+    constructor({ seed = 'emerald-17', name = 'The Emerald Isles', preset = 'islands', inhabited = true, scenario = 'sandbox' } = {}) {
         this.name = name.slice(0, 40);
         this.seed = String(seed);
         this.rng = hash_string(this.seed) || 1;
@@ -40,12 +51,20 @@ export class World {
         this.animals = [];
         this.villages = [];
         this.relations = [];
+        this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
+        this.year_length = this.scenario === 'hundred' ? 2 : 20;
+        this.laws = { rebellions: false, diplomacy: this.scenario === 'hundred' };
+        this.milestone = 0;
         this.events = [];
         this.effects = [];
         this.revision = 1;
-        this.generate(preset);
+        const landscape = this.scenario === 'hundred' ? 'continent' : preset;
+        this.generate(landscape);
         this.log('A new world awakens. What will you make of it?', 'creation');
-        if (inhabited && preset !== 'empty') this.seed_life();
+        if ((inhabited || this.scenario === 'hundred') && landscape !== 'empty') {
+            if (this.scenario === 'hundred') this.seed_hundred_kingdoms();
+            else this.seed_life();
+        }
     }
     random() {
         let x = this.rng;
@@ -53,7 +72,8 @@ export class World {
         this.rng = x >>> 0;
         return this.rng / 4294967296;
     }
-    get year() { return Math.floor(this.time / 20) + 1; }
+    get year() { return Math.floor(this.time / this.year_length) + 1; }
+    get max_people() { return this.scenario === 'hundred' ? MAX_PEOPLE : 600; }
     index(x, y) { return Math.floor(y) * WIDTH + Math.floor(x); }
     inside(x, y) { return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT; }
     tile(x, y) { return this.inside(x, y) ? this.tiles[this.index(x, y)] : T.OCEAN; }
@@ -101,6 +121,34 @@ export class World {
             }
         }
     }
+    seed_hundred_kingdoms() {
+        const spots = [];
+        const candidates = [];
+        for (let y = 5; y < HEIGHT - 5; y += 2) for (let x = 5; x < WIDTH - 5; x += 2) {
+            if (this.walkable(x, y)) candidates.push({ x, y, key: this.random() });
+        }
+        candidates.sort((a, b) => a.key - b.key);
+        for (const distance of [64, 36, 16]) {
+            for (const candidate of candidates) {
+                if (spots.length === 100) break;
+                const { x, y } = candidate;
+                if (spots.some(p => (p.x - x) ** 2 + (p.y - y) ** 2 < distance)) continue;
+                spots.push({ x, y });
+                const race = ['human', 'elf', 'dwarf', 'orc'][spots.length % 4];
+                const village = this.found_village(x, y, race);
+                for (let i = 0; i < 3; i++) {
+                    const p = this.land_near(x, y, 2);
+                    if (p) this.add_person(p.x, p.y, village.id, race);
+                }
+            }
+            if (spots.length === 100) break;
+        }
+        for (let i = 0; i < 50; i++) {
+            const place = candidates[Math.floor(this.random() * candidates.length)];
+            if (place) this.add_animal(place.x, place.y, i % 12 === 0 ? 'wolf' : i % 3 === 0 ? 'deer' : 'sheep');
+        }
+        this.log(`${spots.length} kingdoms enter the contest. Which will survive a thousand years?`, 'creation');
+    }
     land_near(x, y, radius) {
         for (let i = 0; i < 30; i++) {
             const nx = clamp(x + (this.random() - 0.5) * radius * 2, 1, WIDTH - 2);
@@ -132,10 +180,12 @@ export class World {
         return true;
     }
     found_village(x, y, race = 'human') {
-        if (this.villages.length >= 8) return this.villages.reduce((a, b) => Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b);
+        if (this.villages.length >= MAX_VILLAGES) return this.villages.reduce((a, b) => Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b);
         const n = this.villages.length;
         const profile = RACES[race] || RACES.human;
-        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${NAMES[n]}`, color: profile.color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true };
+        const name = n < NAMES.length ? NAMES[n] : `${NAMES[n % NAMES.length]} ${Math.floor(n / NAMES.length) + 1}`;
+        const color = this.scenario === 'hundred' ? kingdom_color(n) : profile.color;
+        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true };
         this.villages.push(village);
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
@@ -154,7 +204,7 @@ export class World {
         return false;
     }
     add_person(x, y, village_id = null, race = 'human') {
-        if (!this.walkable(x, y) || this.people.length >= 600) return false;
+        if (!this.walkable(x, y) || this.people.length >= this.max_people) return false;
         if (!village_id) {
             let nearest = this.villages.filter(v => v.alive && v.race === race).find(v => Math.hypot(v.x - x, v.y - y) < 22);
             nearest ||= this.found_village(x, y, race);
@@ -245,10 +295,55 @@ export class World {
         if (this.walkable(nx, ny)) { unit.x = nx; unit.y = ny; }
         else unit.decision = 0;
     }
+    advance_history() {
+        if (this.laws.diplomacy && this.tick % 80 === 0) {
+            const alive = this.villages.filter(v => v.alive);
+            if (alive.length > 1) {
+                const first = alive[Math.floor(this.random() * alive.length)];
+                const neighbours = alive.filter(v => v.id !== first.id && Math.hypot(v.x - first.x, v.y - first.y) < 30);
+                const second = neighbours[Math.floor(this.random() * neighbours.length)];
+                if (second) {
+                    const current = this.relation_status(first.id, second.id);
+                    const roll = this.random();
+                    const next = current === 'war' ? (roll < 0.38 ? 'peace' : null)
+                        : current === 'alliance' ? (roll < 0.18 ? 'peace' : null)
+                            : roll < 0.34 ? 'war' : roll < 0.49 ? 'alliance' : null;
+                    if (next) this.set_relation(first.id, second.id, next);
+                }
+            }
+        }
+        if (this.laws.rebellions && this.tick % 160 === 0 && this.villages.length < MAX_VILLAGES) {
+            const populations = new Map();
+            for (const person of this.people) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
+            const candidates = this.villages.filter(v => v.alive && v.age > 40 && (populations.get(v.id) || 0) >= 14);
+            const parent = candidates.length ? candidates[Math.floor(this.random() * candidates.length)] : null;
+            if (parent && this.random() < 0.15) {
+                const rebels = this.people.filter(p => p.village_id === parent.id).slice(0, 4);
+                let place = null;
+                for (let attempt = 0; attempt < 20 && !place; attempt++) {
+                    const candidate = this.land_near(parent.x, parent.y, 10);
+                    if (candidate && this.villages.every(v => !v.alive || Math.hypot(v.x - candidate.x, v.y - candidate.y) > 5)) place = candidate;
+                }
+                if (place) {
+                    const child = this.found_village(place.x, place.y, parent.race);
+                    for (const person of rebels) person.village_id = child.id;
+                    this.set_relation(parent.id, child.id, 'war');
+                    this.log(`${child.name} breaks away from ${parent.name}.`, 'disaster');
+                }
+            }
+        }
+        const milestones = [100, 250, 500, 1000];
+        if (this.scenario === 'hundred' && this.milestone < milestones.length && this.year >= milestones[this.milestone]) {
+            const alive = this.villages.slice(0, 100).filter(v => v.alive).length;
+            this.log(`Year ${milestones[this.milestone]}: ${alive} kingdoms remain from the original 100.`, 'creation');
+            this.milestone++;
+        }
+    }
     step(dt) {
         dt = clamp(dt, 0, 0.25);
         this.time += dt;
         this.tick++;
+        this.advance_history();
         const war_targets = new Map();
         for (const relation of this.relations) {
             if (relation.status !== 'war') continue;
@@ -336,7 +431,7 @@ export class World {
                 if (this.add_house(v)) v.wood -= house_cost;
             }
             const birth_delay = v.race === 'orc' ? 8 : 12;
-            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < 600) {
+            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < this.max_people) {
                 const p = this.land_near(v.x, v.y, 4);
                 if (p && this.add_person(p.x, p.y, v.id, v.race)) { v.food -= 5; v.birth_timer = 0; }
             }
@@ -396,7 +491,7 @@ export class World {
         return { population: this.people.length, wildlife: this.animals.length, villages: this.villages.filter(v => v.alive).length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, milestone: this.milestone, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -410,11 +505,15 @@ export class World {
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
-        if (!array(data.villages, 8) || !array(data.people, 600) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 28))) invalid();
+        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 2000))) invalid();
+        if (data.scenario !== undefined && !['sandbox', 'hundred'].includes(data.scenario)) invalid();
+        if (data.year_length !== undefined && ![2, 20].includes(data.year_length)) invalid();
+        if (data.laws !== undefined && (!data.laws || typeof data.laws.rebellions !== 'boolean' || typeof data.laws.diplomacy !== 'boolean')) invalid();
+        if (data.milestone !== undefined && !integer(data.milestone, 0, 4)) invalid();
         const ids = new Set();
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
-            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !(CIV_COLORS.includes(v.color) || Object.values(RACES).some(r => r.color === v.color)) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
+            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
             id(v.id);
         }
@@ -434,6 +533,10 @@ export class World {
         const w = new World({ preset: 'empty', inhabited: false });
         for (const k of ['name', 'seed', 'rng', 'time', 'tick', 'next_id', 'people', 'animals', 'villages', 'events']) w[k] = structuredClone(data[k]);
         w.relations = structuredClone(data.relations || []);
+        w.scenario = data.scenario || 'sandbox';
+        w.year_length = data.year_length || 20;
+        w.laws = data.laws ? { ...data.laws } : { rebellions: false, diplomacy: false };
+        w.milestone = data.milestone || 0;
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; }
         for (const a of w.animals) a.infection ||= 0;
         for (const v of w.villages) v.race ||= 'human';

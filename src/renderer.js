@@ -11,6 +11,10 @@ export class Renderer {
         this.terrain = document.createElement('canvas');
         this.terrain.width = WIDTH * CELL; this.terrain.height = HEIGHT * CELL;
         this.tc = this.terrain.getContext('2d', { alpha: false });
+        this.territory = document.createElement('canvas');
+        this.territory.width = WIDTH; this.territory.height = HEIGHT;
+        this.territory_ctx = this.territory.getContext('2d');
+        this.territory_last = -Infinity;
         this.zoom = 1; this.pan_x = 0; this.pan_y = 0;
         this.borders = true; this.pointer = null; this.brush = 4; this.tool = 'grass';
         this.last_revision = -1; this.last_cache = 0;
@@ -85,6 +89,33 @@ export class Renderer {
         for (const v of world.villages.filter(v => v.alive)) { this.mini.fillStyle = v.color; this.mini.fillRect(v.x - 1, v.y - 1, 3, 3); }
         this.last_revision = world.revision;
     }
+    cache_territory(world) {
+        const living = world.villages.filter(v => v.alive);
+        const owners = new Int16Array(WIDTH * HEIGHT).fill(-1);
+        const image = this.territory_ctx.createImageData(WIDTH, HEIGHT);
+        const colors = living.map(v => [1, 3, 5].map(i => parseInt(v.color.slice(i, i + 2), 16)));
+        for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
+            const i = y * WIDTH + x;
+            if (world.tiles[i] < T.SAND || world.tiles[i] > T.HILL) continue;
+            let owner = -1, distance = Infinity;
+            for (let k = 0; k < living.length; k++) {
+                const dx = living[k].x - x, dy = living[k].y - y;
+                const candidate = dx * dx + dy * dy;
+                if (candidate < distance) { distance = candidate; owner = k; }
+            }
+            owners[i] = owner;
+        }
+        for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
+            const i = y * WIDTH + x, owner = owners[i];
+            if (owner < 0) continue;
+            const edge = (x > 0 && owners[i - 1] !== owner) || (x < WIDTH - 1 && owners[i + 1] !== owner)
+                || (y > 0 && owners[i - WIDTH] !== owner) || (y < HEIGHT - 1 && owners[i + WIDTH] !== owner);
+            const j = i * 4;
+            image.data[j] = colors[owner][0]; image.data[j + 1] = colors[owner][1];
+            image.data[j + 2] = colors[owner][2]; image.data[j + 3] = edge ? 190 : 35;
+        }
+        this.territory_ctx.putImageData(image, 0, 0);
+    }
     render(world, now) {
         if (this.last_revision !== world.revision && now - this.last_cache > 220) { this.cache(world); this.last_cache = now; }
         const c = this.ctx, o = this.origin, s = this.scale;
@@ -92,6 +123,18 @@ export class Renderer {
         c.fillStyle = '#143e4b'; c.fillRect(0, 0, this.width, this.height);
         c.save(); c.translate(o.x, o.y); c.scale(s, s); c.imageSmoothingEnabled = false;
         c.drawImage(this.terrain, 0, 0);
+        const dense_kingdoms = world.villages.length >= 20;
+        if (this.borders && dense_kingdoms) {
+            if (now - this.territory_last > 1500) { this.cache_territory(world); this.territory_last = now; }
+            c.drawImage(this.territory, 0, 0, WIDTH * CELL, HEIGHT * CELL);
+        }
+        const populations = new Map();
+        const kingdoms = new Map(world.villages.map(v => [v.id, v]));
+        const warring = new Set();
+        for (const relation of world.relations) if (relation.status === 'war') {
+            warring.add(relation.a); warring.add(relation.b);
+        }
+        for (const person of world.people) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
         // Slow glints make the sea feel alive without moving the terrain itself.
         for (let i = 0; i < 85; i++) {
             const x = (i * 73 + 19) % WIDTH, y = (i * 31 + 9) % HEIGHT;
@@ -102,9 +145,9 @@ export class Renderer {
         c.globalAlpha = 1;
         for (const v of world.villages) {
             if (!v.alive) continue;
-            const pop = world.people.filter(p => p.village_id === v.id).length;
-            if (this.borders) {
-                const at_war = world.villages.some(other => other.alive && other.id !== v.id && world.relation_status(v.id, other.id) === 'war');
+            const pop = populations.get(v.id) || 0;
+            if (this.borders && !dense_kingdoms) {
+                const at_war = warring.has(v.id);
                 c.strokeStyle = at_war ? '#e7816dbb' : v.color + '85'; c.fillStyle = at_war ? '#e7816d12' : v.color + '0d'; c.lineWidth = 1 / s;
                 c.setLineDash([3, 5]); c.beginPath(); c.arc(v.x * CELL, v.y * CELL, (9 + Math.sqrt(pop) * 1.1) * CELL, 0, Math.PI * 2); c.fill(); c.stroke(); c.setLineDash([]);
             }
@@ -133,7 +176,7 @@ export class Renderer {
         }
         for (const p of world.people) {
             const x = Math.round(p.x * CELL), y = Math.round(p.y * CELL);
-            const v = world.villages.find(v => v.id === p.village_id);
+            const v = kingdoms.get(p.village_id);
             c.fillStyle = '#22342466'; c.fillRect(x - 1, y + 2, 3, 1);
             c.fillStyle = v?.color || '#e4dfb2'; c.fillRect(x - 1, y - 1, 2, 3);
             c.fillStyle = '#f0cc9e'; c.fillRect(x - 1, y - 3, 2, 2);
@@ -167,8 +210,10 @@ export class Renderer {
             }
         }
         c.restore();
-        if (this.borders) for (const v of world.villages.filter(v => v.alive)) {
+        const show_labels = world.villages.length < 20 || this.zoom > 1.7;
+        if (this.borders && show_labels) for (const v of world.villages.filter(v => v.alive)) {
             const x = o.x + v.x * CELL * s, y = o.y + (v.y * CELL - 38) * s;
+            if (x < -100 || x > this.width + 100 || y < -20 || y > this.height + 20) continue;
             c.font = '600 9px -apple-system, Segoe UI, sans-serif';
             const w = c.measureText(v.name).width + 19;
             c.fillStyle = '#152d24df'; c.beginPath(); c.roundRect(x - w / 2, y - 9, w, 19, 4); c.fill();

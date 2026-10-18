@@ -161,3 +161,26 @@ test('kingdom relations control fighting and survive old and new saves', () => {
     const corrupt = structuredClone(w.serialize()); corrupt.relations[0].b = 99999;
     assert.throws(() => World.deserialize(corrupt), /valid Genesis/);
 });
+test('hundred-kingdom challenge starts 100 founders and records survival milestones', () => {
+    const w = new World({ seed: 'challenge', scenario: 'hundred', preset: 'empty', inhabited: false });
+    assert.equal(w.villages.length, 100);
+    assert.equal(w.people.length, 300);
+    assert.equal(w.year_length, 2);
+    assert.deepEqual(w.laws, { rebellions: false, diplomacy: true });
+    for (let i = 0; i < 1600; i++) w.step(0.125);
+    assert.equal(w.year, 101);
+    assert.equal(w.milestone, 1);
+    assert.ok(w.events.some(event => event.text.startsWith('Year 100:')));
+    assert.ok(w.relations.length > 0);
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(w.serialize())));
+    assert.deepEqual(loaded.serialize(), w.serialize());
+    assert.equal(loaded.year, 101);
+});
+test('world laws are validated and old saves inherit safe defaults', () => {
+    const w = new World();
+    const old = w.serialize();
+    delete old.scenario; delete old.year_length; delete old.laws; delete old.milestone;
+    assert.deepEqual(World.deserialize(old).laws, { rebellions: false, diplomacy: false });
+    const bad = w.serialize(); bad.laws.rebellions = 'yes';
+    assert.throws(() => World.deserialize(bad), /valid Genesis/);
+});

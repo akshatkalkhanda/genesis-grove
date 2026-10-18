@@ -21,7 +21,7 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-The current build includes `dist/Genesis Grove-0.2.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.2.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
+The current build includes `dist/Genesis Grove-0.3.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.3.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
 
 ## A living sandbox
 
@@ -29,13 +29,14 @@ The current build includes `dist/Genesis Grove-0.2.0-arm64-mac.zip` for Apple si
 - Seeded island and continent generation, plus empty ocean for building from scratch.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
 - Settlers found villages, gather supplies, build houses, raise families, and age. Use Kingdoms to set peace, alliances, or wars; neighbouring kingdoms trade or raid according to their relationship, and nearby enemies fight on land.
+- A 100-kingdom challenge starts on a broad continent with 300 settlers, autonomous diplomacy, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy or rebellions under Kingdoms at any time.
 - Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
-- Pause, 1×/2×/5× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
+- Pause, 1×/2×/5×/20× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is an expanding playable sandbox. War is local land combat and border raids; armies do not sail or capture distant towns yet. Seasons and age names are visual time markers. There are no boats, genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. War is local land combat and border raids; armies do not sail or capture distant towns yet. Seasons and age names are visual time markers. There are no boats, genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
 
 ## Controls
 
@@ -49,7 +50,7 @@ This is an expanding playable sandbox. War is local land combat and border raids
 | Visit village | Click village in sidebar |
 | Manage kingdoms | Kingdoms button; select two villages, then choose alliance, peace, or war |
 | Pause | Space |
-| Speed | 1 / 2 / 3 for 1× / 2× / 5× |
+| Speed | 1 / 2 / 3 / 4 for 1× / 2× / 5× / 20× |
 | Inspect | I; Esc exits |
 | Brush size | [ / ] |
 | Device save | Cmd+S / Ctrl+S |
@@ -71,5 +72,7 @@ npm run dist:win:zip # cross-build an unsigned Windows x64 ZIP on macOS
 `make setup`, `make dev`, `make test`, `make lint`, and `make build` wrap these commands. `npm run lint` checks syntax only; no formatter or type checker is configured. The CI workflow builds macOS and Windows packages on their respective runners, manually or on a version tag. It does not publish releases. Builds are unsigned by default; signing/notarization requires your own credentials. Windows execution must be tested on Windows before claiming that release is verified.
 
 See [architecture and simulation notes](docs/architecture.md) for implementation boundaries.
+
+See the [video comparison](docs/video-comparison.md) for the reference features and current gaps.
 
 See [validation results](docs/validation.md) for the checks performed on the first build.

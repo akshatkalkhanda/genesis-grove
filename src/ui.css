@@ -10,3 +10,7 @@
 #diplomacy-dialog .diplomacy-actions button{padding:10px 5px;font-size:10px}
 #diplomacy-dialog [data-relation=war].active{color:#f2b2a5;border-color:#ad6a5c;background:#51332e}
 #relation-status{padding:12px;background:#263725;border-radius:6px;color:#deebcf}
+.survival{font-size:10px;line-height:1.5;color:#c9dca7;background:#263725;border:1px solid #455b3c;border-radius:5px;padding:9px 10px;margin-bottom:7px}
+.world-laws{padding:12px 14px;background:#223426;border:1px solid #40553d;border-radius:6px;margin:16px 0}
+.world-laws strong{font-size:9px;letter-spacing:1.2px;color:#b9d19e}
+#diplomacy-dialog .world-laws .checkbox{margin:9px 0 0;font-size:11px}
