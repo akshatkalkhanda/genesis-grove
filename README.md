@@ -27,14 +27,14 @@ The initial build includes `dist/Genesis Grove-0.1.0-arm64-mac.zip` for Apple si
 
 - Eight terrain brushes: meadow, forest, ocean, shallows, sand, highlands, mountains, lava.
 - Seeded island and continent generation, plus empty ocean for building from scratch.
-- Settlers found up to eight named villages, gather food and timber, build houses, raise families, and age. Nearby villages occasionally trade or raid.
-- Sheep graze and reproduce; wolves hunt sheep. Forests spread, lava cools, and ash recovers.
-- Rain, fire, lightning, meteors, blessings, and a life eraser.
+- Four playable peoples: humans, elves, dwarves, and orcs. Settlers found villages, gather food and timber, build houses, raise families, and age. Nearby villages occasionally trade or raid.
+- Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
+- Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
 - Pause, 1×/2×/5× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is a playable first version. Diplomacy is a simple frontier trade/raid model, not a full kingdom or war system. Seasons and age names are visual time markers. There are no boats, genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. Diplomacy is a simple frontier trade/raid model, not a full kingdom or war system. Seasons and age names are visual time markers. There are no boats, genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
 
 ## Controls
 
