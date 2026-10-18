@@ -152,8 +152,12 @@ function inspect(p) {
     const people = world.people.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     const animals = world.animals.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
-    const village = world.villages.filter(v => v.alive).find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 18);
-    if (village) { add(village.name); add(`${Math.floor(village.food)} food · ${Math.floor(village.wood)} wood`); add(`${village.houses.length} homes`); }
+    const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
+    if (site) {
+        const kingdom = site.kingdom_id ? world.villages.find(v => v.id === site.kingdom_id) : site;
+        add(site.name); add(`${kingdom?.name || 'Lost kingdom'} · ${site.houses.length} homes`);
+        if (kingdom) add(`${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`);
+    }
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
 }
@@ -171,6 +175,22 @@ function update_diplomacy(preferred_source = null) {
     if (source) source_select.value = String(source.id);
     if (target) target_select.value = String(target.id);
     const status = source && target ? world.relation_status(source.id, target.id) : null;
+    const profile = $('kingdom-profile'); profile.replaceChildren();
+    if (source) {
+        const colonies = world.colonies.filter(c => c.kingdom_id === source.id);
+        const population = world.people.filter(p => p.village_id === source.id).length;
+        const alliances = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'alliance').length;
+        const wars = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'war').length;
+        const heading = document.createElement('strong'); heading.textContent = source.name;
+        const details = document.createElement('span'); details.textContent = `${population} people · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
+        const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · ${source.deaths || 0} deaths`;
+        const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
+        profile.append(heading, details, resources, relations);
+        if (colonies.length) {
+            const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
+            profile.append(towns);
+        }
+    }
     $('relation-status').textContent = status === 'alliance' ? 'Allied kingdoms exchange extra supplies when nearby.' : status === 'war' ? 'At war: nearby people fight and border raids can occur.' : status === 'peace' ? 'At peace: neighbouring kingdoms may trade.' : 'Create at least two living kingdoms to manage relations.';
     for (const button of document.querySelectorAll('[data-relation]')) {
         button.disabled = !status || button.dataset.relation === status;
@@ -180,10 +200,12 @@ function update_diplomacy(preferred_source = null) {
 $('diplomacy').onclick = () => {
     update_diplomacy(focused_village_id);
     $('law-diplomacy').checked = world.laws.diplomacy;
+    $('law-expansion').checked = world.laws.expansion;
     $('law-rebellions').checked = world.laws.rebellions;
     $('diplomacy-dialog').showModal();
 };
 $('law-diplomacy').onchange = event => { world.laws.diplomacy = event.target.checked; toast(`Autonomous diplomacy ${event.target.checked ? 'enabled' : 'disabled'}.`); };
+$('law-expansion').onchange = event => { world.laws.expansion = event.target.checked; toast(`Kingdom expansion ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('law-rebellions').onchange = event => { world.laws.rebellions = event.target.checked; toast(`Rebellions ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('source-kingdom').onchange = event => update_diplomacy(Number(event.currentTarget.value));
 $('target-kingdom').onchange = () => update_diplomacy();
@@ -193,7 +215,7 @@ for (const button of document.querySelectorAll('[data-relation]')) button.onclic
 };
 function update_ui() {
     const stats = world.stats();
-    for (const id of ['population', 'wildlife', 'villages', 'trees']) $(id).textContent = stats[id].toLocaleString();
+    for (const id of ['population', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
     $('survival').hidden = world.scenario !== 'hundred';
     const founders = world.villages.slice(0, 100).filter(v => v.alive).length;
@@ -219,7 +241,8 @@ function update_ui() {
         button.style.setProperty('--civ-color', v.color);
         const dot = document.createElement('span'); dot.className = 'civ-dot';
         const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
-        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
+        const towns = world.colonies.filter(c => c.kingdom_id === v.id).length + 1;
+        const small = document.createElement('small'); small.textContent = `${towns} towns · ${Math.floor(v.food)} food${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
         button.append(dot, name, count); button.onclick = () => { focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
         $('civilizations').append(button);
@@ -243,7 +266,7 @@ $('new-world').onclick = () => $('new-dialog').showModal();
 $('scenario').onchange = () => {
     const challenge = $('scenario').value === 'hundred';
     $('scenario-note').hidden = !challenge;
-    if (challenge) { $('preset').value = 'continent'; $('inhabited').checked = true; }
+    if (challenge) { $('preset').value = 'fractured'; $('inhabited').checked = true; }
     $('preset').disabled = $('inhabited').disabled = challenge;
 };
 $('help').onclick = () => $('help-dialog').showModal();

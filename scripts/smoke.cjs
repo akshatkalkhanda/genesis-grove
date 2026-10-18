@@ -85,7 +85,11 @@ app.whenReady().then(async () => {
         assert.equal(await js('genesis.snapshot().laws.rebellions'), false);
         assert.equal(await js('document.getElementById("survival").hidden'), false);
         checks.push('100-kingdom challenge creates founders and survival display');
-        await click('#diplomacy'); await click('#law-rebellions');
+        await click('#diplomacy');
+        assert.equal(await js('document.getElementById("law-expansion").checked'), true);
+        assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("towns")'));
+        checks.push('Challenge exposes expansion law and kingdom profile');
+        await click('#law-rebellions');
         assert.equal(await js('genesis.snapshot().laws.rebellions'), true);
         await click('#diplomacy-dialog [data-close]');
         checks.push('World-law toggle updates the simulation');

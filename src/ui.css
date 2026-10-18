@@ -14,3 +14,6 @@
 .world-laws{padding:12px 14px;background:#223426;border:1px solid #40553d;border-radius:6px;margin:16px 0}
 .world-laws strong{font-size:9px;letter-spacing:1.2px;color:#b9d19e}
 #diplomacy-dialog .world-laws .checkbox{margin:9px 0 0;font-size:11px}
+.kingdom-profile{display:grid;gap:5px;background:#263725;border:1px solid #40553d;border-radius:6px;padding:12px;margin:10px 0 16px;font-size:11px;color:#a9c29e}
+.kingdom-profile strong{color:#e2edce;font-size:12px}
+.kingdom-profile small{color:#90a98a;line-height:1.5;max-height:44px;overflow:auto}

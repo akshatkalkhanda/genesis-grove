@@ -6,6 +6,8 @@ export const CIV_COLORS = ['#e9c87b', '#b9a4e6', '#e58f83', '#83c5cd', '#c3da89'
 const NAMES = ['Amberwick', 'Willowmere', 'Rosehaven', 'Tidewatch', 'Mossvale', 'Sunhollow', 'Briarford', 'Cloudrest'];
 const MAX_VILLAGES = 120;
 const MAX_PEOPLE = 1200;
+const MAX_COLONIES = 240;
+const MAX_VOYAGES = 40;
 const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' } });
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -50,15 +52,17 @@ export class World {
         this.people = [];
         this.animals = [];
         this.villages = [];
+        this.colonies = [];
+        this.voyages = [];
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
         this.year_length = this.scenario === 'hundred' ? 2 : 20;
-        this.laws = { rebellions: false, diplomacy: this.scenario === 'hundred' };
+        this.laws = { rebellions: false, diplomacy: this.scenario === 'hundred', expansion: this.scenario === 'hundred' };
         this.milestone = 0;
         this.events = [];
         this.effects = [];
         this.revision = 1;
-        const landscape = this.scenario === 'hundred' ? 'continent' : preset;
+        const landscape = this.scenario === 'hundred' ? 'fractured' : preset;
         this.generate(landscape);
         this.log('A new world awakens. What will you make of it?', 'creation');
         if ((inhabited || this.scenario === 'hundred') && landscape !== 'empty') {
@@ -96,6 +100,12 @@ export class World {
             const fine = noise(x / 4, y / 4, seed + 97);
             let h = broad * 0.64 + detail * 0.27 + fine * 0.09 - edge;
             if (preset === 'continent') h += 0.15 * (1 - nx * nx - ny * ny);
+            if (preset === 'fractured') {
+                const lobes = [[-0.55, -0.48, 0.68, 0.5], [0.54, -0.45, 0.63, 0.53], [-0.5, 0.5, 0.67, 0.5], [0.57, 0.49, 0.61, 0.48]];
+                const land = Math.max(0, ...lobes.map(([cx, cy, rx, ry]) => 1 - ((nx - cx) / rx) ** 2 - ((ny - cy) / ry) ** 2));
+                const fault = Math.abs(nx + 0.05 * Math.sin(ny * 9 + seed)) < 0.025 ? 0.18 : 0;
+                h = 0.12 + land * 0.36 + broad * 0.24 + detail * 0.16 + fine * 0.08 - fault;
+            }
             let t = h < 0.39 ? T.OCEAN : h < 0.445 ? T.SHALLOW : h < 0.478 ? T.SAND : h < 0.65 ? T.GRASS : h < 0.73 ? T.HILL : T.MOUNTAIN;
             if (t === T.GRASS && noise(x / 8, y / 8, seed + 51) > 0.48 && this.random() > 0.2) t = T.FOREST;
             this.tiles[this.index(x, y)] = t;
@@ -185,7 +195,7 @@ export class World {
         const profile = RACES[race] || RACES.human;
         const name = n < NAMES.length ? NAMES[n] : `${NAMES[n % NAMES.length]} ${Math.floor(n / NAMES.length) + 1}`;
         const color = this.scenario === 'hundred' ? kingdom_color(n) : profile.color;
-        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true };
+        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true, founded_year: this.year, deaths: 0, siege: 0 };
         this.villages.push(village);
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
@@ -203,6 +213,131 @@ export class World {
         }
         return false;
     }
+    settlements_of(kingdom_id) {
+        const capital = this.villages.find(v => v.id === kingdom_id && v.alive);
+        return capital ? [capital, ...this.colonies.filter(c => c.kingdom_id === kingdom_id)] : [];
+    }
+    found_colony(kingdom_id, x, y) {
+        const kingdom = this.villages.find(v => v.id === kingdom_id && v.alive);
+        if (!kingdom || !this.walkable(x, y) || this.colonies.length >= MAX_COLONIES) return null;
+        const count = this.colonies.filter(c => c.kingdom_id === kingdom_id).length + 1;
+        const colony = { id: this.next_id++, kingdom_id, x, y, name: `${kingdom.name} ${count}`, houses: [], age: 0, birth_timer: 0, expansion_timer: 0, siege: 0 };
+        this.colonies.push(colony);
+        this.add_house(colony);
+        this.log(`${kingdom.name} establishes ${colony.name}.`, 'village');
+        return colony;
+    }
+    landmasses() {
+        const labels = new Int16Array(this.tiles.length).fill(-1);
+        const queue = new Int32Array(this.tiles.length);
+        let label = 0;
+        for (let start = 0; start < labels.length; start++) {
+            if (labels[start] !== -1 || !this.walkable(start % WIDTH, Math.floor(start / WIDTH))) continue;
+            let head = 0, tail = 1;
+            queue[0] = start; labels[start] = label;
+            while (head < tail) {
+                const i = queue[head++], x = i % WIDTH, y = Math.floor(i / WIDTH);
+                for (const [dx, dy] of DIRECTIONS) {
+                    const nx = x + dx, ny = y + dy;
+                    if (!this.inside(nx, ny)) continue;
+                    const j = ny * WIDTH + nx;
+                    if (labels[j] === -1 && this.walkable(nx, ny)) { labels[j] = label; queue[tail++] = j; }
+                }
+            }
+            label++;
+        }
+        return labels;
+    }
+    launch_colony(kingdom_id, x, y, labels = null) {
+        const kingdom = this.villages.find(v => v.id === kingdom_id && v.alive);
+        if (!kingdom || !this.walkable(x, y) || this.voyages.length >= MAX_VOYAGES || this.colonies.length >= MAX_COLONIES || kingdom.food < 10 || kingdom.wood < 6) return false;
+        const sites = [...this.villages.filter(v => v.alive), ...this.colonies];
+        if (sites.some(site => Math.hypot(site.x - x, site.y - y) < 7)) return false;
+        const crew = this.people.filter(p => p.village_id === kingdom_id && !p.voyage_id && p.age > 5).slice(0, 3);
+        if (crew.length < 3) return false;
+        const source = this.settlements_of(kingdom_id).find(site => crew.some(p => p.home_id === site.id)) || kingdom;
+        const masses = labels || this.landmasses();
+        const ship = masses[this.index(source.x, source.y)] !== masses[this.index(x, y)];
+        const voyage = { id: this.next_id++, kingdom_id, x: source.x, y: source.y, target_x: x, target_y: y, progress: 0, duration: Math.max(5, Math.hypot(x - source.x, y - source.y) / (ship ? 3 : 5)), kind: ship ? 'ship' : 'caravan', crew_ids: crew.map(p => p.id) };
+        this.voyages.push(voyage);
+        for (const person of crew) person.voyage_id = voyage.id;
+        kingdom.food -= 10; kingdom.wood -= 6;
+        this.log(`${kingdom.name} sends ${ship ? 'a ship' : 'settlers'} toward new land.`, 'village');
+        return true;
+    }
+    advance_voyages(dt) {
+        for (const voyage of this.voyages) {
+            voyage.progress = Math.min(1, voyage.progress + dt / voyage.duration);
+            if (voyage.progress < 1) continue;
+            const kingdom = this.villages.find(v => v.id === voyage.kingdom_id && v.alive);
+            const crew = this.people.filter(p => voyage.crew_ids.includes(p.id));
+            const occupied = [...this.villages.filter(v => v.alive), ...this.colonies]
+                .some(site => Math.hypot(site.x - voyage.target_x, site.y - voyage.target_y) < 7);
+            const colony = kingdom && !occupied && this.walkable(voyage.target_x, voyage.target_y)
+                ? this.found_colony(kingdom.id, voyage.target_x, voyage.target_y) : null;
+            for (const person of crew) {
+                person.voyage_id = null;
+                person.x = colony ? colony.x : kingdom?.x ?? person.x;
+                person.y = colony ? colony.y : kingdom?.y ?? person.y;
+                if (colony) person.home_id = colony.id;
+            }
+        }
+        this.voyages = this.voyages.filter(v => v.progress < 1);
+    }
+    conquer_site(site, attacker_id) {
+        const attacker = this.villages.find(v => v.id === attacker_id && v.alive);
+        const defender = this.villages.find(v => v.id === (site.kingdom_id || site.id) && v.alive);
+        if (!attacker || !defender || attacker.id === defender.id) return false;
+        if (site.kingdom_id) {
+            site.kingdom_id = attacker.id;
+            site.siege = 0;
+            for (const person of this.people) if (person.village_id === defender.id) {
+                if (person.voyage_id && person.home_id === site.id) person.home_id = defender.id;
+                else if (!person.voyage_id && (person.home_id === site.id || Math.hypot(person.x - site.x, person.y - site.y) < 7)) {
+                    person.village_id = attacker.id; person.home_id = site.id;
+                }
+            }
+            this.log(`${attacker.name} captures ${site.name} from ${defender.name}.`, 'disaster');
+        } else {
+            if (this.colonies.length >= MAX_COLONIES) return false;
+            const captured = { id: this.next_id++, kingdom_id: attacker.id, x: site.x, y: site.y, name: site.name, houses: structuredClone(site.houses), age: site.age, birth_timer: 0, expansion_timer: 0, siege: 0 };
+            this.colonies.push(captured);
+            for (const colony of this.colonies) if (colony.kingdom_id === defender.id) colony.kingdom_id = attacker.id;
+            for (const voyage of this.voyages) if (voyage.kingdom_id === defender.id) voyage.kingdom_id = attacker.id;
+            for (const person of this.people) if (person.village_id === defender.id) {
+                person.village_id = attacker.id;
+                if (person.home_id === defender.id) person.home_id = captured.id;
+            }
+            defender.alive = false; defender.houses = []; defender.siege = 0;
+            this.log(`${attacker.name} conquers ${defender.name} and its towns.`, 'disaster');
+        }
+        return true;
+    }
+    resolve_sieges() {
+        if (this.tick % 8 !== 0) return;
+        const enemies = new Map();
+        for (const relation of this.relations) if (relation.status === 'war') {
+            if (!enemies.has(relation.a)) enemies.set(relation.a, new Set());
+            if (!enemies.has(relation.b)) enemies.set(relation.b, new Set());
+            enemies.get(relation.a).add(relation.b);
+            enemies.get(relation.b).add(relation.a);
+        }
+        if (!enemies.size) return;
+        for (const site of [...this.villages.filter(v => v.alive), ...this.colonies]) {
+            const owner = site.kingdom_id || site.id, rivals = enemies.get(owner);
+            if (!rivals) continue;
+            let defenders = 0;
+            const attackers = new Map();
+            for (const person of this.people) {
+                if (person.voyage_id || person.health <= 0 || (person.x - site.x) ** 2 + (person.y - site.y) ** 2 > 36) continue;
+                if (person.village_id === owner) defenders++;
+                else if (rivals.has(person.village_id)) attackers.set(person.village_id, (attackers.get(person.village_id) || 0) + 1);
+            }
+            const [leader, count] = [...attackers].sort((a, b) => b[1] - a[1])[0] || [];
+            site.siege = count >= 2 && count > defenders ? (site.siege || 0) + count - defenders : Math.max(0, (site.siege || 0) - 1);
+            if (site.siege >= (site.kingdom_id ? 8 : 14)) this.conquer_site(site, leader);
+        }
+    }
     add_person(x, y, village_id = null, race = 'human') {
         if (!this.walkable(x, y) || this.people.length >= this.max_people) return false;
         if (!village_id) {
@@ -211,7 +346,7 @@ export class World {
             nearest.alive = true;
             village_id = nearest.id;
         }
-        this.people.push({ id: this.next_id++, x, y, village_id, race: RACES[race] ? race : 'human', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0 });
+        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0 });
         return true;
     }
     add_animal(x, y, species) {
@@ -267,6 +402,7 @@ export class World {
         if (tool === 'lightning') this.log('Thunder breaks the quiet.', 'disaster');
         const damage = tool === 'nuke' ? 300 : tool === 'meteor' ? 200 : tool === 'lightning' ? 75 : tool === 'acid' ? 35 : tool === 'erase' ? 1000 : 0;
         for (const list of [this.people, this.animals]) for (const unit of list) {
+            if (unit.voyage_id) continue;
             if (Math.hypot(unit.x - x, unit.y - y) > r) continue;
             unit.health -= damage;
             if (tool === 'bless') unit.health = 100;
@@ -279,7 +415,17 @@ export class World {
         this.clean_up();
     }
     clean_up() {
+        for (const person of this.people) if (person.health <= 0 || !this.walkable(person.x, person.y)) {
+            const kingdom = this.villages.find(v => v.id === person.village_id);
+            if (kingdom) kingdom.deaths = (kingdom.deaths || 0) + 1;
+        }
         this.people = this.people.filter(p => p.health > 0 && this.walkable(p.x, p.y));
+        const survivors = new Set(this.people.map(p => p.id));
+        this.voyages = this.voyages.filter(voyage => {
+            if (voyage.crew_ids.every(id => survivors.has(id))) return true;
+            for (const person of this.people) if (person.voyage_id === voyage.id) person.voyage_id = null;
+            return false;
+        });
         this.animals = this.animals.filter(p => p.health > 0 && this.walkable(p.x, p.y));
         for (const v of this.villages) {
             v.houses = v.houses.filter(h => this.walkable(h.x, h.y) && this.fire[this.index(h.x, h.y)] < 5);
@@ -288,6 +434,8 @@ export class World {
                 this.log(`${v.name} falls silent. Its story lives on.`, 'disaster');
             }
         }
+        const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
+        this.colonies = this.colonies.filter(c => living.has(c.kingdom_id));
     }
     move(unit, dt, speed) {
         const nx = clamp(unit.x + unit.dx * dt * speed, 0.5, WIDTH - 0.5);
@@ -332,6 +480,27 @@ export class World {
                 }
             }
         }
+        if (this.laws.expansion && this.tick % 320 === 0 && this.colonies.length < MAX_COLONIES && this.voyages.length < MAX_VOYAGES) {
+            const populations = new Map();
+            for (const person of this.people) if (!person.voyage_id) populations.set(person.village_id, (populations.get(person.village_id) || 0) + 1);
+            const choices = this.villages.filter(v => v.alive && (populations.get(v.id) || 0) >= 8 && v.food >= 20 && v.wood >= 12 && this.colonies.filter(c => c.kingdom_id === v.id).length < 4);
+            const kingdom = choices[Math.floor(this.random() * choices.length)];
+            if (kingdom) {
+                const labels = this.landmasses();
+                const sites = [...this.villages.filter(v => v.alive), ...this.colonies];
+                const source_mass = labels[this.index(kingdom.x, kingdom.y)];
+                let target = null;
+                for (let attempt = 0; attempt < 250; attempt++) {
+                    const x = 3 + Math.floor(this.random() * (WIDTH - 6));
+                    const y = 3 + Math.floor(this.random() * (HEIGHT - 6));
+                    if (!this.walkable(x, y) || Math.hypot(x - kingdom.x, y - kingdom.y) > 70 || sites.some(site => Math.hypot(site.x - x, site.y - y) < 7)) continue;
+                    const candidate = { x, y };
+                    if (labels[this.index(x, y)] !== source_mass) { target = candidate; break; }
+                    target ||= candidate;
+                }
+                if (target) this.launch_colony(kingdom.id, target.x, target.y, labels);
+            }
+        }
         const milestones = [100, 250, 500, 1000];
         if (this.scenario === 'hundred' && this.milestone < milestones.length && this.year >= milestones[this.milestone]) {
             const alive = this.villages.slice(0, 100).filter(v => v.alive).length;
@@ -344,6 +513,8 @@ export class World {
         this.time += dt;
         this.tick++;
         this.advance_history();
+        this.advance_voyages(dt);
+        this.resolve_sieges();
         const war_targets = new Map();
         for (const relation of this.relations) {
             if (relation.status !== 'war') continue;
@@ -352,18 +523,22 @@ export class World {
                 war_targets.get(a).add(b);
             }
         }
+        const homes = new Map([...this.villages, ...this.colonies].map(site => [site.id, site]));
         for (const p of this.people) {
             if (p.health <= 0) continue;
             p.age += dt;
+            if (p.voyage_id) continue;
             p.decision -= dt;
             p.gather += dt;
             const v = this.villages.find(v => v.id === p.village_id);
+            const home = homes.get(p.home_id) || v;
             const enemies = war_targets.get(p.village_id);
             if (p.decision <= 0) {
                 let a = this.random() * Math.PI * 2;
-                const target = enemies && this.villages.find(other => other.alive && enemies.has(other.id) && Math.hypot(other.x - p.x, other.y - p.y) < 32);
+                const target = enemies && [...this.villages.filter(other => other.alive && enemies.has(other.id)), ...this.colonies.filter(c => enemies.has(c.kingdom_id))]
+                    .find(other => Math.hypot(other.x - p.x, other.y - p.y) < 32);
                 if (target && p.age > 5) a = Math.atan2(target.y - p.y, target.x - p.x);
-                else if (v && Math.hypot(p.x - v.x, p.y - v.y) > 9 + Math.sqrt(v.houses.length)) a = Math.atan2(v.y - p.y, v.x - p.x);
+                else if (home && Math.hypot(p.x - home.x, p.y - home.y) > 9 + Math.sqrt(home.houses.length)) a = Math.atan2(home.y - p.y, home.x - p.x);
                 p.dx = Math.cos(a); p.dy = Math.sin(a); p.decision = 0.5 + this.random() * 3;
             }
             if (enemies) {
@@ -421,19 +596,30 @@ export class World {
             if (this.fire[this.index(animal.x, animal.y)] > 0) animal.health -= dt * 45;
             if (animal.age > 450) animal.health -= dt;
         }
+        const home_populations = new Map(), kingdom_populations = new Map();
+        for (const person of this.people) {
+            kingdom_populations.set(person.village_id, (kingdom_populations.get(person.village_id) || 0) + 1);
+            if (!person.voyage_id) home_populations.set(person.home_id, (home_populations.get(person.home_id) || 0) + 1);
+        }
         for (const v of this.villages) {
             if (!v.alive) continue;
             v.age += dt; v.birth_timer += dt; v.expansion_timer += dt;
-            const pop = this.people.filter(p => p.village_id === v.id).length;
+            const sites = this.settlements_of(v.id);
+            const pop = kingdom_populations.get(v.id) || 0;
             const house_cost = v.race === 'dwarf' ? 4 : 5;
-            if (v.expansion_timer > 10 && v.wood >= house_cost && v.houses.length < Math.ceil(pop / 3) + 1) {
-                v.expansion_timer = 0;
-                if (this.add_house(v)) v.wood -= house_cost;
+            for (const site of sites) {
+                if (site !== v) { site.age += dt; site.expansion_timer += dt; }
+                const local_pop = home_populations.get(site.id) || 0;
+                if (site.expansion_timer > 10 && v.wood >= house_cost && site.houses.length < Math.ceil(local_pop / 3) + 1) {
+                    site.expansion_timer = 0;
+                    if (this.add_house(site)) v.wood -= house_cost;
+                }
             }
             const birth_delay = v.race === 'orc' ? 8 : 12;
-            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < this.max_people) {
-                const p = this.land_near(v.x, v.y, 4);
-                if (p && this.add_person(p.x, p.y, v.id, v.race)) { v.food -= 5; v.birth_timer = 0; }
+            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < sites.reduce((sum, site) => sum + site.houses.length * 5, 0) && this.people.length < this.max_people) {
+                const site = sites[Math.floor(this.random() * sites.length)];
+                const p = this.land_near(site.x, site.y, 4);
+                if (p && this.add_person(p.x, p.y, v.id, v.race)) { this.people.at(-1).home_id = site.id; v.food -= 5; v.birth_timer = 0; }
             }
             // Neighbouring kingdoms trade in peace, or raid while at war.
             if (this.tick % 240 === 0) {
@@ -488,10 +674,11 @@ export class World {
     stats() {
         let trees = 0, land = 0;
         for (const t of this.tiles) { if (t === T.FOREST) trees++; if (t > T.SHALLOW) land++; }
-        return { population: this.people.length, wildlife: this.animals.length, villages: this.villages.filter(v => v.alive).length, trees, land: Math.round(land / this.tiles.length * 100) };
+        const kingdoms = this.villages.filter(v => v.alive).length;
+        return { population: this.people.length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, milestone: this.milestone, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, milestone: this.milestone, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -505,24 +692,40 @@ export class World {
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
-        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 2000))) invalid();
+        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES))) invalid();
         if (data.scenario !== undefined && !['sandbox', 'hundred'].includes(data.scenario)) invalid();
         if (data.year_length !== undefined && ![2, 20].includes(data.year_length)) invalid();
-        if (data.laws !== undefined && (!data.laws || typeof data.laws.rebellions !== 'boolean' || typeof data.laws.diplomacy !== 'boolean')) invalid();
+        if (data.laws !== undefined && (!data.laws || typeof data.laws.rebellions !== 'boolean' || typeof data.laws.diplomacy !== 'boolean' || (data.laws.expansion !== undefined && typeof data.laws.expansion !== 'boolean'))) invalid();
         if (data.milestone !== undefined && !integer(data.milestone, 0, 4)) invalid();
         const ids = new Set();
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
+            if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000))) invalid();
             id(v.id);
         }
         const villages = new Set(data.villages.map(v => v.id));
+        const colonies = new Map();
+        for (const c of data.colonies || []) {
+            if (!point(c) || !villages.has(c.kingdom_id) || typeof c.name !== 'string' || c.name.length > 40 || !array(c.houses, 220) || !c.houses.every(point) || !['age', 'birth_timer', 'expansion_timer', 'siege'].every(k => num(c[k]))) invalid();
+            id(c.id); colonies.set(c.id, c.kingdom_id);
+        }
+        const voyages = new Map();
+        for (const v of data.voyages || []) {
+            if (!point(v) || !point({ x: v.target_x, y: v.target_y }) || !villages.has(v.kingdom_id) || !num(v.progress, 0, 1) || !num(v.duration, 0.001, 500) || !['ship', 'caravan'].includes(v.kind) || !array(v.crew_ids, 3) || v.crew_ids.length !== 3 || new Set(v.crew_ids).size !== 3) invalid();
+            id(v.id); voyages.set(v.id, v);
+        }
         for (const u of [...data.people, ...data.animals]) {
             if (!point(u) || !num(u.health, -1000, 100) || !num(u.age) || !num(u.dx, -1, 1) || !num(u.dy, -1, 1) || !num(u.decision, -0.25, 10)) invalid();
             id(u.id);
         }
-        for (const p of data.people) if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
+        for (const p of data.people) {
+            if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
+            if (p.home_id !== undefined && p.home_id !== p.village_id && colonies.get(p.home_id) !== p.village_id) invalid();
+            if (p.voyage_id !== undefined && p.voyage_id !== null && (!voyages.has(p.voyage_id) || !voyages.get(p.voyage_id).crew_ids.includes(p.id))) invalid();
+        }
+        for (const voyage of voyages.values()) if (!voyage.crew_ids.every(crew_id => data.people.some(p => p.id === crew_id && p.village_id === voyage.kingdom_id && p.voyage_id === voyage.id))) invalid();
         for (const a of data.animals) if (!['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
         for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind)) invalid();
         const relation_keys = new Set();
@@ -533,13 +736,15 @@ export class World {
         const w = new World({ preset: 'empty', inhabited: false });
         for (const k of ['name', 'seed', 'rng', 'time', 'tick', 'next_id', 'people', 'animals', 'villages', 'events']) w[k] = structuredClone(data[k]);
         w.relations = structuredClone(data.relations || []);
+        w.colonies = structuredClone(data.colonies || []);
+        w.voyages = structuredClone(data.voyages || []);
         w.scenario = data.scenario || 'sandbox';
         w.year_length = data.year_length || 20;
-        w.laws = data.laws ? { ...data.laws } : { rebellions: false, diplomacy: false };
+        w.laws = { rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };
         w.milestone = data.milestone || 0;
-        for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; }
+        for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; p.home_id ||= p.village_id; p.voyage_id ||= null; }
         for (const a of w.animals) a.infection ||= 0;
-        for (const v of w.villages) v.race ||= 'human';
+        for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; }
         w.tiles = Uint8Array.from(data.tiles); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
         return w;
     }

@@ -1,7 +1,7 @@
 # WorldBox video comparison
 
 Reference: [Mellon's 100 kingdoms / 1,000 years video](https://www.youtube.com/watch?v=f4EIP_n-6Ng).
-Its description says the run spawns 100 kingdoms, disables rebellions, and follows survival over 1,000 years. A sampled mid-video frame shows a crowded, color-coded kingdom map with several landmasses. The video has no available transcript, so this comparison is limited to those observed elements.
+Its description says the run spawns 100 kingdoms, disables rebellions, and follows survival over 1,000 years. Sampled frames around 10 and 30 minutes show a crowded, color-coded map across several landmasses, multiple cities per kingdom, ships, and kingdom statistics. The video has no available transcript, so this comparison is limited to those observed elements.
 
 | Element | Genesis Grove before | Genesis Grove now |
 | --- | --- | --- |
@@ -10,6 +10,9 @@ Its description says the run spawns 100 kingdoms, disables rebellions, and follo
 | Survival | Live village count | Founding-kingdom survival counter and population-ranked village list |
 | Diplomacy | Manual alliance, peace, and war | Optional autonomous neighboring diplomacy; manual controls still available |
 | Rebellions | None | World-law toggle, off by default; enabled law can split a populous mature town |
-| Map | Islands or continent | Original generated continent for the challenge, with color-coded kingdoms |
+| Map | Islands or continent | Original four-landmass challenge map, with color-coded kingdom territories |
+| Settlements | One village per kingdom | Kingdoms can found additional towns with caravan or ship settlers |
+| War | Local fighting and raids | Local fighting plus town and capital sieges that transfer ownership |
+| Kingdom details | Population list | Profile with population, towns, resources, deaths, alliances, and wars |
 
-The challenge uses Genesis Grove's own terrain, art, and simulation. It does not reproduce the video's downloadable workshop map or the full WorldBox mechanics. Combat still happens on land near towns, with border raids; there are no ships or distant conquest campaigns.
+The challenge uses Genesis Grove's own terrain, art, and simulation. It does not reproduce the video's downloadable workshop map or the full WorldBox mechanics. Ships carry settlers, while battles remain local to land and naval invasions are not simulated.

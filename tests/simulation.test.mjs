@@ -166,7 +166,7 @@ test('hundred-kingdom challenge starts 100 founders and records survival milesto
     assert.equal(w.villages.length, 100);
     assert.equal(w.people.length, 300);
     assert.equal(w.year_length, 2);
-    assert.deepEqual(w.laws, { rebellions: false, diplomacy: true });
+    assert.deepEqual(w.laws, { rebellions: false, diplomacy: true, expansion: true });
     for (let i = 0; i < 1600; i++) w.step(0.125);
     assert.equal(w.year, 101);
     assert.equal(w.milestone, 1);
@@ -180,7 +180,7 @@ test('world laws are validated and old saves inherit safe defaults', () => {
     const w = new World();
     const old = w.serialize();
     delete old.scenario; delete old.year_length; delete old.laws; delete old.milestone;
-    assert.deepEqual(World.deserialize(old).laws, { rebellions: false, diplomacy: false });
+    assert.deepEqual(World.deserialize(old).laws, { rebellions: false, diplomacy: false, expansion: false });
     const bad = w.serialize(); bad.laws.rebellions = 'yes';
     assert.throws(() => World.deserialize(bad), /valid Genesis/);
 });
@@ -196,4 +196,45 @@ test('enabled rebellions split a mature populous kingdom and start a war', () =>
     assert.equal(w.villages.length, 2);
     assert.equal(w.people.filter(p => p.village_id === w.villages[1].id).length, 4);
     assert.equal(w.relation_status(w.villages[0].id, w.villages[1].id), 'war');
+});
+test('settlers cross water by ship and establish another town for their kingdom', () => {
+    const w = blank();
+    w.apply('grass', 25, 35, 13); w.apply('grass', 110, 75, 13);
+    for (let i = 0; i < 3; i++) w.apply('human', 25, 35, 1);
+    const kingdom = w.villages[0];
+    for (const person of w.people) person.age = 10;
+    assert.equal(w.launch_colony(kingdom.id, 110, 75), true);
+    assert.equal(w.voyages[0].kind, 'ship');
+    assert.equal(w.people.filter(p => p.voyage_id === w.voyages[0].id).length, 3);
+    w.advance_voyages(w.voyages[0].duration / 2);
+    assert.deepEqual(World.deserialize(JSON.parse(JSON.stringify(w.serialize()))).serialize(), w.serialize());
+    const broken = structuredClone(w.serialize()); broken.voyages[0].crew_ids[0] = 99999;
+    assert.throws(() => World.deserialize(broken), /valid Genesis/);
+    w.advance_voyages(w.voyages[0].duration);
+    assert.equal(w.voyages.length, 0);
+    assert.equal(w.colonies.length, 1);
+    assert.equal(w.colonies[0].kingdom_id, kingdom.id);
+    assert.equal(w.people.filter(p => p.home_id === w.colonies[0].id).length, 3);
+    assert.equal(w.stats().towns, 2);
+    assert.deepEqual(World.deserialize(JSON.parse(JSON.stringify(w.serialize()))).serialize(), w.serialize());
+});
+test('sieges capture towns and capitals, preserving the conquered population', () => {
+    const w = blank(); w.apply('grass', 55, 45, 37);
+    w.apply('human', 35, 45, 1); w.apply('orc', 70, 45, 1);
+    const [attacker, defender] = w.villages;
+    const colony = w.found_colony(defender.id, 58, 45);
+    w.add_person(58, 45, defender.id, 'orc');
+    w.people.at(-1).home_id = colony.id;
+    assert.equal(w.set_relation(attacker.id, defender.id, 'war'), true);
+    for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = 58; person.y = 45; }
+    for (let i = 1; i <= 8; i++) { w.tick = i * 8; w.resolve_sieges(); }
+    assert.equal(colony.kingdom_id, attacker.id);
+    assert.ok(w.people.some(p => p.home_id === colony.id && p.village_id === attacker.id));
+    for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = defender.x; person.y = defender.y; }
+    for (const person of w.people.filter(p => p.village_id === defender.id)) { person.x = 40; person.y = 45; }
+    for (let i = 9; i <= 23; i++) { w.tick = i * 8; w.resolve_sieges(); }
+    assert.equal(defender.alive, false);
+    assert.ok(w.people.every(p => p.village_id === attacker.id));
+    assert.ok(w.colonies.some(c => c.name === defender.name && c.kingdom_id === attacker.id));
+    assert.deepEqual(World.deserialize(JSON.parse(JSON.stringify(w.serialize()))).serialize(), w.serialize());
 });

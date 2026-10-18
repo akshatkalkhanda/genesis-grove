@@ -87,13 +87,22 @@ export class Renderer {
         }
         this.mini.putImageData(mini_image, 0, 0);
         for (const v of world.villages.filter(v => v.alive)) { this.mini.fillStyle = v.color; this.mini.fillRect(v.x - 1, v.y - 1, 3, 3); }
+        const kingdoms = new Map(world.villages.map(v => [v.id, v]));
+        for (const colony of world.colonies) {
+            this.mini.fillStyle = kingdoms.get(colony.kingdom_id)?.color || '#d7dbc4';
+            this.mini.fillRect(colony.x, colony.y, 2, 2);
+        }
         this.last_revision = world.revision;
     }
     cache_territory(world) {
-        const living = world.villages.filter(v => v.alive);
+        const kingdoms = new Map(world.villages.map(v => [v.id, v]));
+        const living = [...world.villages.filter(v => v.alive), ...world.colonies];
         const owners = new Int16Array(WIDTH * HEIGHT).fill(-1);
         const image = this.territory_ctx.createImageData(WIDTH, HEIGHT);
-        const colors = living.map(v => [1, 3, 5].map(i => parseInt(v.color.slice(i, i + 2), 16)));
+        const colors = living.map(site => {
+            const color = (site.kingdom_id ? kingdoms.get(site.kingdom_id)?.color : site.color) || '#d7dbc4';
+            return [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+        });
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x;
             if (world.tiles[i] < T.SAND || world.tiles[i] > T.HILL) continue;
@@ -166,6 +175,20 @@ export class Renderer {
             for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false);
             this.house(c, v.x * CELL, v.y * CELL, v.color, true);
         }
+        for (const colony of world.colonies) {
+            const kingdom = kingdoms.get(colony.kingdom_id);
+            if (!kingdom?.alive) continue;
+            for (const house of colony.houses) this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false);
+            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true);
+        }
+        for (const voyage of world.voyages) {
+            const x = (voyage.x + (voyage.target_x - voyage.x) * voyage.progress) * CELL;
+            const y = (voyage.y + (voyage.target_y - voyage.y) * voyage.progress) * CELL;
+            c.fillStyle = '#352d26'; c.fillRect(x - 6, y + 2, 13, 3);
+            c.fillStyle = voyage.kind === 'ship' ? '#e8e3c9' : '#bca87b';
+            c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
+            c.fillStyle = kingdoms.get(voyage.kingdom_id)?.color || '#e8e3c9'; c.fillRect(x - 5, y, 11, 2);
+        }
         for (const a of world.animals) {
             const x = Math.round(a.x * CELL), y = Math.round(a.y * CELL), wolf = a.species === 'wolf' || a.species === 'bear';
             c.fillStyle = '#13291f55'; c.fillRect(x - 2, y + 2, 6, 2);
@@ -175,6 +198,7 @@ export class Renderer {
             c.fillStyle = '#46483a'; c.fillRect(x - 1, y + 2, 1, 1); c.fillRect(x + 2, y + 2, 1, 1);
         }
         for (const p of world.people) {
+            if (p.voyage_id) continue;
             const x = Math.round(p.x * CELL), y = Math.round(p.y * CELL);
             const v = kingdoms.get(p.village_id);
             c.fillStyle = '#22342466'; c.fillRect(x - 1, y + 2, 3, 1);
@@ -218,6 +242,14 @@ export class Renderer {
             const w = c.measureText(v.name).width + 19;
             c.fillStyle = '#152d24df'; c.beginPath(); c.roundRect(x - w / 2, y - 9, w, 19, 4); c.fill();
             c.fillStyle = v.color; c.textAlign = 'center'; c.fillText(v.name, x, y + 3);
+        }
+        if (this.borders && this.zoom > 2.4) for (const colony of world.colonies) {
+            const x = o.x + colony.x * CELL * s, y = o.y + (colony.y * CELL - 26) * s;
+            if (x < -90 || x > this.width + 90 || y < -20 || y > this.height + 20) continue;
+            c.font = '500 8px -apple-system, Segoe UI, sans-serif';
+            c.fillStyle = '#18291fdb'; c.fillRect(x - 38, y - 9, 76, 15);
+            c.fillStyle = kingdoms.get(colony.kingdom_id)?.color || '#e8e3c9'; c.textAlign = 'center';
+            c.fillText(colony.name.slice(0, 14), x, y + 2);
         }
     }
     house(c, x, y, color, town) {

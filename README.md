@@ -21,22 +21,22 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-The current build includes `dist/Genesis Grove-0.3.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.3.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
+The current build includes `dist/Genesis Grove-0.4.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.4.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
 
 ## A living sandbox
 
 - Eight terrain brushes: meadow, forest, ocean, shallows, sand, highlands, mountains, lava.
-- Seeded island and continent generation, plus empty ocean for building from scratch.
+- Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
-- Settlers found villages, gather supplies, build houses, raise families, and age. Use Kingdoms to set peace, alliances, or wars; neighbouring kingdoms trade or raid according to their relationship, and nearby enemies fight on land.
-- A 100-kingdom challenge starts on a broad continent with 300 settlers, autonomous diplomacy, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy or rebellions under Kingdoms at any time.
+- Settlers found kingdoms, gather supplies, build houses, raise families, and age. With expansion enabled, kingdoms send caravans and ships to found more towns. Use Kingdoms to inspect their people, towns, resources, deaths, and relations, or set peace, alliances, and wars. Nearby enemies fight and can capture towns or capitals by siege.
+- A 100-kingdom challenge starts across four landmasses with 300 settlers, autonomous diplomacy and expansion, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy, expansion, or rebellions under Kingdoms at any time.
 - Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
 - Pause, 1×/2×/5×/20× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. War is local land combat and border raids; armies do not sail or capture distant towns yet. Seasons and age names are visual time markers. There are no boats, genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers between landmasses; armies still fight locally and do not launch naval invasions. The map stays 192 × 128 tiles, and the economy, diplomacy, and sieges are simpler than WorldBox. Seasons and age names are visual time markers. There are no genetics, research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
 
 ## Controls
 
@@ -48,7 +48,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Zoom | Scroll, + / −, or map buttons |
 | Fit world | Percentage button or minimap arrow |
 | Visit village | Click village in sidebar |
-| Manage kingdoms | Kingdoms button; select two villages, then choose alliance, peace, or war |
+| Manage kingdoms | Kingdoms button; inspect a kingdom, switch world laws, or set alliance, peace, and war |
 | Pause | Space |
 | Speed | 1 / 2 / 3 / 4 for 1× / 2× / 5× / 20× |
 | Inspect | I; Esc exits |
