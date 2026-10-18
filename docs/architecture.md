@@ -4,10 +4,12 @@ The game renderer and simulation use web standards, with no runtime library depe
 
 - `src/simulation.js`: deterministic 192 × 128 tile world, seeded terrain and ore deposits, civilian jobs, trained soldiers, resource-gated technology, mining and equipment crafting, caravan and ship trade and settler voyages, sieges, ecology, brush operations and versioned save validation. No DOM dependencies; tests run in Node.
 - `src/renderer.js`: cached procedural pixel terrain, animated creatures, settlement buildings, power effects, camera and minimap.
-- `src/app.js`: input, fixed 0.125-second simulation steps, UI, modal flows, manual device save/export/import, synthesized audio.
+- `src/app.js`: start menu, deterministic map preview and world setup, input, fixed 0.125-second simulation steps, UI, modal flows, manual device save/export/import, synthesized audio.
 - `src/desktop.cjs`: sandboxed Electron window and native application menu.
 - `scripts/serve.mjs`: loopback-only development server with a narrow static file allowlist.
 - `scripts/smoke.cjs`: isolated Electron session, native pointer actions, save/load and export checks, screenshot capture. Test files live in ignored `artifacts/`.
+
+The app opens on a main menu over an empty, paused world. World setup previews terrain from the same seed and landscape used for the playable world. Creation leaves the world paused until the player starts time or chooses to paint first.
 
 World time is advanced by the fixed-step loop, independently of display refresh rate. Twenty simulated seconds make one sandbox year; challenge years take two simulated seconds. At 20×, a challenge year lasts 0.1 real seconds before rendering overhead. Villager lifetimes use simulation seconds rather than realistic calendar ages. Population caps are 600 people in the sandbox or 1,200 in the challenge, 350 animals, 120 kingdoms, 240 additional towns, 40 settler voyages, and 60 concurrent trade shipments. Caching terrain avoids redrawing thousands of decorated tiles every frame; dynamic creatures, fire and overlays draw separately. Saves preserve RNG state so restored worlds evolve identically with matching future input and steps. Cosmetic power effects are deliberately transient.
 

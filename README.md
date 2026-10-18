@@ -21,12 +21,13 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.7.0 adds working town jobs, barracks and trained soldiers, and real supply shipments by caravan or ship. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
+Version 0.8.0 opens on a main menu. World setup shows a live map preview and lets you choose a seed, landscape, starting life, and simulation rules before time begins. You can start immediately or paint the map while paused. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
 
 ## A living sandbox
 
 - Eight terrain brushes: meadow, forest, ocean, shallows, sand, highlands, mountains, lava.
 - Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
+- A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused, and the four tool categories use a two-row selector that fits smaller windows.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
 - Each kingdom has its own banner color, clear territory borders, and a matching color in the kingdom list. Creatures have different pixel silhouettes and selection icons.
 - Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins.
@@ -48,6 +49,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Action | Control |
 | --- | --- |
 | Use brush | Left click / drag |
+| Open main menu | Menu button |
 | Place people or animals; strike meteor or lightning | One application per click |
 | Pan | Right or middle drag, Alt-drag, WASD |
 | Zoom | Scroll, + / −, or map buttons |

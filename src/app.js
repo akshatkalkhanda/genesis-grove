@@ -1,4 +1,4 @@
-import { World, WIDTH, HEIGHT, TERRAIN_NAMES, TECH_AGES, technology_level } from './simulation.js';
+import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
 const $ = id => document.getElementById(id);
 const TOOLS = {
@@ -43,13 +43,14 @@ const TOOLS = {
         ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
     ]
 };
-let world = new World();
+let world = new World({ preset: 'empty', inhabited: false });
 const renderer = new Renderer($('world'), $('minimap'));
 let category = 'terrain', tool = 'grass', previous_tool = 'grass', brush = 4, paused = false, speed = 1;
 let focused_village_id = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
 let toast_timer, audio_context, audio_gain, sound_on = false;
 const storage_key = 'genesis-grove-world-v1';
+let world_started = false;
 function toast(message) {
     $('toast').textContent = message; $('toast').hidden = false;
     clearTimeout(toast_timer); toast_timer = setTimeout(() => { $('toast').hidden = true; }, 3300);
@@ -298,21 +299,86 @@ function replace_world(next) {
     world = next; focused_village_id = null; renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
-$('new-world').onclick = () => $('new-dialog').showModal();
+const terrain_colors = ['#173e53', '#4e8f9b', '#d9c998', '#8cb873', '#537c59', '#89946b', '#a3aaa3', '#df8055', '#635f54'];
+let preview_timer;
+function refresh_preview() {
+    const form = $('new-form');
+    const preset = $('scenario').value === 'hundred' ? 'fractured' : $('preset').value;
+    const preview = new World({ seed: form.elements.seed.value, preset, inhabited: false });
+    const canvas = $('map-preview'), context = canvas.getContext('2d');
+    const image = context.createImageData(WIDTH, HEIGHT);
+    let land = 0;
+    for (let i = 0; i < preview.tiles.length; i++) {
+        const tile = preview.tiles[i], color = terrain_colors[tile];
+        if (tile > T.SHALLOW) land++;
+        image.data[i * 4] = parseInt(color.slice(1, 3), 16);
+        image.data[i * 4 + 1] = parseInt(color.slice(3, 5), 16);
+        image.data[i * 4 + 2] = parseInt(color.slice(5, 7), 16);
+        image.data[i * 4 + 3] = 255;
+    }
+    context.putImageData(image, 0, 0);
+    $('preview-summary').textContent = `${Math.round(land / preview.tiles.length * 100)}% land · ${WIDTH} × ${HEIGHT} tiles · seed ${form.elements.seed.value}`;
+}
+function schedule_preview() { clearTimeout(preview_timer); preview_timer = setTimeout(refresh_preview, 100); }
+function fresh_seed() { return Math.random().toString(36).slice(2, 10); }
+function open_world_setup() {
+    if (!$('new-form').elements.seed.value) $('new-form').elements.seed.value = fresh_seed();
+    refresh_preview(); $('new-dialog').showModal();
+}
+function show_start_ready() {
+    world_started = true;
+    set_pause(true);
+    $('start-home').hidden = true; $('start-ready').hidden = false;
+    $('start-message').textContent = `${world.name} is ready. Paint the map while paused, or start time when you choose.`;
+    $('start-detail').textContent = `${world.stats().land}% land · ${world.stats().villages} kingdoms · ${world.scenario === 'hundred' ? '100-kingdom challenge' : 'living sandbox'}`;
+    $('start-screen').hidden = false;
+}
+function close_start() { $('start-screen').hidden = true; set_pause(false); }
+function show_start_home() {
+    set_pause(true);
+    $('start-home').hidden = false; $('start-ready').hidden = true;
+    $('menu-resume').hidden = !world_started;
+    let saved = false;
+    try { saved = Boolean(localStorage.getItem(storage_key)); } catch { /* Storage may be unavailable. */ }
+    $('menu-continue').disabled = !saved;
+    $('start-message').textContent = 'Choose a landscape, set the rules, and begin your world.';
+    $('start-detail').textContent = 'Build it from empty ocean or choose a generated map.';
+    $('start-screen').hidden = false;
+}
+$('menu').onclick = show_start_home;
+$('menu-create').onclick = $('menu-edit').onclick = $('new-world').onclick = open_world_setup;
+$('menu-resume').onclick = close_start;
+$('menu-start').onclick = close_start;
+$('menu-paint').onclick = () => { $('start-screen').hidden = true; set_pause(true); };
+$('menu-continue').onclick = () => {
+    try { replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world)); show_start_ready(); }
+    catch { toast('That save could not be loaded. Your current world is safe.'); }
+};
+$('menu-load').onclick = () => $('load').click();
+$('regenerate-seed').onclick = () => { $('new-form').elements.seed.value = fresh_seed(); refresh_preview(); };
+$('new-form').elements.seed.oninput = schedule_preview;
+$('preset').onchange = schedule_preview;
 $('scenario').onchange = () => {
     const challenge = $('scenario').value === 'hundred';
     $('scenario-note').hidden = !challenge;
-    if (challenge) { $('preset').value = 'fractured'; $('inhabited').checked = true; }
+    if (challenge) {
+        $('preset').value = 'fractured'; $('inhabited').checked = true;
+        $('new-form').elements.diplomacy.checked = true;
+        $('new-form').elements.expansion.checked = true;
+    }
     $('preset').disabled = $('inhabited').disabled = challenge;
+    schedule_preview();
 };
 $('help').onclick = () => $('help-dialog').showModal();
 for (const button of document.querySelectorAll('[data-close]')) button.onclick = () => button.closest('dialog').close();
 $('new-form').onsubmit = event => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const name = String(data.get('name')).trim() || 'An Unwritten World';
-    const seed = String(data.get('seed')).trim() || String(Date.now());
-    replace_world(new World({ name, seed, preset: data.get('preset'), inhabited: data.has('inhabited'), scenario: data.get('scenario') }));
-    $('new-dialog').close(); toast('A new chapter. This one is yours.');
+    const seed = String(data.get('seed')).trim();
+    const next = new World({ name, seed, preset: $('preset').value, inhabited: data.has('inhabited'), scenario: $('scenario').value });
+    next.laws = { diplomacy: data.has('diplomacy'), expansion: data.has('expansion'), rebellions: data.has('rebellions') };
+    replace_world(next);
+    $('new-dialog').close(); show_start_ready(); toast('Your world is ready. Start time whenever you like.');
 };
 $('save').onclick = () => {
     try {
@@ -332,7 +398,11 @@ $('load').onclick = () => {
     $('load-dialog').showModal();
 };
 $('restore').onclick = () => {
-    try { replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world)); $('load-dialog').close(); toast('Welcome back to your world.'); }
+    try {
+        replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world));
+        $('load-dialog').close(); if (!$('start-screen').hidden) show_start_ready();
+        toast('Welcome back to your world.');
+    }
     catch { toast('That save could not be loaded. Your current world is safe.'); }
 };
 $('export').onclick = () => {
@@ -346,12 +416,13 @@ $('import').onchange = async event => {
     try {
         if (file.size > 8_000_000) throw new Error('World files must be smaller than 8 MB.');
         const next = World.deserialize(JSON.parse(await file.text()));
-        replace_world(next); $('load-dialog').close(); toast('Your world has arrived.');
+        replace_world(next); $('load-dialog').close(); if (!$('start-screen').hidden) show_start_ready();
+        toast('Your world has arrived.');
     } catch (error) { toast(error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message); }
     event.target.value = '';
 };
 window.addEventListener('keydown', event => {
-    if (document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+    if (!$('start-screen').hidden || document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); $('save').click(); return; }
     if (event.metaKey || event.ctrlKey) return;
     if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) set_pause(!paused); }
@@ -393,7 +464,7 @@ let last_frame = performance.now(), accumulator = 0, ui_elapsed = 0;
 function frame(now) {
     const dt = Math.min((now - last_frame) / 1000, 0.1); last_frame = now;
     const dialog_open = Boolean(document.querySelector('dialog[open]'));
-    if (!document.hidden && !dialog_open) {
+    if (!document.hidden && !dialog_open && $('start-screen').hidden) {
         if (!paused) {
             accumulator += dt * speed;
             let steps = 0;
@@ -407,6 +478,6 @@ function frame(now) {
     if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }
     requestAnimationFrame(frame);
 }
-show_tools(); update_ui(); requestAnimationFrame(frame);
+show_tools(); update_ui(); show_start_home(); requestAnimationFrame(frame);
 // A narrow, read-only diagnostic hook for the desktop smoke test.
 window.genesis = Object.freeze({ snapshot: () => world.serialize(), stats: () => world.stats(), camera: () => ({ width: renderer.width, height: renderer.height, base: renderer.base, zoom: renderer.zoom, origin: renderer.origin }) });
