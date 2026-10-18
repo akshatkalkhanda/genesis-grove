@@ -4,7 +4,7 @@ This release adds the 100-kingdom challenge, autonomous diplomacy, optional rebe
 
 ## Verified on this Mac
 
-- Fourteen deterministic simulation tests pass, including a 100-kingdom start, year-100 milestone, challenge save roundtrip, old-save defaults, and invalid-law rejection.
+- Fifteen deterministic simulation tests pass, including a 100-kingdom start, year-100 milestone, challenge save roundtrip, old-save defaults, invalid-law rejection, and an enabled rebellion splitting a town.
 - A separate 16,000-step run reached year 1,001 with all four survival milestones recorded and 46 of the original 100 kingdoms alive for the tested seed.
 - Syntax checks pass for all source, scripts and tests.
 - Nineteen Electron UI checks pass against the source and packaged macOS app. They cover the challenge setup, survival display, world-law toggle, 20× speed, native pointer painting, saves, export/import, and compact layout.

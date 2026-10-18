@@ -184,3 +184,16 @@ test('world laws are validated and old saves inherit safe defaults', () => {
     const bad = w.serialize(); bad.laws.rebellions = 'yes';
     assert.throws(() => World.deserialize(bad), /valid Genesis/);
 });
+test('enabled rebellions split a mature populous kingdom and start a war', () => {
+    const w = blank();
+    w.apply('grass', 50, 50, 25);
+    for (let i = 0; i < 5; i++) w.apply('human', 50, 50, 1);
+    w.villages[0].age = 41;
+    w.tick = 159;
+    w.laws.rebellions = true;
+    w.random = () => 0.1;
+    w.step(0.125);
+    assert.equal(w.villages.length, 2);
+    assert.equal(w.people.filter(p => p.village_id === w.villages[1].id).length, 4);
+    assert.equal(w.relation_status(w.villages[0].id, w.villages[1].id), 'war');
+});
