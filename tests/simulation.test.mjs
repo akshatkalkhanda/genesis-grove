@@ -75,6 +75,39 @@ test('barracks train soldiers who consume supplies and leave civilians out of co
     assert.ok(civilian.health < 100);
     assert.equal(soldier.health, 100);
 });
+test('town claims leave wilderness unclaimed and armies march together toward reachable enemies', () => {
+    const world = blank();
+    for (const x of [35, 45, 55, 65]) world.apply('grass', x, 40, 10);
+    world.apply('grass', 110, 40, 10);
+    const first = world.found_village(35, 40), second = world.found_village(65, 40);
+    const overseas = world.found_village(110, 40);
+    assert.equal(world.territory_at(35, 40), first.id);
+    assert.equal(world.territory_at(65, 40), second.id);
+    assert.equal(world.territory_at(50, 40), null);
+    assert.equal(world.territory_at(110, 40), overseas.id);
+    for (const x of [35, 35.3]) {
+        world.add_person(x, 40, first.id);
+        const soldier = world.people.at(-1); soldier.role = 'soldier'; soldier.age = 10;
+    }
+    for (let i = 0; i < 5; i++) world.add_person(65 + i * 0.4, 40, second.id);
+    world.add_person(110, 40, overseas.id);
+    world.set_relation(first.id, second.id, 'war');
+    world.set_relation(first.id, overseas.id, 'war');
+    const before = world.people.slice(0, 2).map(p => p.x);
+    world.step(0.125);
+    const army = world.armies.find(a => a.kingdom_id === first.id);
+    assert.equal(army.count, 2);
+    assert.equal(army.target_id, second.id);
+    assert.ok(world.people.slice(0, 2).every((p, index) => p.x > before[index]));
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
+    loaded.step(0.125);
+    assert.equal(loaded.armies.find(a => a.kingdom_id === first.id).target_id, second.id);
+    for (let i = 0; i < 300 && second.alive; i++) world.step(0.125);
+    assert.equal(second.alive, false, 'the marching group can reach and capture its target');
+    assert.equal(world.territory_at(65, 40), first.id, 'captured towns change visible claims');
+    world.step(0.125);
+    assert.equal(world.armies.find(a => a.kingdom_id === first.id).target_id, null, 'overseas targets need a future naval system');
+});
 test('miners exhaust deposits and peaceful kingdoms deliver real supplies by ship', () => {
     const world = blank(); world.apply('grass', 30, 40, 8); world.apply('grass', 70, 40, 8);
     const first = world.found_village(30, 40), second = world.found_village(70, 40);

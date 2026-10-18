@@ -46,6 +46,12 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("age-label").textContent'), 'STONE AGE');
         assert.equal(await js('document.getElementById("soldiers").textContent'), '0');
         checks.push('Kingdom banners and Stone Age display are distinct');
+        await click('#civilizations button');
+        assert.equal(await js('document.getElementById("selected-kingdom").hidden'), false);
+        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Supplies:")'));
+        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Towns:")'));
+        checks.push('Selecting a kingdom opens its detailed status panel');
+        await click('#zoom-reset');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 8);
         assert.equal(await js(`(()=>{const tabs=[...document.querySelectorAll('.tabs button')].map(e=>e.getBoundingClientRect());return tabs[0].right<=tabs[1].left&&tabs[0].bottom<=tabs[2].top})()`), true);
         checks.push('Tool categories fit without overlap');

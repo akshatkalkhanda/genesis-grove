@@ -16,7 +16,7 @@ export class Renderer {
         this.territory_ctx = this.territory.getContext('2d');
         this.territory_last = -Infinity;
         this.zoom = 1; this.pan_x = 0; this.pan_y = 0;
-        this.borders = true; this.pointer = null; this.brush = 4; this.tool = 'grass';
+        this.borders = true; this.pointer = null; this.brush = 4; this.tool = 'grass'; this.selected_kingdom_id = null;
         this.last_revision = -1; this.last_cache = 0;
         this.resize();
         new ResizeObserver(() => this.resize()).observe(canvas);
@@ -101,20 +101,14 @@ export class Renderer {
     }
     cache_territory(world) {
         const kingdoms = new Map(world.villages.map(v => [v.id, v]));
-        const living = [...world.villages.filter(v => v.alive), ...world.colonies];
+        const sites = world.claim_sites();
         const owners = new Int32Array(WIDTH * HEIGHT).fill(-1);
         const image = this.territory_ctx.createImageData(WIDTH, HEIGHT);
         const colors = new Map([...kingdoms].map(([id, kingdom]) => [id, [1, 3, 5].map(i => parseInt(kingdom.color.slice(i, i + 2), 16))]));
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x;
             if (world.tiles[i] < T.SAND || world.tiles[i] > T.HILL) continue;
-            let owner = -1, distance = Infinity;
-            for (let k = 0; k < living.length; k++) {
-                const dx = living[k].x - x, dy = living[k].y - y;
-                const candidate = dx * dx + dy * dy;
-                if (candidate < distance) { distance = candidate; owner = k; }
-            }
-            owners[i] = owner < 0 ? -1 : living[owner].kingdom_id || living[owner].id;
+            owners[i] = world.territory_at(x, y, sites) ?? -1;
         }
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x, owner = owners[i];
@@ -124,7 +118,7 @@ export class Renderer {
             const j = i * 4;
             const color = colors.get(owner) || [215, 219, 196];
             image.data[j] = color[0]; image.data[j + 1] = color[1];
-            image.data[j + 2] = color[2]; image.data[j + 3] = edge ? 225 : 82;
+            image.data[j + 2] = color[2]; image.data[j + 3] = edge ? 235 : 68;
         }
         this.territory_ctx.putImageData(image, 0, 0);
     }
@@ -220,6 +214,22 @@ export class Renderer {
             }
         }
         c.restore();
+        for (const army of world.armies || []) {
+            if (army.count < 2 || (!army.target_id && army.kingdom_id !== this.selected_kingdom_id)) continue;
+            const kingdom = kingdoms.get(army.kingdom_id);
+            if (!kingdom?.alive) continue;
+            const x = o.x + army.x * CELL * s, y = o.y + army.y * CELL * s;
+            if (x < -30 || x > this.width + 30 || y < -30 || y > this.height + 30) continue;
+            if (army.target_id && (this.zoom > 1.4 || army.kingdom_id === this.selected_kingdom_id)) {
+                c.strokeStyle = `${kingdom.color}77`; c.lineWidth = 1.5; c.setLineDash([4, 4]);
+                c.beginPath(); c.moveTo(x, y); c.lineTo(o.x + army.target_x * CELL * s, o.y + army.target_y * CELL * s); c.stroke(); c.setLineDash([]);
+            }
+            c.fillStyle = '#11221ce8'; c.fillRect(x - 12, y - 27, 27, 18);
+            c.fillStyle = '#dedfc4'; c.fillRect(x - 8, y - 24, 2, 15);
+            c.fillStyle = kingdom.color; c.beginPath(); c.moveTo(x - 6, y - 24); c.lineTo(x + 4, y - 20); c.lineTo(x - 6, y - 16); c.fill();
+            c.fillStyle = '#eff4df'; c.font = 'bold 9px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
+            c.fillText(String(army.count), x + 9, y - 15);
+        }
         const show_labels = world.villages.length < 20 || this.zoom > 1.7;
         if (this.borders && show_labels) for (const v of world.villages.filter(v => v.alive)) {
             const x = o.x + v.x * CELL * s, y = o.y + (v.y * CELL - 38) * s;

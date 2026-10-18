@@ -75,6 +75,7 @@ export class World {
         this.colonies = [];
         this.voyages = [];
         this.trades = [];
+        this.armies = [];
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
         this.year_length = this.scenario === 'hundred' ? 2 : 20;
@@ -238,6 +239,23 @@ export class World {
     settlements_of(kingdom_id) {
         const capital = this.villages.find(v => v.id === kingdom_id && v.alive);
         return capital ? [capital, ...this.colonies.filter(c => c.kingdom_id === kingdom_id)] : [];
+    }
+    claim_sites() {
+        const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
+        return [...this.villages.filter(v => v.alive), ...this.colonies.filter(c => living.has(c.kingdom_id))]
+            .map(site => ({ id: site.kingdom_id || site.id, x: site.x, y: site.y,
+                radius: Math.min(17, (site.kingdom_id ? 6 : 9) + site.houses.length * 0.65) }));
+    }
+    territory_at(x, y, sites = null) {
+        if (!this.walkable(x, y)) return null;
+        let owner = null, nearest = Infinity;
+        for (const site of sites || this.claim_sites()) {
+            const distance = (site.x - x) ** 2 + (site.y - y) ** 2;
+            if (distance <= site.radius ** 2 && distance < nearest) {
+                owner = site.id; nearest = distance;
+            }
+        }
+        return owner;
     }
     found_colony(kingdom_id, x, y) {
         const kingdom = this.villages.find(v => v.id === kingdom_id && v.alive);
@@ -529,6 +547,49 @@ export class World {
         if (this.walkable(nx, ny)) { unit.x = nx; unit.y = ny; }
         else unit.decision = 0;
     }
+    march(unit, target, dt, speed) {
+        const angle = Math.atan2(target.y - unit.y, target.x - unit.x);
+        const side = unit.id % 2 ? 1 : -1;
+        for (const offset of [0, side * 0.55, side * 1.1, side * 1.65, -side * 0.55, -side * 1.1, -side * 1.65]) {
+            const dx = Math.cos(angle + offset), dy = Math.sin(angle + offset);
+            const nx = unit.x + dx * dt * speed, ny = unit.y + dy * dt * speed;
+            if (!this.walkable(nx, ny)) continue;
+            unit.dx = dx; unit.dy = dy; this.move(unit, dt, speed); return;
+        }
+        unit.decision = 0;
+    }
+    plan_armies(war_targets) {
+        const groups = new Map();
+        for (const person of this.people) {
+            if (person.role !== 'soldier' || person.voyage_id || person.health <= 0) continue;
+            const key = person.home_id || person.village_id;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(person);
+        }
+        if (!this._army_masses || this.tick % 32 === 0) this._army_masses = this.landmasses();
+        const sites = [...this.villages.filter(v => v.alive), ...this.colonies];
+        const orders = new Map();
+        this.armies = [];
+        for (const [home_id, soldiers] of groups) {
+            const kingdom_id = soldiers[0].village_id;
+            const enemies = war_targets.get(kingdom_id);
+            const x = soldiers.reduce((sum, p) => sum + p.x, 0) / soldiers.length;
+            const y = soldiers.reduce((sum, p) => sum + p.y, 0) / soldiers.length;
+            const landmass = this._army_masses[this.index(soldiers[0].x, soldiers[0].y)];
+            let target = null, nearest = Infinity;
+            if (enemies && landmass >= 0) for (const site of sites) {
+                if (!enemies.has(site.kingdom_id || site.id) || this._army_masses[this.index(site.x, site.y)] !== landmass) continue;
+                const distance = (site.x - x) ** 2 + (site.y - y) ** 2;
+                if (distance < nearest) { nearest = distance; target = site; }
+            }
+            const order = { kingdom_id, home_id, x, y, count: soldiers.length,
+                target_id: target?.id || null, target_name: target?.name || null,
+                target_x: target?.x ?? null, target_y: target?.y ?? null };
+            orders.set(home_id, order);
+            this.armies.push(order);
+        }
+        return orders;
+    }
     advance_history() {
         if (this.laws.diplomacy && this.tick % 80 === 0) {
             const alive = this.villages.filter(v => v.alive);
@@ -610,6 +671,7 @@ export class World {
                 war_targets.get(a).add(b);
             }
         }
+        const army_orders = this.plan_armies(war_targets);
         const homes = new Map([...this.villages, ...this.colonies].map(site => [site.id, site]));
         for (const p of this.people) {
             if (p.health <= 0) continue;
@@ -622,12 +684,13 @@ export class World {
             const enemies = war_targets.get(p.village_id);
             if (p.decision <= 0) {
                 let a = this.random() * Math.PI * 2;
-                const target = p.role === 'soldier' && enemies && [...this.villages.filter(other => other.alive && enemies.has(other.id)), ...this.colonies.filter(c => enemies.has(c.kingdom_id))]
-                    .find(other => Math.hypot(other.x - p.x, other.y - p.y) < 32);
-                if (target && p.age > 5) a = Math.atan2(target.y - p.y, target.x - p.x);
-                else if (home && Math.hypot(p.x - home.x, p.y - home.y) > 9 + Math.sqrt(home.houses.length)) a = Math.atan2(home.y - p.y, home.x - p.x);
+                if (home && Math.hypot(p.x - home.x, p.y - home.y) > 9 + Math.sqrt(home.houses.length)) a = Math.atan2(home.y - p.y, home.x - p.x);
                 p.dx = Math.cos(a); p.dy = Math.sin(a); p.decision = 0.5 + this.random() * 3;
             }
+            const order = p.role === 'soldier' ? army_orders.get(p.home_id || p.village_id) : null;
+            let march_target = order?.target_id && p.age > 5
+                ? Math.hypot(p.x - order.x, p.y - order.y) > 5 ? { x: order.x, y: order.y }
+                    : { x: order.target_x, y: order.target_y } : null;
             if (enemies && p.role === 'soldier') {
                 let foe = null, nearest = 100;
                 for (const other of this.people) {
@@ -638,6 +701,7 @@ export class World {
                 if (foe) {
                     const angle = Math.atan2(foe.y - p.y, foe.x - p.x);
                     p.dx = Math.cos(angle); p.dy = Math.sin(angle);
+                    march_target = foe;
                     if (nearest < 2.25) {
                         const weapon = 1 + (p.weapon_level || 0) * 0.28;
                         const armor = 1 + (foe.armor_level || 0) * 0.10;
@@ -645,7 +709,8 @@ export class World {
                     }
                 }
             }
-            this.move(p, dt, p.role === 'soldier' ? 1.55 : 1.3);
+            if (march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) > 1) this.march(p, march_target, dt, 1.55);
+            else this.move(p, dt, p.role === 'soldier' ? 1.55 : 1.3);
             const i = this.index(p.x, p.y);
             if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); p.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
             if (this.fire[i] > 0) p.health -= dt * 38;

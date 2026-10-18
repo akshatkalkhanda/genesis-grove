@@ -160,6 +160,8 @@ function inspect(p) {
     const deposit = world.ores[world.index(tile.x, tile.y)];
     if (deposit) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam'][deposit]);
     const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
+    const claimed_by = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
+    add(claimed_by ? `${claimed_by.name} territory` : 'Unclaimed land');
     if (site) {
         const kingdom = site.kingdom_id ? world.villages.find(v => v.id === site.kingdom_id) : site;
         add(site.name); add(`${kingdom?.name || 'Lost kingdom'} · ${site.houses.length} homes`);
@@ -207,7 +209,10 @@ function update_diplomacy(preferred_source = null) {
         const jobs = document.createElement('span'); jobs.textContent = `${residents.filter(p => p.role !== 'soldier' && p.job === 'farmer').length} farmers · ${residents.filter(p => p.role !== 'soldier' && p.job === 'lumberjack').length} woodcutters · ${residents.filter(p => p.role !== 'soldier' && p.job === 'miner').length} miners · ${residents.filter(p => p.role !== 'soldier' && p.job === 'smith').length} smiths · ${residents.filter(p => p.role !== 'soldier' && p.job === 'builder').length} builders`;
         const logistics = document.createElement('span'); logistics.textContent = `${source.barracks ? 'Barracks active' : 'No barracks'} · ${world.trades.filter(t => t.from_id === source.id || t.to_id === source.id).length} trade routes underway`;
         const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
-        profile.append(heading, details, technology, resources, arsenal, jobs, logistics, relations);
+        const armies = world.armies.filter(army => army.kingdom_id === source.id);
+        const military = document.createElement('span');
+        military.textContent = `${armies.length} garrisons · ${armies.filter(army => army.target_id).length} marching toward enemy towns`;
+        profile.append(heading, details, technology, resources, arsenal, jobs, logistics, military, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);
@@ -235,6 +240,38 @@ for (const button of document.querySelectorAll('[data-relation]')) button.onclic
     const source_id = Number($('source-kingdom').value), target_id = Number($('target-kingdom').value);
     if (world.set_relation(source_id, target_id, button.dataset.relation)) { update_diplomacy(source_id); update_ui(); }
 };
+function update_selected_kingdom() {
+    const box = $('selected-kingdom');
+    const kingdom = world.villages.find(v => v.id === focused_village_id && v.alive);
+    box.hidden = !kingdom;
+    if (!kingdom) { renderer.selected_kingdom_id = null; return; }
+    renderer.selected_kingdom_id = kingdom.id;
+    box.style.setProperty('--civ-color', kingdom.color);
+    const residents = world.people.filter(p => p.village_id === kingdom.id);
+    const soldiers = residents.filter(p => p.role === 'soldier');
+    const towns = world.colonies.filter(c => c.kingdom_id === kingdom.id);
+    const enemies = world.villages.filter(v => v.alive && world.relation_status(kingdom.id, v.id) === 'war');
+    const allies = world.villages.filter(v => v.alive && world.relation_status(kingdom.id, v.id) === 'alliance');
+    const armies = world.armies.filter(a => a.kingdom_id === kingdom.id && a.count >= 2);
+    box.replaceChildren();
+    const heading = document.createElement('strong'); heading.textContent = kingdom.name;
+    const status = document.createElement('span'); status.className = 'kingdom-status';
+    status.textContent = enemies.length ? `⚔ At war with ${enemies.map(v => v.name).join(', ')}` : '☼ At peace';
+    const stats = document.createElement('div'); stats.className = 'kingdom-quick-stats';
+    stats.textContent = `${residents.length} people   ·   ${soldiers.length} soldiers   ·   ${towns.length + 1} towns`;
+    const age = document.createElement('div'); age.textContent = `${TECH_AGES[technology_level(kingdom)].name} · ${TECH_AGES[technology_level(kingdom)].weapon}`;
+    const stores = document.createElement('div'); stores.textContent = `Supplies: ${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`;
+    const ore = kingdom.ore || {};
+    const metals = document.createElement('div'); metals.textContent = `Ore: ${ore.copper || 0} copper · ${ore.tin || 0} tin · ${ore.iron || 0} iron · ${ore.coal || 0} coal`;
+    const settlements = document.createElement('div'); settlements.textContent = `Towns: Capital, ${towns.map(c => c.name).join(', ') || 'no colonies yet'}`;
+    const march = document.createElement('div'); march.textContent = armies.length
+        ? `Army: ${armies.map(a => `${a.count} ${a.target_name ? `marching to ${a.target_name}` : 'defending home'}`).join(' · ')}`
+        : 'Army: no formed garrison yet';
+    const diplomacy = document.createElement('div'); diplomacy.textContent = `Allies: ${allies.map(v => v.name).join(', ') || 'none'}`;
+    const manage = document.createElement('button'); manage.textContent = 'Manage kingdom ↗';
+    manage.onclick = () => $('diplomacy').click();
+    box.append(heading, status, stats, age, stores, metals, settlements, march, diplomacy, manage);
+}
 function update_ui() {
     const stats = world.stats();
     for (const id of ['population', 'soldiers', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
@@ -281,10 +318,14 @@ function update_ui() {
         const towns = world.colonies.filter(c => c.kingdom_id === v.id).length + 1;
         const small = document.createElement('small'); small.textContent = `${towns} ${towns === 1 ? 'town' : 'towns'} · ${TECH_AGES[technology_level(v)].name}${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
-        button.append(dot, name, count); button.onclick = () => { focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
+        button.append(dot, name, count); button.onclick = () => {
+            focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui();
+            $('selected-kingdom').scrollIntoView({ block: 'nearest' });
+        };
         $('civilizations').append(button);
     }
     if (!stats.villages) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Place people on land to begin a civilization.'; $('civilizations').append(p); }
+    update_selected_kingdom();
     const signature = JSON.stringify(world.events.slice(0, 6));
     if ($('chronicle').dataset.signature !== signature) {
         $('chronicle').dataset.signature = signature; $('chronicle').replaceChildren();
@@ -296,7 +337,8 @@ function update_ui() {
     }
 }
 function replace_world(next) {
-    world = next; focused_village_id = null; renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
+    world = next; focused_village_id = null; renderer.selected_kingdom_id = null;
+    renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
 const terrain_colors = ['#173e53', '#4e8f9b', '#d9c998', '#8cb873', '#537c59', '#89946b', '#a3aaa3', '#df8055', '#635f54'];
