@@ -7,11 +7,11 @@ app.setPath('userData', path.join(app.getPath('temp'), `genesis-smoke-${process.
 app.whenReady().then(async () => {
     const errors = [], checks = [];
     const win = new BrowserWindow({ width: 1440, height: 940, show: false, webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true } });
-    win.webContents.on('console-message', (_event, details) => { if (details.level === 'error') errors.push(details.message); });
+    win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
     win.webContents.on('render-process-gone', (_event, details) => errors.push(`Renderer stopped: ${details.reason}`));
     const js = code => win.webContents.executeJavaScript(code, true);
     const click = async selector => {
-        const rect = await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+        const rect = await js(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});element.scrollIntoView({block:'center',inline:'nearest'});const r=element.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
         win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         await delay(80);
@@ -22,6 +22,7 @@ app.whenReady().then(async () => {
         assert.equal(await js('window.genesis.stats().villages'), 3); checks.push('Initial populated world renders');
         assert.equal(await js('new Set(genesis.snapshot().villages.map(v => v.color)).size'), 3);
         assert.equal(await js('document.getElementById("age-label").textContent'), 'STONE AGE');
+        assert.equal(await js('document.getElementById("soldiers").textContent'), '0');
         checks.push('Kingdom banners and Stone Age display are distinct');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 8);
         const artifact_dir = path.join(__dirname, '..', 'artifacts'); await fs.mkdir(artifact_dir, { recursive: true });
@@ -58,6 +59,9 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("diplomacy-dialog").open'), true);
         assert.ok(await js('document.querySelectorAll("#source-kingdom option").length >= 2'));
         assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("Stone club")'));
+        assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("farmers")'));
+        assert.ok(await js('document.getElementById("kingdom-profile").textContent.includes("trade routes underway")'));
+        checks.push('Kingdom profile shows jobs, soldiers, and trade activity');
         await click('[data-relation="war"]');
         assert.equal(await js('genesis.snapshot().relations[0].status'), 'war');
         await click('[data-relation="alliance"]');

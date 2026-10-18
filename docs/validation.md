@@ -1,18 +1,19 @@
-# Version 0.6.0 validation — 18 October 2026
+# Version 0.7.0 validation — 18 October 2026
 
-Kingdoms now mine nearby ore deposits, spend ore to research new ages, and forge individual weapons and armor that change combat. Copper, tin, iron, and coal deposits can also be placed with Powers tools.
+Town residents now work as farmers, woodcutters, miners, smiths, or builders. Growing towns build barracks and train soldiers; civilians keep working while soldiers defend and attack. Peaceful kingdoms send real surplus supplies by caravan or ship.
 
 ## Verified on this Mac
 
-- Twenty deterministic simulation tests pass, including resource-gated age progression, persistent ore deposits, crafting and individual equipment, and save compatibility.
+- Twenty-two deterministic simulation tests pass, including recruitment and supply costs, civilian combat exclusion, deposit exhaustion, trade delivery, and save compatibility.
 - JavaScript syntax checks pass.
-- Twenty-two Electron smoke checks pass. They cover world creation, native painting, saves, import/export, kingdom laws and diplomacy, age/equipment UI, challenge mode, compact layout, and renderer errors.
-- macOS Apple silicon app built successfully and launches through Electron smoke checks. Its ZIP passes `unzip -tq`.
-- Windows x64 ZIP built successfully and passes `unzip -tq`. It has not been run on Windows.
+- Twenty-three Electron UI smoke checks pass against both source and the packaged Mac app, including world creation, native painting, saves, import/export, kingdom jobs and soldiers, diplomacy, challenge mode, compact layout, and renderer errors.
+- The 100-kingdom challenge remained active through 5,000 simulation steps in a development run, with surviving civilizations across Stone, Copper, Bronze, Iron, and Steel ages.
+- macOS Apple silicon app built and its ZIP checked with `unzip -tq`.
+- Windows x64 ZIP built and checked with `unzip -tq`; it has not been run on Windows.
 
 ## Deliverables and boundaries
 
-- `dist/mac-arm64/Genesis Grove.app` and `dist/Genesis Grove-0.6.0-arm64-mac.zip` — Apple silicon macOS build.
-- `dist/Genesis Grove-0.6.0-win.zip` — Windows x64 archive. Extract the full archive and run `Genesis Grove.exe`.
+- `dist/mac-arm64/Genesis Grove.app` and `dist/Genesis Grove-0.7.0-arm64-mac.zip` — Apple silicon macOS build.
+- `dist/Genesis Grove-0.7.0-win.zip` — Windows x64 archive. Extract the full archive and run `Genesis Grove.exe`.
 - Available signing identities are expired or untrusted. The macOS package is unsigned and not notarized. Windows execution, input, audio, import/export, and performance remain unverified on Windows.
-- Dedicated recruitable armies and troop formations are not part of this resource-and-forge update; residents still defend and fight under the existing war rules.
+- Soldiers fight locally; troop formations and naval invasions are not implemented.

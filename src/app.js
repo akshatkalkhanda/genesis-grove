@@ -162,7 +162,11 @@ function inspect(p) {
     if (site) {
         const kingdom = site.kingdom_id ? world.villages.find(v => v.id === site.kingdom_id) : site;
         add(site.name); add(`${kingdom?.name || 'Lost kingdom'} · ${site.houses.length} homes`);
-        if (kingdom) add(`${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`);
+        if (kingdom) {
+            add(`${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`);
+            const soldiers = world.people.filter(p => p.village_id === kingdom.id && p.role === 'soldier').length;
+            add(`${soldiers} soldiers${kingdom.barracks ? ' · barracks' : ''}`);
+        }
     }
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
@@ -186,10 +190,12 @@ function update_diplomacy(preferred_source = null) {
         profile.style.setProperty('--kingdom-color', source.color);
         const colonies = world.colonies.filter(c => c.kingdom_id === source.id);
         const population = world.people.filter(p => p.village_id === source.id).length;
+        const residents = world.people.filter(p => p.village_id === source.id);
+        const soldiers = residents.filter(p => p.role === 'soldier').length;
         const alliances = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'alliance').length;
         const wars = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'war').length;
         const heading = document.createElement('strong'); heading.textContent = source.name; heading.style.setProperty('--kingdom-color', source.color);
-        const details = document.createElement('span'); details.textContent = `${population} people · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
+        const details = document.createElement('span'); details.textContent = `${population} people · ${soldiers} soldiers · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
         const technology = document.createElement('span');
         const level = technology_level(source);
         technology.className = 'technology-detail'; technology.style.setProperty('--technology-color', TECH_AGES[level].color);
@@ -197,14 +203,16 @@ function update_diplomacy(preferred_source = null) {
         const ore = source.ore || {};
         const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · Cu ${ore.copper || 0} · Sn ${ore.tin || 0} · Fe ${ore.iron || 0} · coal ${ore.coal || 0}`;
         const arsenal = document.createElement('span'); arsenal.textContent = `${source.weapons || 0} spare weapons · ${source.armor_stock || 0} spare armor · ${source.deaths || 0} deaths`;
+        const jobs = document.createElement('span'); jobs.textContent = `${residents.filter(p => p.role !== 'soldier' && p.job === 'farmer').length} farmers · ${residents.filter(p => p.role !== 'soldier' && p.job === 'lumberjack').length} woodcutters · ${residents.filter(p => p.role !== 'soldier' && p.job === 'miner').length} miners · ${residents.filter(p => p.role !== 'soldier' && p.job === 'smith').length} smiths · ${residents.filter(p => p.role !== 'soldier' && p.job === 'builder').length} builders`;
+        const logistics = document.createElement('span'); logistics.textContent = `${source.barracks ? 'Barracks active' : 'No barracks'} · ${world.trades.filter(t => t.from_id === source.id || t.to_id === source.id).length} trade routes underway`;
         const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
-        profile.append(heading, details, technology, resources, arsenal, relations);
+        profile.append(heading, details, technology, resources, arsenal, jobs, logistics, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);
         }
     }
-    $('relation-status').textContent = status === 'alliance' ? 'Allied kingdoms exchange extra supplies when nearby.' : status === 'war' ? 'At war: nearby people fight and border raids can occur.' : status === 'peace' ? 'At peace: neighbouring kingdoms may trade.' : 'Create at least two living kingdoms to manage relations.';
+    $('relation-status').textContent = status === 'alliance' ? 'Allied kingdoms can send surplus supplies by caravan or ship.' : status === 'war' ? 'At war: trained soldiers attack and can capture towns by siege.' : status === 'peace' ? 'At peace: neighbouring kingdoms can send surplus supplies.' : 'Create at least two living kingdoms to manage relations.';
     for (const button of document.querySelectorAll('[data-relation]')) {
         button.disabled = !status || button.dataset.relation === status;
         button.classList.toggle('active', button.dataset.relation === status);
@@ -228,7 +236,7 @@ for (const button of document.querySelectorAll('[data-relation]')) button.onclic
 };
 function update_ui() {
     const stats = world.stats();
-    for (const id of ['population', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
+    for (const id of ['population', 'soldiers', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
     $('survival').hidden = world.scenario !== 'hundred';
     const founders = world.villages.slice(0, 100).filter(v => v.alive).length;
@@ -237,11 +245,14 @@ function update_ui() {
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
     $('season').textContent = `${seasons[Math.floor(world.time / 5) % 4]} · Year ${world.year}`;
     const living_kingdoms = world.villages.filter(v => v.alive);
-    const average_technology = living_kingdoms.length
-        ? living_kingdoms.reduce((sum, v) => sum + (v.tech_points || 0), 0) / living_kingdoms.length : 0;
-    const age_level = technology_level({ tech_points: average_technology });
+    const average_technology = living_kingdoms.length ? living_kingdoms.reduce((sum, v) => {
+        const level = technology_level(v), next = TECH_AGES[level + 1];
+        const fraction = next ? Math.min(0.95, Math.max(0, ((v.tech_points || 0) - TECH_AGES[level].threshold) / (next.threshold - TECH_AGES[level].threshold))) : 0;
+        return sum + level + fraction;
+    }, 0) / living_kingdoms.length : 0;
+    const age_level = Math.floor(average_technology);
     const age = TECH_AGES[age_level], next_age = TECH_AGES[age_level + 1];
-    const progress = next_age ? (average_technology - age.threshold) / (next_age.threshold - age.threshold) : 1;
+    const progress = next_age ? average_technology - age_level : 1;
     $('age-label').textContent = age.name.toUpperCase();
     $('era').textContent = `${age.name} · ${age.weapon.toLowerCase()}s`;
     $('age-progress').style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;

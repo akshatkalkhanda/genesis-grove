@@ -30,10 +30,11 @@ test('ore tools place persistent deposits and forges equip individual people', (
     const kingdom = world.villages[0], person = world.people[0];
     world.apply('copper', 41, 40, 1);
     assert.equal(world.ores[world.index(41, 40)], 1);
-    kingdom.research_level = 1; kingdom.ore.copper = 1; kingdom.forge_timer = 9.9;
+    world.add_person(40, 40, kingdom.id, 'human'); world.add_person(40, 40, kingdom.id, 'human');
+    kingdom.research_level = 1; kingdom.ore.copper = 6; kingdom.forge_timer = 9.9;
     world.step(0.125);
     assert.equal(person.weapon_level, 1);
-    assert.equal(kingdom.ore.copper, 0);
+    assert.equal(kingdom.ore.copper, 5);
     const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
     assert.equal(loaded.ores[loaded.index(41, 40)], 1);
     assert.equal(loaded.people[0].weapon_level, 1);
@@ -46,7 +47,7 @@ test('advanced weapons inflict more damage in the same fight', () => {
     basic.apply('human', 36, 40, 1); basic.apply('orc', 45, 40, 1);
     const [attacker, defender] = basic.villages;
     basic.set_relation(attacker.id, defender.id, 'war');
-    for (const person of basic.people.filter(p => p.village_id === attacker.id)) { person.x = 40; person.y = 40; person.gather = 0; }
+    for (const person of basic.people.filter(p => p.village_id === attacker.id)) { person.x = 40; person.y = 40; person.gather = 0; person.role = 'soldier'; }
     for (const person of basic.people.filter(p => p.village_id === defender.id)) { person.x = 41; person.y = 40; person.gather = 0; }
     const advanced = World.deserialize(JSON.parse(JSON.stringify(basic.serialize())));
     advanced.villages[0].research_level = 4;
@@ -54,6 +55,46 @@ test('advanced weapons inflict more damage in the same fight', () => {
     basic.step(0.125); advanced.step(0.125);
     const health = world => world.people.filter(p => p.village_id === defender.id).map(p => p.health);
     assert.ok(health(advanced).some((value, index) => value < health(basic)[index]));
+});
+test('barracks train soldiers who consume supplies and leave civilians out of combat', () => {
+    const world = blank(); world.apply('grass', 45, 45, 18);
+    const kingdom = world.found_village(40, 45);
+    for (let i = 0; i < 9; i++) { world.add_person(40, 45, kingdom.id); world.people.at(-1).age = 10; }
+    kingdom.food = 60; kingdom.wood = 40; kingdom.expansion_timer = 11; kingdom.training_timer = 7.9;
+    world.step(0.125);
+    assert.equal(kingdom.barracks, 1);
+    assert.equal(world.stats().soldiers, 1);
+    assert.ok(kingdom.food < 60);
+    const enemy = world.found_village(48, 45, 'orc'); world.add_person(48, 45, enemy.id, 'orc');
+    const soldier = world.people.find(p => p.village_id === kingdom.id && p.role === 'soldier');
+    const civilian = world.people.find(p => p.village_id === enemy.id);
+    world.set_relation(kingdom.id, enemy.id, 'war');
+    soldier.x = 44; soldier.y = 45; soldier.gather = 0;
+    civilian.x = 45; civilian.y = 45; civilian.gather = 0;
+    world.step(0.125);
+    assert.ok(civilian.health < 100);
+    assert.equal(soldier.health, 100);
+});
+test('miners exhaust deposits and peaceful kingdoms deliver real supplies by ship', () => {
+    const world = blank(); world.apply('grass', 30, 40, 8); world.apply('grass', 70, 40, 8);
+    const first = world.found_village(30, 40), second = world.found_village(70, 40);
+    for (let i = 0; i < 3; i++) world.add_person(30, 40, first.id);
+    world.add_person(70, 40, second.id);
+    world.ores.fill(0); world.ores[world.index(31, 40)] = 1;
+    first.mine_timer = 7.9; world.step(0.125);
+    assert.equal(first.ore.copper, 4);
+    assert.equal(world.ores[world.index(31, 40)], 0);
+    first.food = 80; second.food = 5;
+    world.schedule_trades();
+    assert.equal(world.trades.length, 1);
+    assert.equal(world.trades[0].kind, 'ship');
+    assert.equal(first.food, 74);
+    assert.equal(second.food, 5);
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
+    assert.deepEqual(loaded.serialize(), world.serialize());
+    loaded.advance_trades(loaded.trades[0].duration);
+    assert.equal(loaded.villages[1].food, 11);
+    assert.equal(loaded.trades.length, 0);
 });
 test('default world has viable civilizations that build and grow without intervention', () => {
     const w = new World();
@@ -163,8 +204,8 @@ test('race strengths change resources, housing, and population growth', () => {
     }
     const [elf, human, dwarf, orc] = w.villages;
     w.step(0.125);
-    assert.equal(elf.wood - 15, 6);
-    assert.equal(human.wood - 15, 3);
+    assert.equal(elf.wood - 15, 7);
+    assert.equal(human.wood - 15, 4);
     assert.ok(elf.food > human.food);
     w.set_tile(60, 50, T.HILL);
     for (const person of w.people.filter(p => p.village_id === human.id || p.village_id === dwarf.id)) person.gather = 3;
@@ -192,6 +233,7 @@ test('kingdom relations control fighting and survive old and new saves', () => {
     assert.equal(w.set_relation(first.id, second.id, 'war'), true);
     const human = w.people.find(p => p.village_id === first.id);
     const orc = w.people.find(p => p.village_id === second.id);
+    human.role = orc.role = 'soldier';
     human.x = 37; human.y = 40; human.gather = 0;
     orc.x = 38; orc.y = 40; orc.gather = 0;
     w.step(0.125);
@@ -272,7 +314,7 @@ test('sieges capture towns and capitals, preserving the conquered population', (
     w.add_person(58, 45, defender.id, 'orc');
     w.people.at(-1).home_id = colony.id;
     assert.equal(w.set_relation(attacker.id, defender.id, 'war'), true);
-    for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = 58; person.y = 45; }
+    for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = 58; person.y = 45; person.role = 'soldier'; }
     for (let i = 1; i <= 8; i++) { w.tick = i * 8; w.resolve_sieges(); }
     assert.equal(colony.kingdom_id, attacker.id);
     assert.ok(w.people.some(p => p.home_id === colony.id && p.village_id === attacker.id));

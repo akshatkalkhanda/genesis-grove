@@ -180,6 +180,16 @@ export class Renderer {
             c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
             c.fillStyle = kingdoms.get(voyage.kingdom_id)?.color || '#e8e3c9'; c.fillRect(x - 5, y, 11, 2);
         }
+        for (const trade of world.trades || []) {
+            const sender = kingdoms.get(trade.from_id), recipient = kingdoms.get(trade.to_id);
+            if (!sender || !recipient) continue;
+            const x = (sender.x + (recipient.x - sender.x) * trade.progress) * CELL;
+            const y = (sender.y + (recipient.y - sender.y) * trade.progress) * CELL;
+            c.fillStyle = trade.kind === 'ship' ? '#735b45' : '#8e724e'; c.fillRect(x - 6, y, 12, 4);
+            c.fillStyle = trade.good === 'food' ? '#c6bb6d' : trade.good === 'wood' ? '#7e9d59' : '#a9b8b8'; c.fillRect(x - 3, y - 4, 6, 4);
+            if (trade.kind === 'ship') { c.fillStyle = '#e9dfb8'; c.fillRect(x, y - 10, 1, 8); c.fillRect(x + 1, y - 9, 5, 5); }
+            else { c.fillStyle = '#3f3b32'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2); }
+        }
         for (const animal of world.animals) this.animal(c, animal);
         for (const p of world.people) {
             if (p.voyage_id) continue;
@@ -270,6 +280,7 @@ export class Renderer {
         c.fillStyle = skin; c.fillRect(x - 2, y - 8, 4, 4);
         c.fillStyle = person.race === 'elf' ? '#e5d9a2' : person.race === 'orc' ? '#344330' : '#493d32';
         c.fillRect(x - 2, y - 9, 4, 2);
+        if (person.role === 'soldier') { c.fillStyle = TECH_AGES[Math.max(level, 1)].color; c.fillRect(x - 3, y - 10, 6, 2); c.fillRect(x - 3, y - 4, 1, 4); c.fillRect(x + 2, y - 4, 1, 4); }
         if (person.race === 'elf') { c.fillStyle = skin; c.fillRect(x - 4, y - 7, 2, 1); c.fillRect(x + 2, y - 7, 2, 1); }
         if (person.race === 'dwarf') { c.fillStyle = '#a5683f'; c.fillRect(x - 2, y - 5, 4, 3); }
         if (person.race === 'orc') { c.fillStyle = '#e9dfb8'; c.fillRect(x - 3, y - 5, 1, 2); c.fillRect(x + 2, y - 5, 1, 2); }
@@ -281,7 +292,7 @@ export class Renderer {
         c.fillStyle = metal;
         if (level === 0) c.fillRect(x + face * 4 - 2, y - 9 + sway, 4, 3);
         else { c.fillRect(x + face * 4 - 1, y - 12 + sway, 2, 6); c.fillRect(x + face * 4 - 3, y - 6 + sway, 6, 1); }
-        if (level >= 2) { c.fillStyle = metal; c.fillRect(x - face * 4 - 2, y - 3, 3, 5); }
+        if (level >= 2 || person.role === 'soldier') { c.fillStyle = metal; c.fillRect(x - face * 4 - 2, y - 3, 3, 5); }
     }
     house(c, x, y, color, town, level = 0) {
         const w = town ? 13 : 8, h = town ? 10 : 7;
@@ -296,18 +307,24 @@ export class Renderer {
         if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
     }
     industry(c, x, y, kingdom) {
-        if ((kingdom.mine_timer || 0) > 0) {
+        if (kingdom.mine_level) {
             c.fillStyle = '#463d32'; c.fillRect(x - 19, y - 7, 11, 7);
             c.fillStyle = '#7c6750'; c.fillRect(x - 20, y - 10, 13, 4);
             c.fillStyle = '#b4a080'; c.fillRect(x - 17, y - 6, 2, 6); c.fillRect(x - 12, y - 6, 2, 6);
             c.fillStyle = '#d7b76b'; c.fillRect(x - 15, y - 4, 3, 2);
         }
-        if (technology_level(kingdom) > 0) {
+        if (kingdom.forge_level) {
             c.fillStyle = '#544538'; c.fillRect(x + 9, y - 8, 12, 8);
             c.fillStyle = '#98634a'; c.fillRect(x + 8, y - 11, 14, 4);
             c.fillStyle = '#d77c50'; c.fillRect(x + 13, y - 7, 4, 4);
             c.fillStyle = '#edcf7c'; c.fillRect(x + 14, y - 6, 2, 2);
             c.fillStyle = '#78675a'; c.fillRect(x + 18, y - 15, 3, 6);
+        }
+        if (kingdom.barracks) {
+            c.fillStyle = '#5d5448'; c.fillRect(x + 25, y - 9, 12, 9);
+            c.fillStyle = '#ae9870'; c.fillRect(x + 24, y - 12, 14, 4);
+            c.fillStyle = kingdom.color; c.fillRect(x + 29, y - 15, 6, 3);
+            c.fillStyle = '#d7c48f'; c.fillRect(x + 30, y - 5, 3, 5);
         }
     }
     effect(c, e, now) {

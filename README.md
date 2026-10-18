@@ -21,7 +21,7 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.6.0 adds mineable deposits, material-gated age research, and forge-made individual weapons and armor. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
+Version 0.7.0 adds working town jobs, barracks and trained soldiers, and real supply shipments by caravan or ship. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
 
 ## A living sandbox
 
@@ -29,10 +29,11 @@ Version 0.6.0 adds mineable deposits, material-gated age research, and forge-mad
 - Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
 - Each kingdom has its own banner color, clear territory borders, and a matching color in the kingdom list. Creatures have different pixel silhouettes and selection icons.
-- Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom, then let nearby settlers mine them.
+- Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins.
 - Kingdoms research Copper, Bronze, Iron, and Steel by reaching age milestones and paying the required ore. Forging consumes metal and wood; people wear their own weapons and armor, changing combat damage and protection. Kingdom profiles show material and spare-gear stocks.
 - Later-age buildings gain stronger-looking materials and towers. The world-age display tracks the average progress of living kingdoms.
-- Settlers found kingdoms, gather supplies, build houses, raise families, and age. With expansion enabled, kingdoms send caravans and ships to found more towns. Use Kingdoms to inspect their people, towns, resources, deaths, and relations, or set peace, alliances, and wars. Nearby enemies fight and can capture towns or capitals by siege.
+- Civilians work as farmers, woodcutters, miners, smiths, and builders. Their jobs change food and timber output, ore gathering, forging, and housing cost. Growing towns build barracks and recruit soldiers who use forged gear and consume extra food. Soldiers fight and capture towns or capitals by siege while civilians continue town work.
+- Peaceful neighbours send surplus food, wood, or ore by caravan or ship; goods leave the sender immediately and arrive after travel. With expansion enabled, kingdoms also send settlers to found towns. Open Kingdoms to inspect jobs, soldiers, supplies, routes, and relations or set peace, alliances, and wars.
 - A 100-kingdom challenge starts across four landmasses with 300 settlers, autonomous diplomacy and expansion, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy, expansion, or rebellions under Kingdoms at any time.
 - Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
@@ -40,7 +41,7 @@ Version 0.6.0 adds mineable deposits, material-gated age research, and forge-mad
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers between landmasses; armies still fight locally and do not launch naval invasions. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no genetics, branching research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers and trade goods between landmasses; armies fight locally and do not launch naval invasions. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no troop formations, genetics, branching research trees, multiplayer, or campaign yet. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
 
 ## Controls
 
