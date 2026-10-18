@@ -104,7 +104,8 @@ export class Renderer {
             if (!v.alive) continue;
             const pop = world.people.filter(p => p.village_id === v.id).length;
             if (this.borders) {
-                c.strokeStyle = v.color + '85'; c.fillStyle = v.color + '0d'; c.lineWidth = 1 / s;
+                const at_war = world.villages.some(other => other.alive && other.id !== v.id && world.relation_status(v.id, other.id) === 'war');
+                c.strokeStyle = at_war ? '#e7816dbb' : v.color + '85'; c.fillStyle = at_war ? '#e7816d12' : v.color + '0d'; c.lineWidth = 1 / s;
                 c.setLineDash([3, 5]); c.beginPath(); c.arc(v.x * CELL, v.y * CELL, (9 + Math.sqrt(pop) * 1.1) * CELL, 0, Math.PI * 2); c.fill(); c.stroke(); c.setLineDash([]);
             }
             // Trails lead to homes, then little farms grow around the settlement.

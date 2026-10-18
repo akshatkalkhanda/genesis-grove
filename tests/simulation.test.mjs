@@ -102,3 +102,62 @@ test('world populations remain bounded during repeated spawning', () => {
     for (let i = 0; i < 700; i++) { w.apply('human', 50, 50, 1); w.apply('sheep', 50, 50, 1); }
     assert.equal(w.people.length, 600); assert.equal(w.animals.length, 350);
 });
+test('race strengths change resources, housing, and population growth', () => {
+    const w = blank();
+    for (const [race, x] of [['elf', 20], ['human', 60], ['dwarf', 100], ['orc', 140]]) {
+        w.apply('grass', x, 50, 10);
+        w.apply(race, x, 50, 1);
+        const village = w.villages.at(-1);
+        const ground = race === 'elf' || (race === 'human' && x === 60) ? T.FOREST : race === 'dwarf' ? T.HILL : T.GRASS;
+        w.set_tile(x, 50, ground);
+        for (const person of w.people.filter(p => p.village_id === village.id)) {
+            person.x = x; person.y = 50; person.dx = 0; person.dy = 0;
+            person.decision = 5; person.gather = 3;
+        }
+    }
+    const [elf, human, dwarf, orc] = w.villages;
+    w.step(0.125);
+    assert.equal(elf.wood - 15, 6);
+    assert.equal(human.wood - 15, 3);
+    assert.ok(elf.food > human.food);
+    w.set_tile(60, 50, T.HILL);
+    for (const person of w.people.filter(p => p.village_id === human.id || p.village_id === dwarf.id)) person.gather = 3;
+    const human_food = human.food, dwarf_food = dwarf.food;
+    w.step(0.125);
+    assert.ok(dwarf.food - dwarf_food > human.food - human_food);
+    elf.wood = human.wood = dwarf.wood = 5;
+    elf.expansion_timer = human.expansion_timer = dwarf.expansion_timer = 11;
+    w.step(0.125);
+    assert.equal(dwarf.wood, 1);
+    assert.equal(human.wood, 0);
+    orc.birth_timer = human.birth_timer = 9;
+    orc.food = human.food = 100;
+    const orc_people = w.people.filter(p => p.village_id === orc.id).length;
+    const human_people = w.people.filter(p => p.village_id === human.id).length;
+    w.step(0.125);
+    assert.equal(w.people.filter(p => p.village_id === orc.id).length, orc_people + 1);
+    assert.equal(w.people.filter(p => p.village_id === human.id).length, human_people);
+});
+test('kingdom relations control fighting and survive old and new saves', () => {
+    const w = blank(); w.apply('grass', 38, 40, 20);
+    w.apply('human', 30, 40, 1); w.apply('orc', 45, 40, 1);
+    const [first, second] = w.villages;
+    assert.equal(w.relation_status(first.id, second.id), 'peace');
+    assert.equal(w.set_relation(first.id, second.id, 'war'), true);
+    const human = w.people.find(p => p.village_id === first.id);
+    const orc = w.people.find(p => p.village_id === second.id);
+    human.x = 37; human.y = 40; human.gather = 0;
+    orc.x = 38; orc.y = 40; orc.gather = 0;
+    w.step(0.125);
+    assert.ok(human.health < orc.health);
+    assert.ok(orc.health < 100);
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(w.serialize())));
+    assert.equal(loaded.relation_status(first.id, second.id), 'war');
+    assert.equal(loaded.set_relation(first.id, second.id, 'peace'), true);
+    assert.equal(loaded.relation_status(first.id, second.id), 'peace');
+    assert.equal(loaded.set_relation(first.id, second.id, 'alliance'), true);
+    const legacy = structuredClone(w.serialize()); delete legacy.relations;
+    assert.equal(World.deserialize(legacy).relation_status(first.id, second.id), 'peace');
+    const corrupt = structuredClone(w.serialize()); corrupt.relations[0].b = 99999;
+    assert.throws(() => World.deserialize(corrupt), /valid Genesis/);
+});

@@ -13,7 +13,7 @@ const TOOLS = {
         ['lava', 'Lava', '♨', '#e8a26e', 'Pour molten rock. It cools to ash, and eventually life returns.']
     ],
     life: [
-        ['human', 'Humans', '♟', '#e3cf9a', 'Place three settlers. Humans adapt quickly and build balanced villages.'],
+        ['human', 'Humans', '♟', '#e3cf9a', 'Place three settlers. Humans gather food reliably across all kinds of land.'],
         ['elf', 'Elves', '♧', '#a8d89b', 'Forest folk who gather timber faster and thrive among trees.'],
         ['dwarf', 'Dwarves', '⛏', '#d7a878', 'Hardy highland settlers who gather food from rugged land.'],
         ['orc', 'Orcs', '♜', '#99bd7a', 'Tough settlers who grow quickly and favor border raids.'],
@@ -42,6 +42,7 @@ const TOOLS = {
 let world = new World();
 const renderer = new Renderer($('world'), $('minimap'));
 let category = 'terrain', tool = 'grass', previous_tool = 'grass', brush = 4, paused = false, speed = 1;
+let focused_village_id = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
 let toast_timer, audio_context, audio_gain, sound_on = false;
 const storage_key = 'genesis-grove-world-v1';
@@ -156,6 +157,33 @@ function inspect(p) {
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
 }
+function update_diplomacy(preferred_source = null) {
+    const alive = world.villages.filter(v => v.alive);
+    const source_select = $('source-kingdom'), target_select = $('target-kingdom');
+    const source_id = preferred_source ?? Number(source_select.value);
+    const source = alive.find(v => v.id === source_id) || alive[0];
+    const previous_target = Number(target_select.value);
+    const target = alive.find(v => v.id === previous_target && v.id !== source?.id) || alive.find(v => v.id !== source?.id);
+    const option = village => { const item = document.createElement('option'); item.value = village.id; item.textContent = village.name; return item; };
+    source_select.replaceChildren(...alive.map(option));
+    target_select.replaceChildren(...alive.filter(v => v.id !== source?.id).map(option));
+    source_select.disabled = target_select.disabled = alive.length < 2;
+    if (source) source_select.value = String(source.id);
+    if (target) target_select.value = String(target.id);
+    const status = source && target ? world.relation_status(source.id, target.id) : null;
+    $('relation-status').textContent = status === 'alliance' ? 'Allied kingdoms exchange extra supplies when nearby.' : status === 'war' ? 'At war: nearby people fight and border raids can occur.' : status === 'peace' ? 'At peace: neighbouring kingdoms may trade.' : 'Create at least two living kingdoms to manage relations.';
+    for (const button of document.querySelectorAll('[data-relation]')) {
+        button.disabled = !status || button.dataset.relation === status;
+        button.classList.toggle('active', button.dataset.relation === status);
+    }
+}
+$('diplomacy').onclick = () => { update_diplomacy(focused_village_id); $('diplomacy-dialog').showModal(); };
+$('source-kingdom').onchange = event => update_diplomacy(Number(event.currentTarget.value));
+$('target-kingdom').onchange = () => update_diplomacy();
+for (const button of document.querySelectorAll('[data-relation]')) button.onclick = () => {
+    const source_id = Number($('source-kingdom').value), target_id = Number($('target-kingdom').value);
+    if (world.set_relation(source_id, target_id, button.dataset.relation)) { update_diplomacy(source_id); update_ui(); }
+};
 function update_ui() {
     const stats = world.stats();
     for (const id of ['population', 'wildlife', 'villages', 'trees']) $(id).textContent = stats[id].toLocaleString();
@@ -169,12 +197,14 @@ function update_ui() {
     for (const v of world.villages.filter(v => v.alive)) {
         const pop = world.people.filter(p => p.village_id === v.id).length;
         const button = document.createElement('button'); button.className = 'civilization'; button.title = `Visit ${v.name}`;
+        button.classList.toggle('active', focused_village_id === v.id);
         button.style.setProperty('--civ-color', v.color);
         const dot = document.createElement('span'); dot.className = 'civ-dot';
         const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
-        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food`; name.append(small);
+        const wars = world.villages.filter(other => other.alive && other.id !== v.id && world.relation_status(v.id, other.id) === 'war').length;
+        const small = document.createElement('small'); small.textContent = `${v.houses.length} homes · ${Math.floor(v.food)} food${wars ? ' · ⚔ at war' : ''}`; name.append(small);
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
-        button.append(dot, name, count); button.onclick = () => { renderer.focus(v.x, v.y); update_zoom(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
+        button.append(dot, name, count); button.onclick = () => { focused_village_id = v.id; renderer.focus(v.x, v.y); update_zoom(); update_ui(); toast(`${v.name} · ${pop} people · ${Math.floor(v.wood)} timber`); };
         $('civilizations').append(button);
     }
     if (!stats.villages) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Place people on land to begin a civilization.'; $('civilizations').append(p); }
@@ -189,7 +219,7 @@ function update_ui() {
     }
 }
 function replace_world(next) {
-    world = next; renderer.last_revision = -1; renderer.fit(); renderer.pointer = null;
+    world = next; focused_village_id = null; renderer.last_revision = -1; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
 $('new-world').onclick = () => $('new-dialog').showModal();

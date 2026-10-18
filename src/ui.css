@@ -6,3 +6,7 @@
 .tool-panel>*,.info-panel>*{flex-shrink:0}
 @media(min-height:851px){#civilizations{min-height:112px}#chronicle{height:138px}}
 @media(max-width:900px){.info-panel{display:none}}
+#diplomacy-dialog .diplomacy-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:18px 0}
+#diplomacy-dialog .diplomacy-actions button{padding:10px 5px;font-size:10px}
+#diplomacy-dialog [data-relation=war].active{color:#f2b2a5;border-color:#ad6a5c;background:#51332e}
+#relation-status{padding:12px;background:#263725;border-radius:6px;color:#deebcf}

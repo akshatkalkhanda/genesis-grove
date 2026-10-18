@@ -51,6 +51,15 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("world-tooltip").hidden'), false); checks.push('Inspect shows live tile details');
         await click('#help'); assert.equal(await js('document.getElementById("help-dialog").open'), true); await click('#help-dialog [data-close]');
         checks.push('Help dialog opens and closes');
+        await click('#diplomacy');
+        assert.equal(await js('document.getElementById("diplomacy-dialog").open'), true);
+        assert.ok(await js('document.querySelectorAll("#source-kingdom option").length >= 2'));
+        await click('[data-relation="war"]');
+        assert.equal(await js('genesis.snapshot().relations[0].status'), 'war');
+        await click('[data-relation="alliance"]');
+        assert.equal(await js('genesis.snapshot().relations[0].status'), 'alliance');
+        await click('#diplomacy-dialog [data-close]');
+        checks.push('Kingdoms dialog changes and saves relations');
         // Verify export reaches Electron's download flow and produces a valid portable save.
         const export_path = path.join(artifact_dir, 'exported-world.json');
         const downloaded = new Promise((resolve, reject) => {

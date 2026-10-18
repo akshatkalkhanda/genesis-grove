@@ -39,6 +39,7 @@ export class World {
         this.people = [];
         this.animals = [];
         this.villages = [];
+        this.relations = [];
         this.events = [];
         this.effects = [];
         this.revision = 1;
@@ -112,6 +113,24 @@ export class World {
         this.events.unshift({ text, year: this.year, kind });
         this.events = this.events.slice(0, 40);
     }
+    relation_status(a, b) {
+        if (a === b) return 'peace';
+        const low = Math.min(a, b), high = Math.max(a, b);
+        return this.relations.find(r => r.a === low && r.b === high)?.status || 'peace';
+    }
+    set_relation(a, b, status) {
+        if (!['peace', 'alliance', 'war'].includes(status) || a === b) return false;
+        const first = this.villages.find(v => v.id === a && v.alive);
+        const second = this.villages.find(v => v.id === b && v.alive);
+        if (!first || !second || this.relation_status(a, b) === status) return false;
+        const low = Math.min(a, b), high = Math.max(a, b);
+        const existing = this.relations.find(r => r.a === low && r.b === high);
+        if (existing) existing.status = status;
+        else this.relations.push({ a: low, b: high, status });
+        const action = status === 'war' ? 'declare war' : status === 'alliance' ? 'form an alliance' : 'make peace';
+        this.log(`${first.name} and ${second.name} ${action}.`, status === 'war' ? 'disaster' : 'village');
+        return true;
+    }
     found_village(x, y, race = 'human') {
         if (this.villages.length >= 8) return this.villages.reduce((a, b) => Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b);
         const n = this.villages.length;
@@ -137,7 +156,7 @@ export class World {
     add_person(x, y, village_id = null, race = 'human') {
         if (!this.walkable(x, y) || this.people.length >= 600) return false;
         if (!village_id) {
-            let nearest = this.villages.filter(v => v.alive).find(v => Math.hypot(v.x - x, v.y - y) < 22);
+            let nearest = this.villages.filter(v => v.alive && v.race === race).find(v => Math.hypot(v.x - x, v.y - y) < 22);
             nearest ||= this.found_village(x, y, race);
             nearest.alive = true;
             village_id = nearest.id;
@@ -230,15 +249,40 @@ export class World {
         dt = clamp(dt, 0, 0.25);
         this.time += dt;
         this.tick++;
+        const war_targets = new Map();
+        for (const relation of this.relations) {
+            if (relation.status !== 'war') continue;
+            for (const [a, b] of [[relation.a, relation.b], [relation.b, relation.a]]) {
+                if (!war_targets.has(a)) war_targets.set(a, new Set());
+                war_targets.get(a).add(b);
+            }
+        }
         for (const p of this.people) {
+            if (p.health <= 0) continue;
             p.age += dt;
             p.decision -= dt;
             p.gather += dt;
             const v = this.villages.find(v => v.id === p.village_id);
+            const enemies = war_targets.get(p.village_id);
             if (p.decision <= 0) {
                 let a = this.random() * Math.PI * 2;
-                if (v && Math.hypot(p.x - v.x, p.y - v.y) > 9 + Math.sqrt(v.houses.length)) a = Math.atan2(v.y - p.y, v.x - p.x);
+                const target = enemies && this.villages.find(other => other.alive && enemies.has(other.id) && Math.hypot(other.x - p.x, other.y - p.y) < 32);
+                if (target && p.age > 5) a = Math.atan2(target.y - p.y, target.x - p.x);
+                else if (v && Math.hypot(p.x - v.x, p.y - v.y) > 9 + Math.sqrt(v.houses.length)) a = Math.atan2(v.y - p.y, v.x - p.x);
                 p.dx = Math.cos(a); p.dy = Math.sin(a); p.decision = 0.5 + this.random() * 3;
+            }
+            if (enemies) {
+                let foe = null, nearest = 100;
+                for (const other of this.people) {
+                    if (other.health <= 0 || !enemies.has(other.village_id)) continue;
+                    const distance = (other.x - p.x) ** 2 + (other.y - p.y) ** 2;
+                    if (distance < nearest) { foe = other; nearest = distance; }
+                }
+                if (foe) {
+                    const angle = Math.atan2(foe.y - p.y, foe.x - p.x);
+                    p.dx = Math.cos(angle); p.dy = Math.sin(angle);
+                    if (nearest < 2.25) foe.health -= dt * (p.race === 'orc' ? 16 : 12) * (foe.race === 'orc' ? 0.75 : 1);
+                }
             }
             this.move(p, dt, 1.3);
             const i = this.index(p.x, p.y);
@@ -247,8 +291,13 @@ export class World {
             if (p.age > 700) p.health -= dt * 2;
             if (v && p.gather >= 3) {
                 p.gather = 0;
-                v.food += this.tiles[i] === T.GRASS || this.tiles[i] === T.FOREST ? this.fertility[i] * 2.4 : 0.4;
-                if (this.tiles[i] === T.FOREST) v.wood += 1;
+                const terrain = this.tiles[i];
+                let food = terrain === T.GRASS || terrain === T.FOREST ? this.fertility[i] * 2.4 : 0.4;
+                if (p.race === 'elf' && terrain === T.FOREST) food *= 1.25;
+                if (p.race === 'dwarf' && terrain === T.HILL) food = this.fertility[i] * 2.4;
+                if (p.race === 'human') food *= 1.15;
+                v.food += food;
+                if (terrain === T.FOREST) v.wood += p.race === 'elf' ? 2 : 1;
                 if (v.food < 1) p.health -= 6;
                 else { v.food -= 0.9; p.health = Math.min(100, p.health + 1); }
             }
@@ -281,24 +330,28 @@ export class World {
             if (!v.alive) continue;
             v.age += dt; v.birth_timer += dt; v.expansion_timer += dt;
             const pop = this.people.filter(p => p.village_id === v.id).length;
-            if (v.expansion_timer > 10 && v.wood >= 5 && v.houses.length < Math.ceil(pop / 3) + 1) {
+            const house_cost = v.race === 'dwarf' ? 4 : 5;
+            if (v.expansion_timer > 10 && v.wood >= house_cost && v.houses.length < Math.ceil(pop / 3) + 1) {
                 v.expansion_timer = 0;
-                if (this.add_house(v)) v.wood -= 5;
+                if (this.add_house(v)) v.wood -= house_cost;
             }
-            if (v.birth_timer > 12 && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < 600) {
+            const birth_delay = v.race === 'orc' ? 8 : 12;
+            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < 600) {
                 const p = this.land_near(v.x, v.y, 4);
                 if (p && this.add_person(p.x, p.y, v.id, v.race)) { v.food -= 5; v.birth_timer = 0; }
             }
-            // Distant settlements remain peaceful. Overlapping frontiers create trade or raids.
+            // Neighbouring kingdoms trade in peace, or raid while at war.
             if (this.tick % 240 === 0) {
                 for (const other of this.villages) {
                     if (!other.alive || other.id <= v.id || Math.hypot(v.x - other.x, v.y - other.y) > 24) continue;
-                    if (this.random() < 0.65) {
-                        v.food += 5; other.wood += 3;
+                    const relation = this.relation_status(v.id, other.id);
+                    if (relation === 'alliance' || (relation === 'peace' && this.random() < 0.35)) {
+                        v.food += relation === 'alliance' ? 7 : 5;
+                        other.wood += relation === 'alliance' ? 5 : 3;
                         this.log(`${v.name} and ${other.name} exchange supplies.`, 'village');
-                    } else {
+                    } else if (relation === 'war') {
                         const victim = this.people.find(p => p.village_id === other.id);
-                        if (victim) victim.health -= 45;
+                        if (victim) victim.health -= v.race === 'orc' ? 55 : 35;
                         this.log(`A border raid unsettles ${other.name}.`, 'disaster');
                     }
                 }
@@ -343,7 +396,7 @@ export class World {
         return { population: this.people.length, wildlife: this.animals.length, villages: this.villages.filter(v => v.alive).length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, tiles: Array.from(this.tiles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -357,11 +410,11 @@ export class World {
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
-        if (!array(data.villages, 8) || !array(data.people, 600) || !array(data.animals, 350) || !array(data.events, 40)) invalid();
+        if (!array(data.villages, 8) || !array(data.people, 600) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 28))) invalid();
         const ids = new Set();
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
-            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !(CIV_COLORS.includes(v.color) || Object.values(RACES).some(r => r.color === v.color)) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point)) invalid();
+            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !(CIV_COLORS.includes(v.color) || Object.values(RACES).some(r => r.color === v.color)) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
             id(v.id);
         }
@@ -373,8 +426,14 @@ export class World {
         for (const p of data.people) if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
         for (const a of data.animals) if (!['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
         for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind)) invalid();
+        const relation_keys = new Set();
+        for (const r of data.relations || []) {
+            if (!r || !integer(r.a, 1, data.next_id - 1) || !integer(r.b, 1, data.next_id - 1) || r.a >= r.b || !villages.has(r.a) || !villages.has(r.b) || !['peace', 'alliance', 'war'].includes(r.status) || relation_keys.has(`${r.a}:${r.b}`)) invalid();
+            relation_keys.add(`${r.a}:${r.b}`);
+        }
         const w = new World({ preset: 'empty', inhabited: false });
         for (const k of ['name', 'seed', 'rng', 'time', 'tick', 'next_id', 'people', 'animals', 'villages', 'events']) w[k] = structuredClone(data[k]);
+        w.relations = structuredClone(data.relations || []);
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; }
         for (const a of w.animals) a.infection ||= 0;
         for (const v of w.villages) v.race ||= 'human';
