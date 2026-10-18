@@ -4,6 +4,7 @@ export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST
 export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash'];
 export const CIV_COLORS = ['#e9c87b', '#b9a4e6', '#e58f83', '#83c5cd', '#c3da89', '#efb6d0', '#95acdf', '#dfae76'];
 const NAMES = ['Amberwick', 'Willowmere', 'Rosehaven', 'Tidewatch', 'Mossvale', 'Sunhollow', 'Briarford', 'Cloudrest'];
+const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' } });
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function hash_string(text) {
@@ -111,10 +112,11 @@ export class World {
         this.events.unshift({ text, year: this.year, kind });
         this.events = this.events.slice(0, 40);
     }
-    found_village(x, y) {
+    found_village(x, y, race = 'human') {
         if (this.villages.length >= 8) return this.villages.reduce((a, b) => Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b);
         const n = this.villages.length;
-        const village = { id: this.next_id++, x, y, name: NAMES[n], color: CIV_COLORS[n], food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true };
+        const profile = RACES[race] || RACES.human;
+        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${NAMES[n]}`, color: profile.color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, houses: [], alive: true };
         this.villages.push(village);
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
@@ -132,37 +134,37 @@ export class World {
         }
         return false;
     }
-    add_person(x, y, village_id = null) {
+    add_person(x, y, village_id = null, race = 'human') {
         if (!this.walkable(x, y) || this.people.length >= 600) return false;
         if (!village_id) {
             let nearest = this.villages.filter(v => v.alive).find(v => Math.hypot(v.x - x, v.y - y) < 22);
-            nearest ||= this.found_village(x, y);
+            nearest ||= this.found_village(x, y, race);
             nearest.alive = true;
             village_id = nearest.id;
         }
-        this.people.push({ id: this.next_id++, x, y, village_id, health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3 });
+        this.people.push({ id: this.next_id++, x, y, village_id, race: RACES[race] ? race : 'human', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0 });
         return true;
     }
     add_animal(x, y, species) {
         if (!this.walkable(x, y) || this.animals.length >= 350) return false;
-        this.animals.push({ id: this.next_id++, x, y, species, health: 100, age: 0, dx: 0, dy: 0, decision: 0 });
+        this.animals.push({ id: this.next_id++, x, y, species, health: 100, age: 0, dx: 0, dy: 0, decision: 0, infection: 0 });
         return true;
     }
     apply(tool, x, y, radius = 4) {
         x = Math.floor(x); y = Math.floor(y);
         if (!this.inside(x, y)) return;
         const terrain = { ocean: T.OCEAN, shallow: T.SHALLOW, sand: T.SAND, grass: T.GRASS, forest: T.FOREST, hill: T.HILL, mountain: T.MOUNTAIN, lava: T.LAVA };
-        if (tool === 'human' || tool === 'sheep' || tool === 'wolf') {
+        if (tool in RACES || ['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool)) {
             if (!this.walkable(x, y)) return;
-            if (tool === 'human') {
+            if (tool in RACES) {
                 for (let i = 0; i < 3; i++) {
                     const p = this.land_near(x, y, Math.max(1, radius / 2));
-                    if (p) this.add_person(p.x, p.y);
+                    if (p) this.add_person(p.x, p.y, null, tool);
                 }
             } else this.add_animal(x + 0.5, y + 0.5, tool);
             return;
         }
-        const r = tool === 'meteor' ? radius + 2 : radius;
+        const r = ['meteor', 'nuke'].includes(tool) ? radius + (tool === 'nuke' ? 8 : 2) : radius;
         for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
             if (dx * dx + dy * dy > r * r || !this.inside(x + dx, y + dy)) continue;
             const i = this.index(x + dx, y + dy), t = this.tiles[i];
@@ -175,24 +177,34 @@ export class World {
                 if (t === T.LAVA) this.set_tile(x + dx, y + dy, T.ASH);
             }
             if (tool === 'bless') this.fertility[i] = 1;
+            if (tool === 'acid' && t > T.SHALLOW) { this.fertility[i] = 0; if (t !== T.LAVA) this.set_tile(x + dx, y + dy, T.ASH); }
             if (tool === 'meteor' && t > T.SHALLOW) {
                 this.set_tile(x + dx, y + dy, dx * dx + dy * dy < r * r * 0.2 ? T.LAVA : T.ASH);
                 this.fire[i] = 0;
             }
+            if (tool === 'nuke' && t > T.SHALLOW) {
+                this.set_tile(x + dx, y + dy, dx * dx + dy * dy < r * r * 0.3 ? T.LAVA : T.ASH);
+                this.fire[i] = dx * dx + dy * dy > r * r * 0.55 ? 12 + this.random() * 10 : 0;
+            }
             if (tool === 'lightning' && Math.abs(dx) + Math.abs(dy) < 3 && t >= T.GRASS && t <= T.HILL) this.fire[i] = 12;
         }
-        if (['meteor', 'lightning', 'rain', 'bless'].includes(tool)) {
+        if (['meteor', 'nuke', 'lightning', 'rain', 'bless', 'acid'].includes(tool)) {
             this.effects.push({ type: tool, x, y, radius: r, life: 1, duration: tool === 'rain' ? 1.5 : 0.8 });
         }
         if (tool === 'meteor') this.log('A star falls. The earth will remember.', 'disaster');
+        if (tool === 'nuke') this.log('A terrible flash reshapes the land.', 'disaster');
+        if (tool === 'plague') this.log('A strange sickness takes hold.', 'disaster');
+        if (tool === 'acid') this.log('Caustic rain poisons the land.', 'disaster');
         if (tool === 'lightning') this.log('Thunder breaks the quiet.', 'disaster');
-        const damage = tool === 'meteor' ? 200 : tool === 'lightning' ? 75 : tool === 'erase' ? 1000 : 0;
+        const damage = tool === 'nuke' ? 300 : tool === 'meteor' ? 200 : tool === 'lightning' ? 75 : tool === 'acid' ? 35 : tool === 'erase' ? 1000 : 0;
         for (const list of [this.people, this.animals]) for (const unit of list) {
             if (Math.hypot(unit.x - x, unit.y - y) > r) continue;
             unit.health -= damage;
             if (tool === 'bless') unit.health = 100;
+            if (tool === 'plague') unit.infection = 1;
+            if (tool === 'bless') unit.infection = 0;
         }
-        if (tool === 'meteor' || tool === 'erase') for (const v of this.villages) {
+        if (tool === 'meteor' || tool === 'nuke' || tool === 'erase') for (const v of this.villages) {
             v.houses = v.houses.filter(h => Math.hypot(h.x - x, h.y - y) > r);
         }
         this.clean_up();
@@ -230,6 +242,7 @@ export class World {
             }
             this.move(p, dt, 1.3);
             const i = this.index(p.x, p.y);
+            if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); p.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
             if (this.fire[i] > 0) p.health -= dt * 38;
             if (p.age > 700) p.health -= dt * 2;
             if (v && p.gather >= 3) {
@@ -247,9 +260,9 @@ export class World {
                 const a = this.random() * Math.PI * 2;
                 animal.dx = Math.cos(a); animal.dy = Math.sin(a); animal.decision = 1 + this.random() * 3;
             }
-            if (animal.species === 'wolf') {
-                let prey = null, nearest = 10;
-                for (const other of this.animals) if (other.species === 'sheep' && other.health > 0) {
+            if (['wolf', 'bear'].includes(animal.species)) {
+                let prey = null, nearest = animal.species === 'bear' ? 6 : 10;
+                for (const other of this.animals) if (['sheep', 'deer', 'rabbit', 'chicken'].includes(other.species) && other.health > 0) {
                     const d = Math.hypot(other.x - animal.x, other.y - animal.y);
                     if (d < nearest) { prey = other; nearest = d; }
                 }
@@ -257,9 +270,10 @@ export class World {
                     const a = Math.atan2(prey.y - animal.y, prey.x - animal.x);
                     animal.dx = Math.cos(a); animal.dy = Math.sin(a);
                     if (nearest < 1) { prey.health -= dt * 35; animal.health = Math.min(100, animal.health + dt * 5); }
-                } else animal.health -= dt * 0.1;
-            } else if (this.tile(animal.x, animal.y) === T.GRASS) animal.health = Math.min(100, animal.health + dt);
-            this.move(animal, dt, animal.species === 'wolf' ? 2 : 0.7);
+                } else if (animal.species === 'wolf') animal.health -= dt * 0.1;
+            } else if (['sheep', 'deer', 'rabbit', 'chicken'].includes(animal.species) && this.tile(animal.x, animal.y) === T.GRASS) animal.health = Math.min(100, animal.health + dt);
+            if (animal.infection > 0) { animal.infection = Math.max(0, animal.infection - dt * 0.025); animal.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.animals.find(q => q !== animal && Math.hypot(q.x - animal.x, q.y - animal.y) < 2); if (nearby) nearby.infection = 1; } }
+            this.move(animal, dt, animal.species === 'wolf' || animal.species === 'bear' ? 1.7 : animal.species === 'rabbit' ? 1.5 : 0.7);
             if (this.fire[this.index(animal.x, animal.y)] > 0) animal.health -= dt * 45;
             if (animal.age > 450) animal.health -= dt;
         }
@@ -273,7 +287,7 @@ export class World {
             }
             if (v.birth_timer > 12 && pop >= 2 && v.food > 8 && pop < v.houses.length * 5 && this.people.length < 600) {
                 const p = this.land_near(v.x, v.y, 4);
-                if (p && this.add_person(p.x, p.y, v.id)) { v.food -= 5; v.birth_timer = 0; }
+                if (p && this.add_person(p.x, p.y, v.id, v.race)) { v.food -= 5; v.birth_timer = 0; }
             }
             // Distant settlements remain peaceful. Overlapping frontiers create trade or raids.
             if (this.tick % 240 === 0) {
@@ -317,7 +331,7 @@ export class World {
             this.clean_up();
             if (this.animals.length < 240 && this.random() < 0.25) {
                 const parent = this.animals[Math.floor(this.random() * this.animals.length)];
-                if (parent?.species === 'sheep' && parent.age > 15) this.add_animal(parent.x, parent.y, 'sheep');
+                if (parent && ['sheep', 'deer', 'rabbit', 'chicken'].includes(parent.species) && parent.age > 15) this.add_animal(parent.x, parent.y, parent.species);
             }
         }
         for (const effect of this.effects) effect.life -= dt / effect.duration;
@@ -347,7 +361,7 @@ export class World {
         const ids = new Set();
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
-            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !CIV_COLORS.includes(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point)) invalid();
+            if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !(CIV_COLORS.includes(v.color) || Object.values(RACES).some(r => r.color === v.color)) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point)) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
             id(v.id);
         }
@@ -356,11 +370,14 @@ export class World {
             if (!point(u) || !num(u.health, -1000, 100) || !num(u.age) || !num(u.dx, -1, 1) || !num(u.dy, -1, 1) || !num(u.decision, -0.25, 10)) invalid();
             id(u.id);
         }
-        for (const p of data.people) if (!villages.has(p.village_id) || !num(p.gather, 0, 10)) invalid();
-        for (const a of data.animals) if (!['sheep', 'wolf'].includes(a.species)) invalid();
+        for (const p of data.people) if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
+        for (const a of data.animals) if (!['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
         for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind)) invalid();
         const w = new World({ preset: 'empty', inhabited: false });
         for (const k of ['name', 'seed', 'rng', 'time', 'tick', 'next_id', 'people', 'animals', 'villages', 'events']) w[k] = structuredClone(data[k]);
+        for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; }
+        for (const a of w.animals) a.infection ||= 0;
+        for (const v of w.villages) v.race ||= 'human';
         w.tiles = Uint8Array.from(data.tiles); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
         return w;
     }
