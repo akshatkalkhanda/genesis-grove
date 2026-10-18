@@ -13,18 +13,28 @@ const TOOLS = {
         ['lava', 'Lava', '♨', '#e8a26e', 'Pour molten rock. It cools to ash, and eventually life returns.']
     ],
     life: [
-        ['human', 'People', '♟', '#e3cf9a', 'Place three settlers on land. They found villages, gather food, build, and grow.'],
-        ['sheep', 'Sheep', '♧', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
-        ['wolf', 'Wolves', '♜', '#b9bec4', 'A little wildness. Wolves hunt nearby sheep to survive.'],
+        ['human', 'Humans', '♟', '#e3cf9a', 'Place three settlers. Humans adapt quickly and build balanced villages.'],
+        ['elf', 'Elves', '♧', '#a8d89b', 'Forest folk who gather timber faster and thrive among trees.'],
+        ['dwarf', 'Dwarves', '⛏', '#d7a878', 'Hardy highland settlers who gather food from rugged land.'],
+        ['orc', 'Orcs', '♜', '#99bd7a', 'Tough settlers who grow quickly and favor border raids.'],
         ['forest', 'Forest', '♠', '#8eb66c', 'Bring a woodland to life. Villagers gather timber here.'],
-        ['bless', 'Blessing', '✦', '#e1e9a4', 'Heal creatures and restore the fertility of their home.'],
-        ['erase', 'Remove life', '◇', '#c2aaa0', 'Remove creatures and buildings within the brush. The land remains.']
+    ],
+    creatures: [
+        ['sheep', 'Sheep', '♧', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
+        ['wolf', 'Wolves', '♜', '#b9bec4', 'Pack hunters that chase sheep and deer.'],
+        ['deer', 'Deer', '♘', '#c79d69', 'Shy forest grazers that flee from predators.'],
+        ['bear', 'Bears', '♟', '#b6825b', 'Powerful, territorial predators that hunt nearby wildlife.'],
+        ['rabbit', 'Rabbits', '♧', '#e0d7c5', 'Quick little grazers that multiply in fertile meadows.'],
+        ['chicken', 'Chickens', '♧', '#e8c866', 'Peaceful birds that forage and grow their flocks.']
     ],
     powers: [
         ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
         ['fire', 'Fire', '♨', '#e3a16a', 'Spark a wildfire. Flames spread through meadows and forests.'],
         ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike the earth with thunder. Nearby creatures and forests feel its power.'],
         ['meteor', 'Meteor', '☄', '#e7a288', 'Bring down a star. Leave a crater of ash and molten rock.'],
+        ['nuke', 'Nuclear bomb', '☢', '#d99175', 'A devastating blast that scorches a wide crater and sets the land ablaze.'],
+        ['plague', 'Plague', '☣', '#a4bd83', 'Infect nearby creatures. The sickness spreads until they recover or perish.'],
+        ['acid', 'Acid rain', '♨', '#a3c77c', 'A caustic storm that poisons the soil and harms creatures.'],
         ['bless', 'Blessing', '✦', '#e1e9a4', 'A gentler touch. Restore health and fertility to a patch of the world.'],
         ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
     ]
@@ -90,11 +100,11 @@ function local_point(event) {
 }
 function paint(p, continuous = false) {
     if (tool === 'inspect') return;
-    if (continuous && ['meteor', 'lightning', 'human', 'sheep', 'wolf'].includes(tool)) return;
+    if (continuous && ['meteor', 'nuke', 'lightning', 'human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool)) return;
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) return;
-    if (['human', 'sheep', 'wolf'].includes(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on meadows, forests, sand, or highlands.'); return; }
-    if (last_paint && !['meteor', 'lightning', 'human', 'sheep', 'wolf', 'rain', 'bless'].includes(tool)) {
+    if (['human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on meadows, forests, sand, or highlands.'); return; }
+    if (last_paint && !['meteor', 'nuke', 'lightning', 'human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'rain', 'bless'].includes(tool)) {
         const distance = Math.hypot(tile.x - last_paint.x, tile.y - last_paint.y);
         const steps = Math.min(100, Math.ceil(distance / Math.max(1, brush / 2)));
         for (let i = 1; i < steps; i++) world.apply(tool, last_paint.x + (tile.x - last_paint.x) * i / steps, last_paint.y + (tile.y - last_paint.y) * i / steps, brush);
