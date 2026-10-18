@@ -9,19 +9,37 @@ test('same seed gives identical terrain, settlements and deterministic evolution
     assert.deepEqual(a.serialize(), b.serialize());
     assert.notDeepEqual(a.tiles, new World({ seed: 'different world' }).tiles);
 });
-test('kingdom banners differ and technology upgrades weapons over time', () => {
+test('kingdom banners differ and technology requires ore to advance', () => {
     const world = new World();
     assert.equal(new Set(world.villages.map(v => v.color)).size, 3);
     const kingdom = world.villages[0];
     kingdom.tech_points = 7.999;
+    kingdom.ore.copper = 3;
     world.step(0.125);
     assert.equal(technology_level(kingdom), 1);
+    assert.equal(kingdom.ore.copper, 0);
     assert.ok(world.events.some(event => event.text.includes('Copper Age')));
     assert.deepEqual(TECH_AGES.map(age => age.name), ['Stone Age', 'Copper Age', 'Bronze Age', 'Iron Age', 'Steel Age']);
     const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
     assert.equal(loaded.villages[0].tech_points, kingdom.tech_points);
     const legacy = world.serialize(); delete legacy.villages[0].tech_points;
     assert.ok(Number.isFinite(World.deserialize(legacy).villages[0].tech_points));
+});
+test('ore tools place persistent deposits and forges equip individual people', () => {
+    const world = blank(); world.apply('grass', 40, 40, 10); world.apply('human', 40, 40, 1);
+    const kingdom = world.villages[0], person = world.people[0];
+    world.apply('copper', 41, 40, 1);
+    assert.equal(world.ores[world.index(41, 40)], 1);
+    kingdom.research_level = 1; kingdom.ore.copper = 1; kingdom.forge_timer = 9.9;
+    world.step(0.125);
+    assert.equal(person.weapon_level, 1);
+    assert.equal(kingdom.ore.copper, 0);
+    const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
+    assert.equal(loaded.ores[loaded.index(41, 40)], 1);
+    assert.equal(loaded.people[0].weapon_level, 1);
+    const old_save = new World().serialize(); delete old_save.ores;
+    const upgraded = World.deserialize(old_save);
+    assert.ok(upgraded.ores.some(ore => ore > 0), 'older mountain and hill worlds receive natural ore deposits');
 });
 test('advanced weapons inflict more damage in the same fight', () => {
     const basic = blank(); basic.apply('grass', 40, 40, 16);
@@ -31,7 +49,8 @@ test('advanced weapons inflict more damage in the same fight', () => {
     for (const person of basic.people.filter(p => p.village_id === attacker.id)) { person.x = 40; person.y = 40; person.gather = 0; }
     for (const person of basic.people.filter(p => p.village_id === defender.id)) { person.x = 41; person.y = 40; person.gather = 0; }
     const advanced = World.deserialize(JSON.parse(JSON.stringify(basic.serialize())));
-    advanced.villages[0].tech_points = 100;
+    advanced.villages[0].research_level = 4;
+    for (const person of advanced.people.filter(p => p.village_id === attacker.id)) person.weapon_level = 4;
     basic.step(0.125); advanced.step(0.125);
     const health = world => world.people.filter(p => p.village_id === defender.id).map(p => p.health);
     assert.ok(health(advanced).some((value, index) => value < health(basic)[index]));

@@ -82,6 +82,11 @@ export class Renderer {
                 c.fillStyle = '#ee9c4a'; c.fillRect(px + 1, py + 2, 3, 2);
                 c.fillStyle = '#f4c66c'; c.fillRect(px + 2, py + 2, 1, 1);
             }
+            const ore = world.ores?.[y * WIDTH + x] || 0;
+            if (ore && (h > 0.38 || t >= T.MOUNTAIN)) {
+                c.fillStyle = ['', '#d77c50', '#ddc08a', '#c9d3d4', '#474a47'][ore];
+                c.fillRect(px + (h > 0.6 ? 1 : 3), py + (h > 0.6 ? 3 : 1), 2, 2);
+            }
             const hex = PALETTE[t].slice(1), j = (y * WIDTH + x) * 4;
             mini_image.data[j] = parseInt(hex.slice(0, 2), 16); mini_image.data[j + 1] = parseInt(hex.slice(2, 4), 16); mini_image.data[j + 2] = parseInt(hex.slice(4, 6), 16); mini_image.data[j + 3] = 255;
         }
@@ -159,6 +164,7 @@ export class Renderer {
             }
             for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
             this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v));
+            this.industry(c, v.x * CELL, v.y * CELL, v);
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
@@ -255,7 +261,7 @@ export class Renderer {
     }
     person(c, person, kingdom, now) {
         const x = Math.round(person.x * CELL), y = Math.round(person.y * CELL);
-        const level = technology_level(kingdom), face = person.dx < 0 ? -1 : 1;
+        const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
         const skin = person.race === 'orc' ? '#8fbc6c' : person.race === 'dwarf' ? '#d69b75' : '#f0c9a0';
         c.fillStyle = '#172a2266'; c.fillRect(x - 3, y + 3, 7, 2);
         c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1, 2, 4); c.fillRect(x + 1, y + 1, 2, 4);
@@ -267,6 +273,7 @@ export class Renderer {
         if (person.race === 'elf') { c.fillStyle = skin; c.fillRect(x - 4, y - 7, 2, 1); c.fillRect(x + 2, y - 7, 2, 1); }
         if (person.race === 'dwarf') { c.fillStyle = '#a5683f'; c.fillRect(x - 2, y - 5, 4, 3); }
         if (person.race === 'orc') { c.fillStyle = '#e9dfb8'; c.fillRect(x - 3, y - 5, 1, 2); c.fillRect(x + 2, y - 5, 1, 2); }
+        if (armor > 0) { c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
         const sway = Math.round(Math.sin(now / 250 + person.id) * 1);
@@ -287,6 +294,21 @@ export class Renderer {
         c.fillStyle = '#f7dd8d'; c.fillRect(x - w / 2 + 1, y - 5, 1, 2);
         if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 20, 1, 10); c.fillStyle = color; c.fillRect(x + 4, y - 20, 5, 3); }
         if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
+    }
+    industry(c, x, y, kingdom) {
+        if ((kingdom.mine_timer || 0) > 0) {
+            c.fillStyle = '#463d32'; c.fillRect(x - 19, y - 7, 11, 7);
+            c.fillStyle = '#7c6750'; c.fillRect(x - 20, y - 10, 13, 4);
+            c.fillStyle = '#b4a080'; c.fillRect(x - 17, y - 6, 2, 6); c.fillRect(x - 12, y - 6, 2, 6);
+            c.fillStyle = '#d7b76b'; c.fillRect(x - 15, y - 4, 3, 2);
+        }
+        if (technology_level(kingdom) > 0) {
+            c.fillStyle = '#544538'; c.fillRect(x + 9, y - 8, 12, 8);
+            c.fillStyle = '#98634a'; c.fillRect(x + 8, y - 11, 14, 4);
+            c.fillStyle = '#d77c50'; c.fillRect(x + 13, y - 7, 4, 4);
+            c.fillStyle = '#edcf7c'; c.fillRect(x + 14, y - 6, 2, 2);
+            c.fillStyle = '#78675a'; c.fillRect(x + 18, y - 15, 3, 6);
+        }
     }
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = e.radius * CELL;

@@ -28,6 +28,10 @@ const TOOLS = {
         ['chicken', 'Chickens', '🐓', '#e8c866', 'Peaceful birds that forage and grow their flocks.']
     ],
     powers: [
+        ['copper', 'Copper vein', '◆', '#dc9464', 'Place a copper deposit. Miners can collect it for copper-age research and weapons.'],
+        ['tin', 'Tin vein', '◇', '#c4a778', 'Place tin for bronze research and bronze equipment.'],
+        ['iron', 'Iron vein', '⬟', '#aab8c4', 'Place iron for iron-age research, swords, and armor.'],
+        ['coal', 'Coal seam', '⬢', '#9a9d91', 'Place coal to fuel advanced research and forge work.'],
         ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
         ['fire', 'Fire', '♨', '#e3a16a', 'Spark a wildfire. Flames spread through meadows and forests.'],
         ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike the earth with thunder. Nearby creatures and forests feel its power.'],
@@ -152,6 +156,8 @@ function inspect(p) {
     const people = world.people.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     const animals = world.animals.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
+    const deposit = world.ores[world.index(tile.x, tile.y)];
+    if (deposit) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam'][deposit]);
     const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
     if (site) {
         const kingdom = site.kingdom_id ? world.villages.find(v => v.id === site.kingdom_id) : site;
@@ -187,10 +193,12 @@ function update_diplomacy(preferred_source = null) {
         const technology = document.createElement('span');
         const level = technology_level(source);
         technology.className = 'technology-detail'; technology.style.setProperty('--technology-color', TECH_AGES[level].color);
-        technology.textContent = `${TECH_AGES[level].name} · ${TECH_AGES[level].weapon} · +${level * 28}% weapon damage`;
-        const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · ${source.deaths || 0} deaths`;
+        technology.textContent = `${TECH_AGES[level].name} · ${TECH_AGES[level].weapon} · gear improves damage and protection`;
+        const ore = source.ore || {};
+        const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · Cu ${ore.copper || 0} · Sn ${ore.tin || 0} · Fe ${ore.iron || 0} · coal ${ore.coal || 0}`;
+        const arsenal = document.createElement('span'); arsenal.textContent = `${source.weapons || 0} spare weapons · ${source.armor_stock || 0} spare armor · ${source.deaths || 0} deaths`;
         const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
-        profile.append(heading, details, technology, resources, relations);
+        profile.append(heading, details, technology, resources, arsenal, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);

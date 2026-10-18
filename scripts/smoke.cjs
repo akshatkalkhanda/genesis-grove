@@ -80,7 +80,8 @@ app.whenReady().then(async () => {
         assert.equal(await js('genesis.snapshot().name'), 'The Emerald Isles');
         assert.ok(await js('document.getElementById("toast").textContent.includes("not a valid")')); checks.push('Invalid import preserves current world');
         const imported = { ...exported, name: 'Imported Adventure' };
-        imported.villages.forEach(kingdom => { kingdom.tech_points = 100; });
+        imported.villages.forEach(kingdom => { kingdom.tech_points = 100; kingdom.research_level = 4; });
+        imported.people.forEach(person => { person.weapon_level = 4; person.armor_level = 4; });
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(imported))}],'world.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
         await delay(150);
         assert.equal(await js('genesis.snapshot().name'), 'Imported Adventure'); checks.push('Valid world file imports through the file-input handler');

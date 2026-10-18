@@ -21,7 +21,7 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-The current build includes `dist/Genesis Grove-0.5.0-arm64-mac.zip` for Apple silicon Macs and `dist/Genesis Grove-0.5.0-win.zip` for Windows x64. Extract the Windows ZIP and run `Genesis Grove.exe` inside the extracted folder; keep the other files alongside it. The Windows ZIP was built on macOS and has not been executed on Windows. Both packages are unsigned. An Intel Mac package is not included in this build.
+Version 0.6.0 adds mineable deposits, material-gated age research, and forge-made individual weapons and armor. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
 
 ## A living sandbox
 
@@ -29,7 +29,9 @@ The current build includes `dist/Genesis Grove-0.5.0-arm64-mac.zip` for Apple si
 - Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
 - Each kingdom has its own banner color, clear territory borders, and a matching color in the kingdom list. Creatures have different pixel silhouettes and selection icons.
-- Kingdoms advance through Stone, Copper, Bronze, Iron, and Steel Ages. Their weapons visibly change and deal increasing damage in combat; later buildings gain stronger-looking materials and towers. The world-age display tracks the average progress of living kingdoms.
+- Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom, then let nearby settlers mine them.
+- Kingdoms research Copper, Bronze, Iron, and Steel by reaching age milestones and paying the required ore. Forging consumes metal and wood; people wear their own weapons and armor, changing combat damage and protection. Kingdom profiles show material and spare-gear stocks.
+- Later-age buildings gain stronger-looking materials and towers. The world-age display tracks the average progress of living kingdoms.
 - Settlers found kingdoms, gather supplies, build houses, raise families, and age. With expansion enabled, kingdoms send caravans and ships to found more towns. Use Kingdoms to inspect their people, towns, resources, deaths, and relations, or set peace, alliances, and wars. Nearby enemies fight and can capture towns or capitals by siege.
 - A 100-kingdom challenge starts across four landmasses with 300 settlers, autonomous diplomacy and expansion, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy, expansion, or rebellions under Kingdoms at any time.
 - Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
