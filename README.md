@@ -21,7 +21,7 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.9.0 adds finite kingdom claims, shared marching orders for trained soldiers, army banners, and a kingdom detail card. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
+Version 0.9.1 fixes late-world age regression: breakaway kingdoms inherit their parent's knowledge, and kingdoms can rediscover technology already reached elsewhere in the world's history. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
 
 ## A living sandbox
 
@@ -31,7 +31,7 @@ Version 0.9.0 adds finite kingdom claims, shared marching orders for trained sol
 - Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
 - Each kingdom has its own banner color and finite claims around its towns, leaving distant wilderness unclaimed. Captured towns change the border. Creatures have different pixel silhouettes and selection icons.
 - Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins.
-- Kingdoms research Copper, Bronze, Iron, and Steel by reaching age milestones and paying the required ore. Forging consumes metal and wood; people wear their own weapons and armor, changing combat damage and protection. Kingdom profiles show material and spare-gear stocks.
+- Kingdoms research Copper, Bronze, Iron, and Steel by reaching age milestones and paying the required ore for a new discovery. Once another kingdom has discovered an age, its knowledge can spread without a second ore payment. Rebellions inherit their parent's technology. Forging still consumes metal and wood; people wear their own weapons and armor, changing combat damage and protection. Kingdom profiles show material and spare-gear stocks.
 - Later-age buildings gain stronger-looking materials and towers. The world-age display tracks the average progress of living kingdoms.
 - Civilians work as farmers, woodcutters, miners, smiths, and builders. Their jobs change food and timber output, ore gathering, forging, and housing cost. Growing towns build barracks and recruit soldiers who use forged gear and consume extra food. Soldiers from the same town share a reachable land target, march under a visible army banner, and capture towns or capitals by siege while civilians continue town work.
 - Peaceful neighbours send surplus food, wood, or ore by caravan or ship; goods leave the sender immediately and arrive after travel. With expansion enabled, kingdoms also send settlers to found towns. Open Kingdoms to inspect jobs, soldiers, supplies, routes, and relations or set peace, alliances, and wars.

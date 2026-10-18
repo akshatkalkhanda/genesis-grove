@@ -25,6 +25,29 @@ test('kingdom banners differ and technology requires ore to advance', () => {
     const legacy = world.serialize(); delete legacy.villages[0].tech_points;
     assert.ok(Number.isFinite(World.deserialize(legacy).villages[0].tech_points));
 });
+test('later kingdoms can rediscover an age already reached by a fallen kingdom', () => {
+    const world = blank();
+    world.apply('grass', 40, 40, 20);
+    const earlier = world.found_village(35, 40);
+    const successor = world.found_village(45, 40);
+    world.add_person(45, 40, successor.id);
+    earlier.alive = false;
+    earlier.research_level = 2;
+    successor.tech_points = TECH_AGES[1].threshold;
+    const restored = World.deserialize(world.serialize());
+    restored.step(0.125);
+    assert.equal(technology_level(restored.villages[1]), 1);
+    assert.equal(restored.villages[1].ore.copper, 0);
+});
+test('rebellions do not reset a mature world to the Stone Age', () => {
+    const world = new World();
+    world.laws.rebellions = true;
+    world.laws.expansion = true;
+    for (let tick = 0; tick < 16000; tick++) world.step(0.125);
+    assert.equal(world.year, 101);
+    assert.ok(world.villages.some(v => v.alive));
+    assert.ok(world.villages.filter(v => v.alive).every(v => technology_level(v) >= 2));
+});
 test('ore tools place persistent deposits and forges equip individual people', () => {
     const world = blank(); world.apply('grass', 40, 40, 10); world.apply('human', 40, 40, 1);
     const kingdom = world.villages[0], person = world.people[0];
@@ -310,12 +333,16 @@ test('enabled rebellions split a mature populous kingdom and start a war', () =>
     w.apply('grass', 50, 50, 25);
     for (let i = 0; i < 5; i++) w.apply('human', 50, 50, 1);
     w.villages[0].age = 41;
+    w.villages[0].research_level = 3;
+    w.villages[0].tech_points = 80;
     w.tick = 159;
     w.laws.rebellions = true;
     w.random = () => 0.1;
     w.step(0.125);
     assert.equal(w.villages.length, 2);
     assert.equal(w.people.filter(p => p.village_id === w.villages[1].id).length, 4);
+    assert.equal(w.villages[1].research_level, 3);
+    assert.ok(w.villages[1].tech_points >= 80);
     assert.equal(w.relation_status(w.villages[0].id, w.villages[1].id), 'war');
 });
 test('settlers cross water by ship and establish another town for their kingdom', () => {

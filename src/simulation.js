@@ -621,6 +621,8 @@ export class World {
                 }
                 if (place) {
                     const child = this.found_village(place.x, place.y, parent.race);
+                    child.research_level = parent.research_level;
+                    child.tech_points = parent.tech_points;
                     for (const person of rebels) person.village_id = child.id;
                     this.set_relation(parent.id, child.id, 'war');
                     this.log(`${child.name} breaks away from ${parent.name}.`, 'disaster');
@@ -795,8 +797,11 @@ export class World {
             const cost = research_cost[next_level];
             const research_rate = dt / this.year_length * (0.35 + Math.min(pop, 30) * 0.035 + Math.min(v.houses.length, 10) * 0.04);
             if (next_threshold && v.tech_points < next_threshold) v.tech_points = Math.min(next_threshold, v.tech_points + research_rate);
-            if (next_threshold && v.tech_points >= next_threshold && cost && Object.entries(cost).every(([ore, amount]) => v.ore[ore] >= amount)) {
-                for (const [ore, amount] of Object.entries(cost)) v.ore[ore] -= amount;
+            const has_materials = cost && Object.entries(cost).every(([ore, amount]) => v.ore[ore] >= amount);
+            const known_technology = !has_materials && next_threshold && v.tech_points >= next_threshold
+                && this.villages.some(other => other.id !== v.id && technology_level(other) >= next_level);
+            if (next_threshold && v.tech_points >= next_threshold && (has_materials || known_technology)) {
+                if (has_materials) for (const [ore, amount] of Object.entries(cost)) v.ore[ore] -= amount;
                 v.research_level = next_level;
             } else if (!next_threshold) v.tech_points = Math.min(1000, (v.tech_points || 0) + research_rate);
             const after_technology = technology_level(v);
