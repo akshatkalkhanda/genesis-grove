@@ -10,7 +10,12 @@ export const BUILDINGS = Object.freeze({
     observatory: { label: 'Observatory', population: 24, age: 8, wood: 48 },
     astral_forge: { label: 'Astral forge', population: 24, age: 9, wood: 52 },
     stargate: { label: 'Stargate monument', population: 28, age: 11, wood: 60 },
-    condenser: { label: 'Cosmic dust condenser', population: 28, age: 12, wood: 64 }
+    condenser: { label: 'Cosmic dust condenser', population: 28, age: 12, wood: 64 },
+    watchtower: { label: 'Watchtower', population: 10, age: 1, wood: 20 },
+    prison: { label: 'Prison', population: 16, age: 3, wood: 28 },
+    castle: { label: 'Castle', population: 24, age: 4, wood: 60 },
+    dock: { label: 'Dock', population: 12, age: 2, wood: 26 },
+    aerodrome: { label: 'Aerodrome', population: 24, age: 7, wood: 44 }
 });
 
 export function advance_buildings(world, kingdom, dt, population, age) {
@@ -32,7 +37,7 @@ export function advance_buildings(world, kingdom, dt, population, age) {
             building.harvests = Math.min(1e6, (building.harvests || 0) + 1);
         }
     }
-    if (kingdom.build_timer < 12 || buildings.length >= 16) return;
+    if (kingdom.build_timer < 12 || buildings.length >= 24) return;
     for (const [type, recipe] of Object.entries(BUILDINGS)) {
         const limit = type === 'farm' ? Math.min(3, Math.ceil(population / 30)) : 1;
         if (buildings.filter(building => building.type === type).length >= limit
@@ -40,15 +45,18 @@ export function advance_buildings(world, kingdom, dt, population, age) {
             || kingdom.houses.length < 2 || kingdom.wood < recipe.wood + 10) continue;
         let place = null;
         for (let attempt = 0; attempt < 30; attempt++) {
-            const point = world.land_near(kingdom.x, kingdom.y, 13);
+            const point = world.land_near(kingdom.x, kingdom.y, 16);
             if (!point || Math.hypot(point.x - kingdom.x, point.y - kingdom.y) < 3
-                || buildings.some(b => Math.hypot(b.x - point.x, b.y - point.y) < 3)
-                || kingdom.houses.some(h => Math.hypot(h.x - point.x, h.y - point.y) < 2)) continue;
+                || buildings.some(b => Math.hypot(b.x - point.x, b.y - point.y) < (type === 'castle' || b.type === 'castle' ? 5 : 3))
+                || kingdom.houses.some(h => Math.hypot(h.x - point.x, h.y - point.y) < (type === 'castle' ? 4 : 2))) continue;
+            if (type === 'dock' && ![[2, 0], [-2, 0], [0, 2], [0, -2], [1, 0], [-1, 0], [0, 1], [0, -1]]
+                .some(([dx, dy]) => world.inside(point.x + dx, point.y + dy) && world.tile(point.x + dx, point.y + dy) <= 1)) continue;
             place = point; break;
         }
         if (!place) continue;
         buildings.push({ type, x: Math.floor(place.x), y: Math.floor(place.y), growth: 0,
-            harvests: 0, stock: 0 });
+            harvests: 0, stock: 0, integrity: type === 'castle' ? 300 : type === 'watchtower' ? 160 : 100,
+            defense_timer: 0 });
         kingdom.wood -= recipe.wood;
         kingdom.build_timer = 0;
         world.revision++;

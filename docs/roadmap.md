@@ -7,7 +7,7 @@ lighting support those systems. Version 0.12 adds fourteen ages through Cosmic D
 
 Continue in this order:
 
-4. Naval warfare: transport armies, land on enemy coasts, and defend ports.
+4. Naval warfare: extend coastal cannon boats into ship combat, transport armies, and land on enemy coasts. Existing aircraft carry food; troop transport remains future work.
 5. Environmental events: droughts, blizzards, floods, and volcanic activity.
 6. Richer maps: rivers, lakes, coherent mountain ranges, and larger maps with
    performance limits and clearer biome transitions.

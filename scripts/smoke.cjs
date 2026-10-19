@@ -211,7 +211,7 @@ app.whenReady().then(async () => {
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(living_towns))}],'living-towns.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
         await delay(150); await click('#pause');
-        assert.equal(await js('new Set(genesis.snapshot().villages.flatMap(v=>v.buildings||[]).map(b=>b.type)).size'), 4);
+        assert.ok(await js('(()=>{const types=new Set(genesis.snapshot().villages.flatMap(v=>v.buildings||[]).map(b=>b.type));return ["farm","windmill","armory","camp"].every(type=>types.has(type))})()'));
         assert.ok(await js('genesis.snapshot().people.some(p=>p.health>100&&p.xp>0)'));
         await click('#civilizations button');
         for (let zoom = 0; zoom < 4; zoom++) await click('#zoom-in');
@@ -265,6 +265,43 @@ app.whenReady().then(async () => {
         await delay(250);
         await fs.writeFile(path.join(artifact_dir, 'cosmic-town.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('Cosmic-world import renders energy equipment, advanced flags, stargates, condensers, and hover carriers');
+        const { MACHINES } = await import(path.join(__dirname, '..', 'src', 'machines.js'));
+        const { defense_hit } = await import(path.join(__dirname, '..', 'src', 'defenses.js'));
+        const fortress = new World({ preset: 'empty', inhabited: false, name: 'The Castle and Sky Harbor' });
+        fortress.tiles.fill(3);
+        for (let y = 0; y < 128; y++) for (let x = 66; x <= 78; x++) fortress.set_tile(x, y, 0);
+        for (let y = 38; y < 53; y++) for (let x = 32; x < 47; x++) fortress.set_tile(x, y, 4);
+        const capital = fortress.found_village(50, 60), distant = fortress.found_village(88, 60), rival = fortress.found_village(130, 90);
+        for (const site of [capital, distant, rival]) {
+            for (let person = 0; person < 24; person++) fortress.add_person(site.x + (person % 6) * 0.5, site.y + Math.floor(person / 6) * 0.5, site.id);
+            site.food = site === distant ? 10 : 1000; site.wood = 1000; site.research_level = 9; site.tech_points = 800;
+            site.ore.iron = 100; site.ore.coal = 100; site.ore.stardust = 100;
+        }
+        capital.buildings = [['castle', 50, 54], ['watchtower', 61, 56], ['prison', 56, 65],
+            ['dock', 65, 67], ['aerodrome', 46, 72], ['workshop', 52, 72], ['farm', 42, 64],
+            ['windmill', 40, 69], ['university', 42, 56]].map(([type,x,y])=>({type,x,y,growth:0.8,harvests:2,stock:40,integrity:type==='castle'?300:100,defense_timer:0}));
+        for (const [kind,x,y] of [['boat',68.5,66],['artillery',57,57],['balloon',54,70],['plane',60,61],['airship',60,70]]) {
+            fortress.machines.push({id:fortress.next_id++,kingdom_id:capital.id,kind,x,y,dx:1,dy:0,health:MACHINES[kind].health,decision:0,cooldown:0,cargo:0,recipient_id:null,delivered:0});
+        }
+        fortress.set_relation(capital.id, rival.id, 'war');
+        const captive = fortress.people.find(p=>p.village_id===rival.id); captive.role='soldier'; captive.x=58;captive.y=65;captive.health=20;
+        defense_hit(fortress,capital.id,captive,1);
+        for (let cycle=0;cycle<capital.houses.length+capital.buildings.length;cycle++) advance_roads(fortress,capital,8,9);
+        const fortress_world = fortress.serialize();
+        await fs.writeFile(path.join(artifact_dir, 'fortress-showcase.json'), JSON.stringify(fortress_world));
+        await click('#load');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(fortress_world))}],'fortress-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150); await click('#pause'); await click('#civilizations button');
+        await js(`document.querySelector('#zoom-slider').value='55';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
+        assert.equal(await js('new Set(genesis.snapshot().machines.map(machine=>machine.kind)).size'),5);
+        assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Coastal boat")'));
+        assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Release prisoners (1)")'));
+        await delay(250);
+        await fs.writeFile(path.join(artifact_dir, 'fortress-and-aircraft.png'), (await win.webContents.capturePage()).toPNG());
+        checks.push('Fortress import renders castles, towers, prison, coastal boats, artillery, balloons, aircraft, and flying transports');
+        await js(`(()=>{const button=[...document.querySelectorAll('#selected-kingdom button')].find(b=>b.textContent.startsWith('Release prisoners'));button.click()})()`);
+        assert.equal(await js('genesis.snapshot().people.filter(p=>p.prisoner_of).length'),0);
+        checks.push('Kingdom prisoner release control returns captives to their home kingdom');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         await click('#menu-start');

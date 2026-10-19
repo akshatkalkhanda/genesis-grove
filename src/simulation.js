@@ -6,6 +6,8 @@ import { DAY_LENGTHS } from './daylight.js';
 import { advance_roads, advance_transport, VEHICLES, MAX_VEHICLES } from './infrastructure.js';
 import { MYTHIC, advance_mythic } from './mythic.js';
 import { choose_ruler } from './heraldry.js';
+import { advance_detention, advance_defenses } from './defenses.js';
+import { MACHINES, MAX_MACHINES, advance_machines } from './machines.js';
 export const WIDTH = 192;
 export const HEIGHT = 128;
 export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8, JUNGLE: 9, SAVANNA: 10, SNOW: 11, MAPLE: 12, MUSHROOM: 13, CRYSTAL: 14, CELESTIAL: 15, DESERT: 16 });
@@ -112,6 +114,7 @@ export class World {
         this.voyages = [];
         this.trades = [];
         this.vehicles = [];
+        this.machines = [];
         this.armies = [];
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
@@ -331,6 +334,7 @@ export class World {
         village.build_timer = 0;
         village.road_timer = 0; village.road_cursor = 0; village.vehicle_timer = 0;
         village.king_id = null;
+        village.machine_timer = 0;
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
         return village;
@@ -536,10 +540,12 @@ export class World {
             let defenders = 0;
             const attackers = new Map();
             for (const person of this.people) {
-                if (person.voyage_id || person.role !== 'soldier' || person.health <= 0 || (person.x - site.x) ** 2 + (person.y - site.y) ** 2 > 36) continue;
+                if (person.voyage_id || person.prisoner_of || person.role !== 'soldier' || person.health <= 0 || (person.x - site.x) ** 2 + (person.y - site.y) ** 2 > 36) continue;
                 if (person.village_id === owner) defenders++;
                 else if (rivals.has(person.village_id)) attackers.set(person.village_id, (attackers.get(person.village_id) || 0) + 1);
             }
+            const kingdom = this.villages.find(v => v.id === owner);
+            if (kingdom?.buildings?.some(b => b.type === 'castle' && Math.hypot(b.x - site.x, b.y - site.y) < 18)) defenders += 3;
             const [leader, count] = [...attackers].sort((a, b) => b[1] - a[1])[0] || [];
             site.siege = count >= 2 && count > defenders ? (site.siege || 0) + count - defenders : Math.max(0, (site.siege || 0) - 1);
             if (site.siege >= (site.kingdom_id ? 8 : 14)) this.conquer_site(site, leader);
@@ -649,6 +655,7 @@ export class World {
         }
         if (['meteor', 'nuke', 'erase'].includes(tool)) {
             this.vehicles = this.vehicles.filter(vehicle => Math.hypot(vehicle.x - x, vehicle.y - y) > r);
+            this.machines = this.machines.filter(machine => Math.hypot(machine.x - x, machine.y - y) > r);
             this.revision++;
         }
         this.clean_up();
@@ -674,6 +681,9 @@ export class World {
             return false;
         });
         this.animals = this.animals.filter(p => p.health > 0 && (MYTHIC[p.species] || this.walkable(p.x, p.y)));
+        this.machines = this.machines.filter(machine => machine.health > 0
+            && (MACHINES[machine.kind].domain === 'air' || (MACHINES[machine.kind].domain === 'water'
+                ? this.tile(machine.x, machine.y) <= T.SHALLOW : this.walkable(machine.x, machine.y))));
         for (const v of this.villages) {
             v.houses = v.houses.filter(h => this.walkable(h.x, h.y) && this.fire[this.index(h.x, h.y)] < 5);
             v.buildings = (v.buildings || []).filter(b => this.walkable(b.x, b.y)
@@ -741,7 +751,7 @@ export class World {
     plan_armies(war_targets) {
         const groups = new Map();
         for (const person of this.people) {
-            if (person.role !== 'soldier' || person.voyage_id || person.health <= 0) continue;
+            if (person.role !== 'soldier' || person.voyage_id || person.prisoner_of || person.health <= 0) continue;
             const key = person.home_id || person.village_id;
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(person);
@@ -772,7 +782,7 @@ export class World {
     }
     advance_history() {
         if (this.tick % 80 === 0) for (const kingdom of this.villages.filter(v => v.alive)) {
-            const civilians = this.people.filter(p => p.village_id === kingdom.id && p.role !== 'soldier' && p.health > 0);
+            const civilians = this.people.filter(p => p.village_id === kingdom.id && p.role !== 'soldier' && !p.prisoner_of && p.health > 0);
             if (civilians.length >= JOBS.length) {
                 const counts = Object.fromEntries(JOBS.map(job => [job, civilians.filter(p => p.job === job).length]));
                 for (const job of JOBS.filter(job => !counts[job])) {
@@ -855,6 +865,7 @@ export class World {
         dt = clamp(dt, 0, 0.25);
         this.time += dt;
         this.tick++;
+        advance_detention(this, dt);
         this.advance_history();
         this.advance_voyages(dt);
         this.advance_trades(dt);
@@ -874,7 +885,7 @@ export class World {
             develop_creature(p, dt, this.year_length);
             const attributes = creature_stats(p, this.year_length);
             p.attack_timer = Math.max(0, (p.attack_timer || 0) - dt);
-            if (p.voyage_id) continue;
+            if (p.voyage_id || p.prisoner_of) continue;
             p.decision -= dt;
             p.gather += dt;
             const v = this.villages.find(v => v.id === p.village_id);
@@ -901,7 +912,7 @@ export class World {
                 const range = p.weapon_level >= 5 ? 7 + (p.weapon_level - 5) * 1.5 : 1.5;
                 let foe = null, nearest = Math.max(100, range * range + 1);
                 for (const other of this.people) {
-                    if (other.health <= 0 || !enemies.has(other.village_id)) continue;
+                    if (other.health <= 0 || other.prisoner_of || !enemies.has(other.village_id)) continue;
                     const distance = (other.x - p.x) ** 2 + (other.y - p.y) ** 2;
                     if (distance < nearest) { foe = other; nearest = distance; }
                 }
@@ -1019,6 +1030,7 @@ export class World {
         }
         const home_populations = new Map(), kingdom_populations = new Map(), workers = new Map(), soldier_counts = new Map();
         for (const person of this.people) {
+            if (person.prisoner_of || person.health <= 0) continue;
             kingdom_populations.set(person.village_id, (kingdom_populations.get(person.village_id) || 0) + 1);
             if (!person.voyage_id) home_populations.set(person.home_id, (home_populations.get(person.home_id) || 0) + 1);
             if (person.role === 'soldier') soldier_counts.set(person.village_id, (soldier_counts.get(person.village_id) || 0) + 1);
@@ -1151,6 +1163,8 @@ export class World {
             }
         }
         advance_transport(this, dt, technology_level, RESEARCH_COSTS);
+        advance_defenses(this, dt, technology_level);
+        advance_machines(this, dt, technology_level, RESEARCH_COSTS);
         if (this.tick % 240 === 0) this.schedule_trades();
         // Sample ecological growth; active fires are updated together to keep spread rate stable.
         for (let n = 0; n < 80; n++) {
@@ -1192,7 +1206,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1209,6 +1223,7 @@ export class World {
         if (data.roads !== undefined && (!array(data.roads, size) || data.roads.length !== size
             || !data.roads.every(n => integer(n, 0, 3)))) invalid();
         if (data.vehicles !== undefined && !array(data.vehicles, MAX_VEHICLES)) invalid();
+        if (data.machines !== undefined && !array(data.machines, MAX_MACHINES)) invalid();
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
@@ -1224,11 +1239,14 @@ export class World {
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
-            if (v.buildings !== undefined && (!array(v.buildings, 16) || v.buildings.some(b =>
+            if (v.buildings !== undefined && (!array(v.buildings, 24) || v.buildings.some(b =>
                 !point(b) || !BUILDINGS[b.type] || !num(b.growth, 0, 1)
                 || !integer(b.harvests, 0, 1e6) || (b.stock !== undefined && !num(b.stock, 0, 120))))) invalid();
+            if (v.buildings?.some(b => (b.integrity !== undefined && !num(b.integrity, 0.001, 300))
+                || (b.defense_timer !== undefined && !num(b.defense_timer, 0, 3)))) invalid();
             if (v.build_timer !== undefined && !num(v.build_timer, 0, 60)) invalid();
             if (v.king_id !== undefined && v.king_id !== null && !integer(v.king_id, 1, data.next_id - 1)) invalid();
+            if (v.machine_timer !== undefined && !num(v.machine_timer, 0, 20)) invalid();
             if ((v.road_timer !== undefined && !num(v.road_timer, 0, 8))
                 || (v.road_cursor !== undefined && !integer(v.road_cursor, 0, 1000))
                 || (v.vehicle_timer !== undefined && !num(v.vehicle_timer, 0, 24))) invalid();
@@ -1243,6 +1261,16 @@ export class World {
             id(v.id);
         }
         const villages = new Set(data.villages.map(v => v.id));
+        for (const machine of data.machines || []) {
+            if (!point(machine) || !villages.has(machine.kingdom_id) || !Object.hasOwn(MACHINES, machine.kind)
+                || !num(machine.health, -1000, MACHINES[machine.kind].health)
+                || !num(machine.dx, -1, 1) || !num(machine.dy, -1, 1)
+                || !num(machine.decision, -0.25, 3) || !num(machine.cooldown, 0, 5)
+                || !integer(machine.cargo, 0, 12) || !integer(machine.delivered, 0, 1e6)
+                || (machine.fishing_timer !== undefined && !num(machine.fishing_timer, 0, 20))
+                || (machine.recipient_id !== null && !villages.has(machine.recipient_id))) invalid();
+            id(machine.id);
+        }
         for (const vehicle of data.vehicles || []) {
             if (!point(vehicle) || !point({ x: vehicle.target_x, y: vehicle.target_y })
                 || !villages.has(vehicle.kingdom_id) || !VEHICLES[vehicle.kind]
@@ -1278,6 +1306,8 @@ export class World {
             id(u.id);
         }
         for (const p of data.people) {
+            if ((p.prisoner_of !== undefined && p.prisoner_of !== null && !villages.has(p.prisoner_of))
+                || (p.sentence !== undefined && !num(p.sentence, 0, (data.year_length || 20) * 10))) invalid();
             if (p.attack_timer !== undefined && !num(p.attack_timer, 0, 2)) invalid();
             if (p.work_target !== undefined && (!point(p.work_target) || p.work_target.route !== true
                 || !['Gathering food', 'Gathering timber'].includes(p.work_target.task))) invalid();
@@ -1302,6 +1332,7 @@ export class World {
         w.voyages = structuredClone(data.voyages || []);
         w.trades = structuredClone(data.trades || []);
         w.vehicles = structuredClone(data.vehicles || []);
+        w.machines = structuredClone(data.machines || []);
         w.scenario = data.scenario || 'sandbox';
         w.year_length = data.year_length || 20;
         w.lighting = structuredClone(data.lighting || { phase: 0.35, cycle_seconds: 600 });
@@ -1313,6 +1344,7 @@ export class World {
             kingdom.buildings ||= []; kingdom.build_timer ||= 0;
             kingdom.road_timer ||= 0; kingdom.road_cursor ||= 0; kingdom.vehicle_timer ||= 0;
             kingdom.king_id ??= null;
+            kingdom.machine_timer ||= 0;
         }
         w.laws = { rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };
         w.milestone = data.milestone || 0;

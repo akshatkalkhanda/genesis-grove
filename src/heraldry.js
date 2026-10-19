@@ -27,7 +27,7 @@ export function draw_flag(c, x, y, kingdom, width = 18, height = 12) {
 }
 
 export function choose_ruler(kingdom, residents) {
-    const eligible = residents.filter(person => person.health > 0 && !person.voyage_id);
+    const eligible = residents.filter(person => person.health > 0 && !person.voyage_id && !person.prisoner_of);
     const current = eligible.find(person => person.id === kingdom.king_id);
     if (current) return current;
     return eligible.sort((a, b) => (b.xp || 0) + b.age - (a.xp || 0) - a.age || a.id - b.id)[0] || null;

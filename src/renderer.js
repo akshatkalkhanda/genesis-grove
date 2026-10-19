@@ -3,6 +3,7 @@ import { creature_stats } from './creatures.js';
 import { night_opacity } from './daylight.js';
 import { draw_tree, draw_weapon, draw_vehicle, draw_landmark } from './world_art.js';
 import { draw_flag } from './heraldry.js';
+import { draw_machine, draw_fortification } from './machine_art.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
@@ -209,7 +210,7 @@ export class Renderer {
             for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
             this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v), v);
             this.industry(c, v.x * CELL, v.y * CELL, v);
-            for (const building of v.buildings || []) this.building(c, building, v.color, now);
+            for (const building of v.buildings || []) this.building(c, building, v.color, now, v);
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
@@ -237,10 +238,17 @@ export class Renderer {
             else { c.fillStyle = '#3f3b32'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2); }
         }
         for (const vehicle of world.vehicles) draw_vehicle(c, vehicle, kingdoms.get(vehicle.kingdom_id)?.color || '#b3c697', now);
+        for (const machine of world.machines.filter(m => ['boat', 'artillery'].includes(m.kind))) {
+            const kingdom = kingdoms.get(machine.kingdom_id);
+            draw_machine(c, machine, kingdom, now, technology_level(kingdom));
+        }
         for (const animal of world.animals) this.animal(c, animal, now);
         for (const p of world.people) {
             if (p.voyage_id) continue;
             this.person(c, p, kingdoms.get(p.village_id), now);
+        }
+        for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
+            draw_machine(c, machine, kingdoms.get(machine.kingdom_id), now);
         }
         if (this.selected_unit_id) {
             const selected = [...world.people, ...world.animals].find(unit => unit.id === this.selected_unit_id);
@@ -464,6 +472,10 @@ export class Renderer {
             c.fillRect(x - 4, y - 16, 2, 4); c.fillRect(x - 1, y - 15, 2, 3); c.fillRect(x + 2, y - 16, 2, 4);
             c.fillStyle = '#c98061'; c.fillRect(x - 1, y - 12, 2, 1);
         }
+        if (person.prisoner_of) {
+            c.fillStyle = '#909d9d'; c.fillRect(x - 6, y - 1, 13, 1);
+            c.fillRect(x - 6, y - 2, 2, 3); c.fillRect(x + 5, y - 2, 2, 3);
+        }
     }
     house(c, x, y, color, town, level = 0, kingdom = null) {
         const w = town ? 13 : 8, h = town ? 10 : 7;
@@ -512,9 +524,11 @@ export class Renderer {
         if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 25, 1, 15); draw_flag(c, x + 4, y - 25, kingdom || { color }, 13, 8); }
         if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
     }
-    building(c, building, color, now) {
+    building(c, building, color, now, kingdom = null) {
         const x = building.x * CELL, y = building.y * CELL;
-        if (building.type === 'farm') {
+        if (['castle', 'watchtower', 'prison', 'dock', 'aerodrome'].includes(building.type)) {
+            draw_fortification(c, building, kingdom || { color });
+        } else if (building.type === 'farm') {
             c.fillStyle = '#60482f'; c.fillRect(x - 10, y - 5, 21, 14);
             const crop = building.growth > 0.7 ? '#e6c367' : building.growth > 0.3 ? '#87ae51' : '#83613c';
             for (let row = 0; row < 4; row++) for (let col = 0; col < 6; col++) {
@@ -569,7 +583,15 @@ export class Renderer {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = e.radius * CELL;
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'beam') {
+        if (e.type === 'shell') {
+            const progress = 1 - e.life;
+            const px = x + (e.target_x * CELL - x) * progress;
+            const py = y + (e.target_y * CELL - y) * progress - Math.sin(progress * Math.PI) * 26;
+            c.fillStyle = '#292d2b'; c.beginPath(); c.arc(px, py, 2.5, 0, Math.PI * 2); c.fill();
+            if (progress > 0.8) {
+                c.fillStyle = '#edb56d99'; c.beginPath(); c.arc(e.target_x * CELL, e.target_y * CELL, 9 * progress, 0, Math.PI * 2); c.fill();
+            }
+        } else if (e.type === 'beam') {
             c.strokeStyle = e.color || '#c3f4f0'; c.lineWidth = 3 * e.life;
             c.beginPath(); c.moveTo(x, y - 8); c.lineTo(e.target_x * CELL, e.target_y * CELL - 6); c.stroke();
             c.strokeStyle = '#edfff8'; c.lineWidth = Math.max(0.4, e.life); c.stroke();

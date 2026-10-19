@@ -5,6 +5,8 @@ import { BUILDINGS } from './settlements.js';
 import { advance_daylight } from './daylight.js';
 import { VEHICLES } from './infrastructure.js';
 import { draw_flag } from './heraldry.js';
+import { MACHINES } from './machines.js';
+import { advance_detention } from './defenses.js';
 const $ = id => document.getElementById(id);
 function kingdom_flag(kingdom) {
     const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
@@ -167,12 +169,12 @@ function research_status(kingdom) {
     return `Next: ${next.name} · knowledge ${Math.floor(kingdom.tech_points || 0)}/${next.threshold} · ${resources}${building}`;
 }
 $('technology').onclick = () => {
-    const unlocks = ['First tools, farms, and training camps', 'Copper spears and windmills',
-        'Bronze blades, armor, armories, and harvest carts', 'Iron swords and stone roads',
-        'Steel equipment and founders monuments', 'Crossbows, universities, and workshops',
-        'Muskets and visible ranged combat', 'Rifles, factories, steam wagons, and paved roads',
-        'Carbines, supply trucks, taller town buildings, and observatories that collect stardust',
-        'Photon lances, hovercraft, and astral forges',
+    const unlocks = ['First tools, farms, and training camps', 'Copper spears, windmills, and watchtowers',
+        'Bronze blades, armor, armories, harvest carts, docks, and coastal boats', 'Iron swords, stone roads, and prisons',
+        'Steel equipment, castles, and founders monuments', 'Crossbows, universities, and workshops',
+        'Muskets, artillery, and visible ranged combat', 'Rifles, factories, steam wagons, paved roads, aerodromes, and survey balloons',
+        'Carbines, supply trucks, courier aircraft, taller buildings, and observatories',
+        'Photon lances, hovercraft, flying transports, and astral forges',
         'Plasma projectors and luminous architecture',
         'Void beams, stardust carriers, and stargate monuments',
         'Sovereign rays and cosmic dust condensers',
@@ -257,6 +259,8 @@ function inspect(p) {
     if (road) add(`${['', 'Dirt road', 'Stone road', 'Paved road'][road]} · movement +${road * 15}%`);
     const vehicle = world.vehicles.find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 2);
     if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard · ${vehicle.deliveries} deliveries`);
+    const machine = world.machines.find(m => Math.hypot(m.x - tile.x, m.y - tile.y) < 3);
+    if (machine) add(`${MACHINES[machine.kind].label} · ${Math.ceil(machine.health)} health · ${machine.cargo} food aboard`);
     const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
     const claimed_by = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
     add(claimed_by ? `${claimed_by.name} territory` : 'Unclaimed land');
@@ -272,7 +276,7 @@ function inspect(p) {
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
     for (const kingdom of world.villages.filter(v => v.alive)) {
         const building = kingdom.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
-        if (building) add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crop ${Math.floor(building.growth * 100)}% · ${building.harvests} harvests` : ' · active'}`);
+        if (building) add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crop ${Math.floor(building.growth * 100)}% · ${building.harvests} harvests` : ` · ${Math.ceil(building.integrity ?? 100)} integrity`}`);
     }
     add('Click a person or animal to inspect it');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
@@ -334,6 +338,10 @@ function update_entity_card() {
             ? 'Hostile · spreads fire' : ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
     }
     if (unit.infection > 0) line('Condition', 'Infected');
+    if (unit.prisoner_of) {
+        line('Held by', world.villages.find(v => v.id === unit.prisoner_of)?.name || 'Lost kingdom');
+        line('Sentence', `${Math.ceil((unit.sentence || 0) / world.year_length)} years remaining`);
+    }
     const actions = document.createElement('div'); actions.className = 'entity-actions';
     const zoom = document.createElement('button'); zoom.dataset.action = 'zoom-creature'; zoom.textContent = 'Zoom close';
     zoom.onclick = () => { renderer.focus(unit.x, unit.y, 12); update_zoom(); };
@@ -452,7 +460,13 @@ function update_selected_kingdom() {
     const research = document.createElement('div'); research.textContent = research_status(kingdom);
     const fleet = world.vehicles.filter(vehicle => vehicle.kingdom_id === kingdom.id);
     const transport = document.createElement('div'); transport.textContent = `Transport: ${fleet.length} vehicles · ${fleet.reduce((sum, vehicle) => sum + vehicle.deliveries, 0)} surplus deliveries`;
-    box.append(heading, ruler, status, stats, age, research, stores, metals, settlements, buildings, transport, plan, march, diplomacy, manage);
+    const machines = world.machines.filter(machine => machine.kingdom_id === kingdom.id);
+    const fleet_detail = document.createElement('div'); fleet_detail.textContent = `Fleet: ${machines.map(machine => MACHINES[machine.kind].label).join(', ') || 'no boats or aircraft yet'}`;
+    const prisoners = world.people.filter(person => person.prisoner_of === kingdom.id);
+    const release = document.createElement('button'); release.textContent = `Release prisoners (${prisoners.length})`;
+    release.disabled = !prisoners.length;
+    release.onclick = () => { for (const person of prisoners) person.sentence = 0; advance_detention(world, 0); update_ui(); };
+    box.append(heading, ruler, status, stats, age, research, stores, metals, settlements, buildings, transport, fleet_detail, plan, march, diplomacy, manage, release);
 }
 function update_ui() {
     update_entity_card();
