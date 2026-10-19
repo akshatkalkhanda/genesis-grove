@@ -6,7 +6,7 @@ export function find_path(world, start, target, budget = 4096) {
     if (!world.walkable(sx, sy) || !world.walkable(tx, ty)) return [];
     const origin = sy * width + sx, goal = ty * width + tx;
     const cost = new Map([[origin, 0]]), previous = new Map();
-    const open = [{ index: origin, score: Math.abs(tx - sx) + Math.abs(ty - sy) }];
+    const open = [{ index: origin, score: (Math.abs(tx - sx) + Math.abs(ty - sy)) * 0.65 }];
     const push = entry => {
         let index = open.length;
         open.push(entry);
@@ -47,10 +47,10 @@ export function find_path(world, start, target, budget = 4096) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const nx = x + dx, ny = y + dy, next = ny * width + nx;
             if (!world.walkable(nx, ny) || visited.has(next)) continue;
-            const candidate = cost.get(current) + 1;
+            const candidate = cost.get(current) + (world.roads?.[next] ? 0.65 : 1);
             if (candidate >= (cost.get(next) ?? Infinity)) continue;
             cost.set(next, candidate); previous.set(next, current);
-            push({ index: next, score: candidate + Math.abs(tx - nx) + Math.abs(ty - ny) });
+            push({ index: next, score: candidate + (Math.abs(tx - nx) + Math.abs(ty - ny)) * 0.65 });
         }
     }
     return [];

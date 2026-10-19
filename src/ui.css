@@ -27,10 +27,19 @@
 .map-label b{color:var(--age-color,#b2a18a);font-size:10px;letter-spacing:1.9px}
 .age-track{grid-column:1/-1;height:4px;border-radius:4px;background:#52625785;overflow:hidden;margin-top:4px}
 .age-track i{display:block;width:0;height:100%;border-radius:4px;background:var(--age-color,#b2a18a);box-shadow:0 0 10px var(--age-color,#b2a18a);transition:width .4s}
-.age-stages{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:100%}
+.age-stages{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;width:100%}
 .age-stages span{font-size:7px;letter-spacing:.2px;color:#839c8c;text-align:center}
 .age-stages span.active{color:var(--age-color,#b2a18a);font-weight:750}
 .age-stages span.reached{color:#c1d5b5}
+#technology-dialog{width:560px}
+.technology-step{display:grid;grid-template-columns:24px 1fr;gap:5px 10px;padding:12px 0;border-top:1px solid var(--line);font-size:12px}
+.technology-step>span{color:var(--age-color);font-size:17px;grid-row:span 2}
+.technology-step strong{color:var(--age-color)}
+.technology-step small{font-size:11px;line-height:1.7;color:#9cb29e}
+.zoom-controls{align-items:center}
+.kingdom-flag{display:inline-block;width:27px;height:19px;image-rendering:pixelated;vertical-align:middle;flex-shrink:0}
+.selected-kingdom>strong .kingdom-flag,#kingdom-profile>strong .kingdom-flag{margin-right:8px}
+@media(max-width:1150px){.map-hint{display:none}.map-bottom{justify-content:flex-end}}
 .civilization{background:#202e26;border:1px solid #3a4e3d;border-left:4px solid var(--civ-color);border-radius:7px;padding:7px 8px;margin-bottom:5px;box-shadow:inset 0 1px #ffffff09}
 .civilization:hover,.civilization.active{background:#2d4032;border-color:#6e916e;border-left-color:var(--civ-color)}
 .civ-dot{width:11px;height:11px;flex-shrink:0;background:var(--civ-color);box-shadow:0 0 10px var(--civ-color)}

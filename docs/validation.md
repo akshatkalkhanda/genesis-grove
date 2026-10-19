@@ -1,20 +1,20 @@
-# Version 0.11.0 validation — 19 October 2026
+# Version 0.12.0 validation — 19 October 2026
 
-Close zoom and Follow expose named creatures with XP, levels, health growth, strength, intelligence, traits, and parent records. Kingdoms make supply-aware decisions and use obstacle-aware routes. Towns build productive farms, windmills, armories, and training camps. A separate lighting clock prevents rapid day/night flashing at high speed.
+This update adds fourteen ages through Cosmic Dust, visible ranged and energy weapons, working roads and farm transport, monuments and advanced industries, varied tree artwork, angels and demons, kingdom flags and ruler succession, and easier zoom controls.
 
 ## Verified on this Mac
 
-- Thirty-nine deterministic tests pass, including age/XP growth, old-save migration, restored-world evolution, A* detours, kingdom strategy, harvests, training, forging, and lighting speed limits.
-- A 21-year Wildlands fixture contains all four new building types and creatures with health above 100; it is imported and rendered during the desktop smoke test.
+- Fifty-six deterministic tests pass. New checks cover post-Steel and cosmic research gates, stardust collection and saves, ranged attacks, finite underground seams, job recovery, research material reserves, roads, finite cargo delivery, vehicle upgrades, mythic behavior, and ruler succession.
 - JavaScript syntax checks pass.
-- Thirty-three Electron UI smoke checks pass against both source and the packaged Mac app, including close zoom, Follow, expanded profiles, lighting controls, developed towns, compact layout, and renderer errors.
-- macOS Apple silicon app built and its ZIP checked with `unzip -tq`.
-- Windows x64 ZIP built and checked with `unzip -tq`; it has not been run on Windows.
+- Thirty-six Electron UI checks cover menus, older worlds, close zoom and Follow, the zoom slider, fourteen-age technology panel, kingdom flags and rulers, day/night, modern and cosmic showcase imports, compact layout, and renderer errors.
+- A long diagnostic found miners initially unable to reach distant ore, then exposed missing jobs in mature populations and exhausted surface iron. Prospecting now expands with population and time, births fill job gaps, towns retrain missing professions, and Iron Age mines can uncover at most three finite seams per rocky tile.
+- A previously stalled world recovered to Lightyear Age in all three kingdoms after 100 additional simulated years. After another 500 years, all three naturally reached level 13 / Cosmic Dust Age (2,714–2,717 knowledge), built the cosmic institutions, and operated six stardust carriers. The historical calendar was year 2,001, including the intentionally stalled snapshot; this is a recovery check, not a fresh-world timing benchmark.
 
-## Deliverables and boundaries
+## Artifacts and boundaries
 
-- `dist/mac-arm64/Genesis Grove.app` and `dist/Genesis Grove-0.11.0-arm64-mac.zip` — Apple silicon macOS build.
-- `dist/Genesis Grove-0.11.0-win.zip` — Windows x64 archive. Extract the full archive and run `Genesis Grove.exe`.
-- Packaging commands explicitly disable automatic publishing. CI platform jobs run independently, avoiding the missing publishing-token failure seen on the v0.10.0 tag.
-- Available signing identities are expired or untrusted. The macOS package is unsigned and not notarized. Windows execution, input, audio, import/export, and performance remain unverified on Windows.
-- Soldiers fight locally; troop formations and naval invasions are not implemented.
+- `dist/mac-arm64/Genesis Grove.app` and `dist/Genesis Grove-0.12.0-arm64-mac.zip` — Apple silicon macOS build.
+- `dist/Genesis Grove-0.12.0-win.zip` — Windows x64 archive. Extract the full archive and run `Genesis Grove.exe`.
+- `artifacts/cosmic-showcase.json` — generated demonstration world with an advanced cosmic capital, imports through Load → Import. Its starting technology and stocks are deliberately staged for visual review.
+- Available signing identities are expired or untrusted. The Mac package is unsigned and not notarized. Windows interactive gameplay remains untested on Windows.
+- Cosmic institutions, energy equipment, and hover transports operate on the existing map. Orbital maps, star-system travel, and off-world colonization remain future work.
+- Soldiers fight locally; naval invasions and troop formations remain future work.

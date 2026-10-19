@@ -18,7 +18,8 @@ export function creature_stats(unit, year_length = 20) {
     const level = Math.min(30, 1 + Math.floor(Math.sqrt(xp / 25)));
     return {
         level,
-        max_health: 100 + Math.floor(Math.min(years, 100) * 1.5)
+        max_health: (unit.species === 'angel' ? 250 : unit.species === 'demon' ? 300 : 100)
+            + Math.floor(Math.min(years, 100) * 1.5)
             + (level - 1) * (unit.trait === 'hardy' ? 12 : 8),
         strength: 10 + (level - 1) * 2 + Math.floor(Math.min(years, 100) / 10)
             + (unit.trait === 'brave' && level > 1 ? 2 : 0),

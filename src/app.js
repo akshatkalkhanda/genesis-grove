@@ -1,9 +1,18 @@
-import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RACES, ANIMALS, technology_level } from './simulation.js';
+import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
 import { creature_stats } from './creatures.js';
 import { BUILDINGS } from './settlements.js';
 import { advance_daylight } from './daylight.js';
+import { VEHICLES } from './infrastructure.js';
+import { draw_flag } from './heraldry.js';
 const $ = id => document.getElementById(id);
+function kingdom_flag(kingdom) {
+    const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
+    flag.className = 'kingdom-flag'; flag.setAttribute('role', 'img');
+    flag.setAttribute('aria-label', `${kingdom.name} flag`);
+    draw_flag(flag.getContext('2d'), 2, 2, kingdom, 36, 24);
+    return flag;
+}
 const TOOLS = {
     terrain: [
         ['grass', 'Meadow', '◆', '#a7c47b', 'Lay down fertile ground. Every great civilization starts somewhere.'],
@@ -55,13 +64,16 @@ const TOOLS = {
         ['buffalo', 'Buffalo', '♉', '#8d6248', 'Large herd animals of open grassland.'],
         ['butterfly', 'Butterflies', '🦋', '#dba8db', 'Colorful pollinators of flowered land.'],
         ['moth', 'Moths', '✿', '#c7d3af', 'Moonlit insects of forests and starbloom.'],
-        ['lizard', 'Lizards', '🦎', '#94ad67', 'Small sun-loving reptiles of the desert.']
+        ['lizard', 'Lizards', '🦎', '#94ad67', 'Small sun-loving reptiles of the desert.'],
+        ['angel', 'Angels', '♧', '#f1e6ae', 'Winged guardians that heal nearby creatures, cure infection, quench fires, and fight demons.'],
+        ['demon', 'Demons', '♆', '#e19174', 'Dangerous flying creatures that attack villagers and ignite the land. Angels can fight them.']
     ],
     powers: [
         ['copper', 'Copper vein', '◆', '#dc9464', 'Place a copper deposit. Miners can collect it for copper-age research and weapons.'],
         ['tin', 'Tin vein', '◇', '#c4a778', 'Place tin for bronze research and bronze equipment.'],
         ['iron', 'Iron vein', '⬟', '#aab8c4', 'Place iron for iron-age research, swords, and armor.'],
         ['coal', 'Coal seam', '⬢', '#9a9d91', 'Place coal to fuel advanced research and forge work.'],
+        ['stardust', 'Stardust deposit', '✧', '#e8b8f5', 'Place cosmic dust for advanced research and energy weapons. Observatories also collect it slowly from the sky.'],
         ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
         ['fire', 'Fire', '♨', '#e3a16a', 'Spark a wildfire. Flames spread through meadows and forests.'],
         ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike the earth with thunder. Nearby creatures and forests feel its power.'],
@@ -129,12 +141,52 @@ function set_speed(value) {
     for (const button of document.querySelectorAll('[data-speed]')) button.classList.toggle('active', Number(button.dataset.speed) === speed);
 }
 for (const button of document.querySelectorAll('[data-speed]')) button.onclick = () => { set_speed(Number(button.dataset.speed)); set_pause(false); };
-function update_zoom() { $('zoom-reset').textContent = `${Math.round(renderer.zoom * 100)}%`; }
-$('zoom-in').onclick = () => { renderer.zoom_at(1.25); update_zoom(); };
-$('zoom-out').onclick = () => { renderer.zoom_at(0.8); update_zoom(); };
+const MIN_ZOOM = 0.65, MAX_ZOOM = 24;
+function zoom_slider_value(zoom) { return Math.round(Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM) * 100); }
+function update_zoom() {
+    $('zoom-reset').textContent = `${Math.round(renderer.zoom * 100)}%`;
+    $('zoom-slider').value = String(zoom_slider_value(renderer.zoom));
+}
+$('zoom-slider').oninput = () => {
+    const zoom = MIN_ZOOM * (MAX_ZOOM / MIN_ZOOM) ** (Number($('zoom-slider').value) / 100);
+    renderer.zoom_at(zoom / renderer.zoom); update_zoom();
+};
+$('zoom-in').onclick = () => { renderer.zoom_at(1.15); update_zoom(); };
+$('zoom-out').onclick = () => { renderer.zoom_at(1 / 1.15); update_zoom(); };
 $('zoom-reset').onclick = $('fit').onclick = () => { followed_unit_id = null; renderer.fit(); update_zoom(); };
 $('borders').onclick = () => { renderer.borders = !renderer.borders; $('borders').classList.toggle('active', renderer.borders); };
 $('inspect').onclick = () => select_tool(tool === 'inspect' ? previous_tool : 'inspect');
+function research_status(kingdom) {
+    const next_level = technology_level(kingdom) + 1, next = TECH_AGES[next_level];
+    if (!next) return 'All fourteen ages discovered';
+    const resources = Object.entries(RESEARCH_COSTS[next_level]).map(([ore, amount]) =>
+        `${Math.floor(Math.min(amount, kingdom.ore?.[ore] || 0))}/${amount} ${ore}`).join(' · ');
+    const institution = RESEARCH_BUILDINGS[next_level];
+    const building = institution && !kingdom.buildings?.some(b => b.type === institution)
+        ? ` · needs ${BUILDINGS[institution].label.toLowerCase()}` : '';
+    return `Next: ${next.name} · knowledge ${Math.floor(kingdom.tech_points || 0)}/${next.threshold} · ${resources}${building}`;
+}
+$('technology').onclick = () => {
+    const unlocks = ['First tools, farms, and training camps', 'Copper spears and windmills',
+        'Bronze blades, armor, armories, and harvest carts', 'Iron swords and stone roads',
+        'Steel equipment and founders monuments', 'Crossbows, universities, and workshops',
+        'Muskets and visible ranged combat', 'Rifles, factories, steam wagons, and paved roads',
+        'Carbines, supply trucks, taller town buildings, and observatories that collect stardust',
+        'Photon lances, hovercraft, and astral forges',
+        'Plasma projectors and luminous architecture',
+        'Void beams, stardust carriers, and stargate monuments',
+        'Sovereign rays and cosmic dust condensers',
+        'Stardust staffs and the most advanced armor'];
+    $('technology-list').replaceChildren(...TECH_AGES.map((age, index) => {
+        const row = document.createElement('div'); row.className = 'technology-step';
+        row.style.setProperty('--age-color', age.color);
+        const number = document.createElement('span'); number.textContent = String(index + 1);
+        const title = document.createElement('strong'); title.textContent = age.name;
+        const detail = document.createElement('small'); detail.textContent = unlocks[index];
+        row.append(number, title, detail); return row;
+    }));
+    $('technology-dialog').showModal();
+};
 function local_point(event) {
     const rect = $('world').getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
@@ -177,7 +229,12 @@ function end_pointer(event) {
 canvas.onpointerup = canvas.onpointercancel = end_pointer;
 canvas.onpointerleave = () => { if (!pointer_down && !panning) renderer.pointer = null; $('world-tooltip').hidden = true; };
 window.addEventListener('blur', () => end_pointer());
-canvas.onwheel = event => { event.preventDefault(); const p = local_point(event); renderer.zoom_at(Math.exp(-event.deltaY * 0.0015), p.x, p.y); update_zoom(); };
+canvas.onwheel = event => {
+    event.preventDefault(); const p = local_point(event);
+    const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? canvas.clientHeight : 1;
+    const delta = Math.max(-120, Math.min(120, event.deltaY * unit));
+    renderer.zoom_at(Math.exp(-delta * 0.001), p.x, p.y); update_zoom();
+};
 $('minimap').onclick = event => {
     followed_unit_id = null;
     const rect = $('minimap').getBoundingClientRect();
@@ -195,7 +252,11 @@ function inspect(p) {
     const animals = world.animals.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
     const deposit = world.ores[world.index(tile.x, tile.y)];
-    if (deposit) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam'][deposit]);
+    if (deposit) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
+    const road = world.roads[world.index(tile.x, tile.y)];
+    if (road) add(`${['', 'Dirt road', 'Stone road', 'Paved road'][road]} · movement +${road * 15}%`);
+    const vehicle = world.vehicles.find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 2);
+    if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard · ${vehicle.deliveries} deliveries`);
     const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
     const claimed_by = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
     add(claimed_by ? `${claimed_by.name} territory` : 'Unclaimed land');
@@ -262,13 +323,15 @@ function update_entity_card() {
     if (inspected_unit.kind === 'person') {
         const kingdom = world.villages.find(v => v.id === unit.village_id);
         line('Kingdom', kingdom?.name || 'No kingdom');
+        if (kingdom?.king_id === unit.id) line('Title', 'Ruler');
         line('Role', unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
         line('Weapon', TECH_AGES[unit.weapon_level || 0].weapon);
         line('Armor', unit.armor_level ? `${TECH_AGES[unit.armor_level].name} armor` : 'None');
         if (unit.parents?.length) line('Parents', unit.parents.map(parent => parent.name).join(', '));
         line('Living children', world.people.filter(child => child.parents?.some(parent => parent.id === unit.id)).length);
     } else {
-        line('Nature', ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
+        line('Nature', unit.species === 'angel' ? 'Guardian · healing aura' : unit.species === 'demon'
+            ? 'Hostile · spreads fire' : ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
     }
     if (unit.infection > 0) line('Condition', 'Infected');
     const actions = document.createElement('div'); actions.className = 'entity-actions';
@@ -307,13 +370,16 @@ function update_diplomacy(preferred_source = null) {
         const alliances = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'alliance').length;
         const wars = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'war').length;
         const heading = document.createElement('strong'); heading.textContent = source.name; heading.style.setProperty('--kingdom-color', source.color);
+        heading.prepend(kingdom_flag(source));
+        const ruler = document.createElement('span'); ruler.textContent = `Ruler: ${world.people.find(p => p.id === source.king_id && p.health > 0)?.name || 'Awaiting succession'}`;
         const details = document.createElement('span'); details.textContent = `${population} people · ${soldiers} soldiers · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
         const technology = document.createElement('span');
         const level = technology_level(source);
         technology.className = 'technology-detail'; technology.style.setProperty('--technology-color', TECH_AGES[level].color);
         technology.textContent = `${TECH_AGES[level].name} · ${TECH_AGES[level].weapon} · gear improves damage and protection`;
+        const research = document.createElement('span'); research.textContent = research_status(source);
         const ore = source.ore || {};
-        const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · Cu ${ore.copper || 0} · Sn ${ore.tin || 0} · Fe ${ore.iron || 0} · coal ${ore.coal || 0}`;
+        const resources = document.createElement('span'); resources.textContent = `${Math.floor(source.food)} food · ${Math.floor(source.wood)} wood · Cu ${ore.copper || 0} · Sn ${ore.tin || 0} · Fe ${ore.iron || 0} · coal ${ore.coal || 0} · dust ${Math.floor(ore.stardust || 0)}`;
         const arsenal = document.createElement('span'); arsenal.textContent = `${source.weapons || 0} spare weapons · ${source.armor_stock || 0} spare armor · ${source.deaths || 0} deaths`;
         const jobs = document.createElement('span'); jobs.textContent = `${residents.filter(p => p.role !== 'soldier' && p.job === 'farmer').length} farmers · ${residents.filter(p => p.role !== 'soldier' && p.job === 'lumberjack').length} woodcutters · ${residents.filter(p => p.role !== 'soldier' && p.job === 'miner').length} miners · ${residents.filter(p => p.role !== 'soldier' && p.job === 'smith').length} smiths · ${residents.filter(p => p.role !== 'soldier' && p.job === 'builder').length} builders`;
         const logistics = document.createElement('span'); logistics.textContent = `${source.barracks ? 'Barracks active' : 'No barracks'} · ${world.trades.filter(t => t.from_id === source.id || t.to_id === source.id).length} trade routes underway`;
@@ -321,7 +387,7 @@ function update_diplomacy(preferred_source = null) {
         const armies = world.armies.filter(army => army.kingdom_id === source.id);
         const military = document.createElement('span');
         military.textContent = `${armies.length} garrisons · ${armies.filter(army => army.target_id).length} marching toward enemy towns`;
-        profile.append(heading, details, technology, resources, arsenal, jobs, logistics, military, relations);
+        profile.append(heading, ruler, details, technology, research, resources, arsenal, jobs, logistics, military, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);
@@ -364,6 +430,8 @@ function update_selected_kingdom() {
     const armies = world.armies.filter(a => a.kingdom_id === kingdom.id && a.count >= 2);
     box.replaceChildren();
     const heading = document.createElement('strong'); heading.textContent = kingdom.name;
+    heading.prepend(kingdom_flag(kingdom));
+    const ruler = document.createElement('div'); ruler.textContent = `Ruler: ${world.people.find(p => p.id === kingdom.king_id && p.health > 0)?.name || 'Awaiting succession'}`;
     const status = document.createElement('span'); status.className = 'kingdom-status';
     status.textContent = enemies.length ? `⚔ At war with ${enemies.map(v => v.name).join(', ')}` : '☼ At peace';
     const stats = document.createElement('div'); stats.className = 'kingdom-quick-stats';
@@ -371,7 +439,7 @@ function update_selected_kingdom() {
     const age = document.createElement('div'); age.textContent = `${TECH_AGES[technology_level(kingdom)].name} · ${TECH_AGES[technology_level(kingdom)].weapon}`;
     const stores = document.createElement('div'); stores.textContent = `Supplies: ${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`;
     const ore = kingdom.ore || {};
-    const metals = document.createElement('div'); metals.textContent = `Ore: ${ore.copper || 0} copper · ${ore.tin || 0} tin · ${ore.iron || 0} iron · ${ore.coal || 0} coal`;
+    const metals = document.createElement('div'); metals.textContent = `Ore: ${ore.copper || 0} copper · ${ore.tin || 0} tin · ${ore.iron || 0} iron · ${ore.coal || 0} coal · ${Math.floor(ore.stardust || 0)} stardust`;
     const settlements = document.createElement('div'); settlements.textContent = `Towns: Capital, ${towns.map(c => c.name).join(', ') || 'no colonies yet'}`;
     const march = document.createElement('div'); march.textContent = armies.length
         ? `Army: ${armies.map(a => `${a.count} ${a.target_name ? `marching to ${a.target_name}` : 'defending home'}`).join(' · ')}`
@@ -381,7 +449,10 @@ function update_selected_kingdom() {
     manage.onclick = () => $('diplomacy').click();
     const plan = document.createElement('div'); plan.textContent = `Strategy: ${kingdom.plan?.reason || 'Establish the settlement'}`;
     const buildings = document.createElement('div'); buildings.textContent = `Buildings: ${(kingdom.buildings || []).map(b => BUILDINGS[b.type].label).join(', ') || 'homes and workshops'}`;
-    box.append(heading, status, stats, age, stores, metals, settlements, buildings, plan, march, diplomacy, manage);
+    const research = document.createElement('div'); research.textContent = research_status(kingdom);
+    const fleet = world.vehicles.filter(vehicle => vehicle.kingdom_id === kingdom.id);
+    const transport = document.createElement('div'); transport.textContent = `Transport: ${fleet.length} vehicles · ${fleet.reduce((sum, vehicle) => sum + vehicle.deliveries, 0)} surplus deliveries`;
+    box.append(heading, ruler, status, stats, age, research, stores, metals, settlements, buildings, transport, plan, march, diplomacy, manage);
 }
 function update_ui() {
     update_entity_card();
@@ -409,7 +480,9 @@ function update_ui() {
     $('era').textContent = `${age.name} · ${age.weapon.toLowerCase()}s`;
     $('age-progress').style.width = `${Math.max(0, Math.min(100, progress * 100))}%`;
     document.querySelector('.map-label').style.setProperty('--age-color', age.color);
+    const visible_age = Math.max(0, Math.min(TECH_AGES.length - 5, age_level - 2));
     for (const [index, step] of [...document.querySelectorAll('.age-stages span')].entries()) {
+        step.hidden = index < visible_age || index >= visible_age + 5;
         step.classList.toggle('active', index === age_level);
         step.classList.toggle('reached', index < age_level);
     }
@@ -427,7 +500,7 @@ function update_ui() {
         const button = document.createElement('button'); button.className = 'civilization'; button.title = `Visit ${v.name}`;
         button.classList.toggle('active', focused_village_id === v.id);
         button.style.setProperty('--civ-color', v.color);
-        const dot = document.createElement('span'); dot.className = 'civ-dot';
+        const dot = kingdom_flag(v);
         const name = document.createElement('span'); name.className = 'civ-name'; name.textContent = v.name;
         const towns = world.colonies.filter(c => c.kingdom_id === v.id).length + 1;
         const small = document.createElement('small'); small.textContent = `${towns} ${towns === 1 ? 'town' : 'towns'} · ${TECH_AGES[technology_level(v)].name}${warring.has(v.id) ? ' · ⚔ at war' : ''}`; name.append(small);

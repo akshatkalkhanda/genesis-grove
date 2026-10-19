@@ -50,13 +50,15 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("selected-kingdom").hidden'), false);
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Supplies:")'));
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Towns:")'));
+        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Ruler:")'));
+        assert.equal(await js('document.querySelectorAll("#civilizations .kingdom-flag").length'), 3);
         checks.push('Selecting a kingdom opens its detailed status panel');
         await click('#zoom-reset');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 16);
         await click('[data-category="life"]');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 12);
         await click('[data-category="creatures"]');
-        assert.equal(await js('document.querySelectorAll("#tools button").length'), 18);
+        assert.equal(await js('document.querySelectorAll("#tools button").length'), 20);
         await click('[data-category="terrain"]');
         checks.push('Biome, civilization, and wildlife catalogs expose the expanded choices');
         assert.equal(await js(`(()=>{const tabs=[...document.querySelectorAll('.tabs button')].map(e=>e.getBoundingClientRect());return tabs[0].right<=tabs[1].left&&tabs[0].bottom<=tabs[2].top})()`), true);
@@ -72,8 +74,14 @@ app.whenReady().then(async () => {
         win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(target.x), y: Math.round(target.y), button: 'left', clickCount: 1 });
         await delay(100);
         assert.equal(await js(`genesis.snapshot().tiles[${target.i}]`), 7); checks.push('Native pointer input applies meteor to the map');
-        await click('#zoom-in'); assert.ok(await js('genesis.camera().zoom > 1')); await click('#zoom-reset');
-        assert.equal(await js('genesis.camera().zoom'), 1); checks.push('Zoom and fit controls work');
+        await click('#zoom-in'); assert.ok(await js('genesis.camera().zoom > 1'));
+        await js(`document.querySelector('#zoom-slider').value='70';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
+        assert.ok(await js('genesis.camera().zoom > 5'));
+        assert.equal(await js(`Number(document.querySelector('#zoom-slider').value)`), 70);
+        await click('#zoom-reset');
+        assert.equal(await js('genesis.camera().zoom'), 1);
+        assert.equal(await js(`Number(document.querySelector('#zoom-slider').value)`), 12);
+        checks.push('Zoom slider, buttons, and fit stay synchronized');
         await click('#save'); assert.ok(await js('localStorage.getItem("genesis-grove-world-v1") !== null')); checks.push('Device save persists world');
         await click('#new-world');
         await js(`document.querySelector('#new-form [name=name]').value='Smoke Ocean';document.querySelector('#new-form [name=seed]').value='';document.querySelector('#new-form [name=preset]').value='empty';document.querySelector('#new-form').requestSubmit()`);
@@ -187,6 +195,12 @@ app.whenReady().then(async () => {
         assert.equal(await js('genesis.snapshot().lighting.cycle_seconds'), 1440);
         await click('#lighting'); await click('[data-day-phase="0.5"]'); await click('#lighting-dialog [data-close]');
         checks.push('Day/night settings preview readable nights and choose a separate lighting clock');
+        await click('#technology');
+        assert.equal(await js('document.querySelectorAll(".technology-step").length'), 14);
+        assert.ok(await js('document.querySelector("#technology-list").textContent.includes("Cosmic Dust Age")'));
+        await fs.writeFile(path.join(artifact_dir, 'technology-ages.png'), (await win.webContents.capturePage()).toPNG());
+        await click('#technology-dialog [data-close]');
+        checks.push('Technology panel explains all fourteen ages and their visible unlocks');
         const { World } = await import(path.join(__dirname, '..', 'src', 'simulation.js'));
         const developed = new World({ seed: 'color-world', preset: 'wildlands', name: 'The Living Wildlands' });
         developed.laws.expansion = true;
@@ -204,6 +218,53 @@ app.whenReady().then(async () => {
         await delay(500);
         await fs.writeFile(path.join(artifact_dir, 'town-industry-closeup.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('A grown world restores veteran health and renders working farms, windmills, armories, and camps');
+        const { advance_buildings } = await import(path.join(__dirname, '..', 'src', 'settlements.js'));
+        const { advance_roads, advance_transport } = await import(path.join(__dirname, '..', 'src', 'infrastructure.js'));
+        const modern = developed.villages.find(v => v.alive);
+        modern.research_level = 8; modern.tech_points = 560; modern.wood = 2000;
+        modern.ore.iron = 1000; modern.ore.coal = 1000; modern.ore.copper = 1000;
+        for (let cycle = 0; cycle < 20; cycle++) advance_buildings(developed, modern, 12, 60, 8);
+        for (const farm of modern.buildings.filter(b => b.type === 'farm')) farm.stock = 100;
+        for (let cycle = 0; cycle < modern.houses.length + modern.buildings.length; cycle++) advance_roads(developed, modern, 8, 8);
+        modern.vehicle_timer = 24;
+        advance_transport(developed, 0.125, v => v.research_level);
+        const residents = developed.people.filter(p => p.village_id === modern.id);
+        for (let index = 0; index < residents.length; index++) {
+            residents[index].weapon_level = 5 + index % 4; residents[index].armor_level = 8;
+        }
+        const holy = developed.land_near(modern.x + 10, modern.y, 6);
+        if (holy) { developed.add_animal(holy.x, holy.y, 'angel'); developed.add_animal(holy.x + 1, holy.y, 'demon'); }
+        const modern_world = developed.serialize();
+        await fs.writeFile(path.join(artifact_dir, 'modern-showcase.json'), JSON.stringify(modern_world));
+        await click('#load');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(modern_world))}],'modern-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150); await click('#pause');
+        assert.ok(await js('genesis.snapshot().roads.some(grade=>grade===3)'));
+        assert.ok(await js('genesis.snapshot().vehicles.some(vehicle=>vehicle.kind==="truck")'));
+        assert.ok(await js('genesis.snapshot().villages.some(v=>v.buildings.some(b=>b.type==="monument"))'));
+        await click('#civilizations button');
+        await js(`document.querySelector('#zoom-slider').value='65';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
+        await delay(250);
+        await fs.writeFile(path.join(artifact_dir, 'modern-town.png'), (await win.webContents.capturePage()).toPNG());
+        checks.push('Modern-town import renders roads, monuments, universities, factories, trucks, and later weapons');
+        modern.research_level = 13; modern.tech_points = 2700; modern.wood = 2000; modern.ore.stardust = 1000;
+        for (let cycle = 0; cycle < 30; cycle++) advance_buildings(developed, modern, 12, 60, 13);
+        for (let cycle = 0; cycle < 2; cycle++) { modern.vehicle_timer = 24; advance_transport(developed, 0.125, v => v.research_level); }
+        for (let index = 0; index < residents.length; index++) {
+            residents[index].weapon_level = 9 + index % 5; residents[index].armor_level = 13;
+        }
+        const cosmic_world = developed.serialize();
+        await fs.writeFile(path.join(artifact_dir, 'cosmic-showcase.json'), JSON.stringify(cosmic_world));
+        await click('#load');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(cosmic_world))}],'cosmic-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150); await click('#pause'); await click('#civilizations button');
+        await js(`document.querySelector('#zoom-slider').value='60';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
+        assert.ok(await js('genesis.snapshot().vehicles.some(vehicle=>vehicle.kind==="starbarge")'));
+        assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Cosmic Dust Age")'));
+        assert.ok(await js('genesis.snapshot().villages.some(v=>v.buildings.some(b=>b.type==="condenser"))'));
+        await delay(250);
+        await fs.writeFile(path.join(artifact_dir, 'cosmic-town.png'), (await win.webContents.capturePage()).toPNG());
+        checks.push('Cosmic-world import renders energy equipment, advanced flags, stargates, condensers, and hover carriers');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         await click('#menu-start');

@@ -40,7 +40,7 @@ test('all peoples and wildlife can be placed, simulated, and restored', () => {
     }
     for (const species of ANIMALS) world.add_animal(40, 70, species);
     assert.equal(new Set(world.people.map(p => p.race)).size, 11);
-    assert.equal(world.animals.length, 18);
+    assert.equal(world.animals.length, ANIMALS.length);
     for (let tick = 0; tick < 16; tick++) world.step(0.125);
     const restored = World.deserialize(world.serialize());
     assert.deepEqual(restored.people, world.people);
@@ -76,7 +76,7 @@ test('kingdom banners differ and technology requires ore to advance', () => {
     assert.equal(technology_level(kingdom), 1);
     assert.equal(kingdom.ore.copper, 0);
     assert.ok(world.events.some(event => event.text.includes('Copper Age')));
-    assert.deepEqual(TECH_AGES.map(age => age.name), ['Stone Age', 'Copper Age', 'Bronze Age', 'Iron Age', 'Steel Age']);
+    assert.deepEqual(TECH_AGES.slice(0, 5).map(age => age.name), ['Stone Age', 'Copper Age', 'Bronze Age', 'Iron Age', 'Steel Age']);
     const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
     assert.equal(loaded.villages[0].tech_points, kingdom.tech_points);
     const legacy = world.serialize(); delete legacy.villages[0].tech_points;

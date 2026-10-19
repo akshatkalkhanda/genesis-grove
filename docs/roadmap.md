@@ -3,7 +3,7 @@
 The current release implements the first three priorities: supply-aware kingdom
 strategy, obstacle-aware land routes, and individual names, traits, experience,
 and parent records. Close inspection, working industries, and stable day/night
-lighting support those systems.
+lighting support those systems. Version 0.12 adds fourteen ages through Cosmic Dust, visible ranged weapons, roads and local transport, monuments, varied tree artwork, angels and demons, and persistent kingdom flags with ruler succession.
 
 Continue in this order:
 
@@ -15,3 +15,5 @@ Continue in this order:
 
 Later character work can add relationships, family trees, and inherited traits.
 Current parent records and personality traits are intentionally simpler.
+
+Cosmic follow-up: orbital maps, star-system travel, off-world colonies, and distinct alien civilizations. Current stargates and hover transports support towns on the existing map.

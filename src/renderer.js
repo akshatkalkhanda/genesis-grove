@@ -1,6 +1,8 @@
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
 import { night_opacity } from './daylight.js';
+import { draw_tree, draw_weapon, draw_vehicle, draw_landmark } from './world_art.js';
+import { draw_flag } from './heraldry.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
@@ -64,10 +66,8 @@ export class Renderer {
                 if (h > 0.72) { c.fillStyle = '#a9c078'; c.fillRect(px + 1, py + 2, 1, 1); c.fillRect(px + 3, py + 4, 1, 1); }
                 if (h < 0.08) { c.fillStyle = '#c9cb93'; c.fillRect(px + 2, py + 3, 1, 1); }
             } else if (t === T.FOREST) {
-                c.fillStyle = '#344e35'; c.fillRect(px + 2, py + 3, 3, 3);
-                c.fillStyle = h > 0.5 ? '#375b38' : '#3b663c'; c.fillRect(px + 1, py + 1, 4, 3);
-                c.fillStyle = '#6d914f'; c.fillRect(px + 1, py, 3, 2);
-                c.fillStyle = '#8ca35c'; c.fillRect(px + 2, py, 1, 1);
+                c.fillStyle = '#73864d'; c.fillRect(px + 1, py + 3, 1, 1);
+                c.fillStyle = '#354c37'; c.fillRect(px + 4, py + 1, 1, 2);
             } else if (t === T.MOUNTAIN) {
                 c.fillStyle = '#657773'; c.fillRect(px, py + 4, 6, 2);
                 c.fillStyle = '#aab8a5'; c.fillRect(px + 2, py + 1, 3, 4);
@@ -96,8 +96,7 @@ export class Renderer {
                 c.fillStyle = '#ecf8ee'; c.fillRect(px + 1, py + 1, 3, 2); c.fillRect(px + 4, py + 4, 2, 1);
                 c.fillStyle = '#8dbcc4'; c.fillRect(px, py + 4, 2, 1);
             } else if (t === T.MAPLE) {
-                c.fillStyle = '#75444a'; c.fillRect(px + 2, py + 2, 2, 4);
-                c.fillStyle = h > 0.5 ? '#e6915f' : '#e46a75'; c.fillRect(px + 1, py, 4, 3);
+                c.fillStyle = h > 0.5 ? '#e6915f' : '#e46a75'; c.fillRect(px + 1, py + 3, 2, 1);
             } else if (t === T.MUSHROOM) {
                 c.fillStyle = '#d1a8d1'; c.fillRect(px + 2, py + 2, 1, 3);
                 c.fillStyle = '#dfa6ec'; c.fillRect(px + 1, py + 1, 4, 2);
@@ -113,11 +112,38 @@ export class Renderer {
             }
             const ore = world.ores?.[y * WIDTH + x] || 0;
             if (ore && (h > 0.38 || t >= T.MOUNTAIN)) {
-                c.fillStyle = ['', '#d77c50', '#ddc08a', '#c9d3d4', '#474a47'][ore];
+                c.fillStyle = ['', '#d77c50', '#ddc08a', '#c9d3d4', '#474a47', '#f3c7ff'][ore];
                 c.fillRect(px + (h > 0.6 ? 1 : 3), py + (h > 0.6 ? 3 : 1), 2, 2);
             }
             const hex = PALETTE[t].slice(1), j = (y * WIDTH + x) * 4;
             mini_image.data[j] = parseInt(hex.slice(0, 2), 16); mini_image.data[j + 1] = parseInt(hex.slice(2, 4), 16); mini_image.data[j + 2] = parseInt(hex.slice(4, 6), 16); mini_image.data[j + 3] = 255;
+        }
+        // Roads follow walkable terrain and stay wide enough to read at world scale.
+        for (let i = 0; i < world.roads.length; i++) {
+            const grade = world.roads[i]; if (!grade || !world.walkable(i % WIDTH, Math.floor(i / WIDTH))) continue;
+            const x = i % WIDTH * CELL, y = Math.floor(i / WIDTH) * CELL;
+            c.fillStyle = grade === 3 ? '#384b50' : grade === 2 ? '#9da99b' : '#bda478';
+            c.fillRect(x, y + 1, CELL, 4);
+            if (world.roads[i - WIDTH] || world.roads[i + WIDTH]) c.fillRect(x + 1, y, 4, CELL);
+            c.fillStyle = grade === 3 ? '#dbc98a' : grade === 2 ? '#c5c8b0' : '#d6bc84';
+            c.fillRect(x + 2, y + 2, grade === 3 ? 2 : 1, 1);
+        }
+        const clearings = new Uint8Array(WIDTH * HEIGHT);
+        for (const site of [...world.villages.filter(v => v.alive), ...world.colonies]) {
+            for (const place of [site, ...site.houses, ...(site.buildings || [])]) {
+                for (let dy = -3; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+                    if (world.inside(place.x + dx, place.y + dy)) clearings[world.index(place.x + dx, place.y + dy)] = 1;
+                }
+            }
+        }
+        const biomes = { [T.FOREST]: 'forest', [T.JUNGLE]: 'jungle', [T.MAPLE]: 'maple',
+            [T.CELESTIAL]: 'celestial', [T.MUSHROOM]: 'mushroom', [T.SNOW]: 'snow', [T.SAVANNA]: 'savanna' };
+        for (let y = 2; y < HEIGHT - 1; y += 2) for (let x = 1; x < WIDTH - 1; x += 2) {
+            const i = y * WIDTH + x, biome = biomes[world.tiles[i]], h = tile_hash(x + 47, y + 19);
+            if (!biome || clearings[i] || (['snow', 'savanna'].includes(biome) && h > 0.2)
+                || world.roads[i] || world.roads[i - WIDTH] || world.roads[i + WIDTH]
+                || world.roads[i - 1] || world.roads[i + 1]) continue;
+            draw_tree(c, x * CELL + Math.floor(h * 5), y * CELL + 3, biome, h);
         }
         this.mini.putImageData(mini_image, 0, 0);
         for (const v of world.villages.filter(v => v.alive)) { this.mini.fillStyle = v.color; this.mini.fillRect(v.x - 1, v.y - 1, 3, 3); }
@@ -173,11 +199,6 @@ export class Renderer {
         c.globalAlpha = 1;
         for (const v of world.villages) {
             if (!v.alive) continue;
-            // Trails lead to homes, then little farms grow around the settlement.
-            for (const h of v.houses) {
-                c.strokeStyle = '#c1b17e9c'; c.lineWidth = 2;
-                c.beginPath(); c.moveTo(v.x * CELL, v.y * CELL); c.lineTo(h.x * CELL, v.y * CELL); c.lineTo(h.x * CELL, h.y * CELL); c.stroke();
-            }
             for (let j = 0; j < Math.min(v.houses.length, 5); j++) {
                 const h = v.houses[j], x = h.x * CELL + 8, y = h.y * CELL + 5;
                 if (world.walkable(h.x + 2, h.y + 1)) {
@@ -186,7 +207,7 @@ export class Renderer {
                 }
             }
             for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
-            this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v));
+            this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v), v);
             this.industry(c, v.x * CELL, v.y * CELL, v);
             for (const building of v.buildings || []) this.building(c, building, v.color, now);
         }
@@ -194,7 +215,7 @@ export class Renderer {
             const kingdom = kingdoms.get(colony.kingdom_id);
             if (!kingdom?.alive) continue;
             for (const house of colony.houses) this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false, technology_level(kingdom));
-            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom));
+            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom), kingdom);
         }
         for (const voyage of world.voyages) {
             const x = (voyage.x + (voyage.target_x - voyage.x) * voyage.progress) * CELL;
@@ -203,6 +224,7 @@ export class Renderer {
             c.fillStyle = voyage.kind === 'ship' ? '#e8e3c9' : '#bca87b';
             c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
             c.fillStyle = kingdoms.get(voyage.kingdom_id)?.color || '#e8e3c9'; c.fillRect(x - 5, y, 11, 2);
+            draw_flag(c, x + 1, y - 12, kingdoms.get(voyage.kingdom_id) || {}, 8, 5);
         }
         for (const trade of world.trades || []) {
             const sender = kingdoms.get(trade.from_id), recipient = kingdoms.get(trade.to_id);
@@ -214,7 +236,8 @@ export class Renderer {
             if (trade.kind === 'ship') { c.fillStyle = '#e9dfb8'; c.fillRect(x, y - 10, 1, 8); c.fillRect(x + 1, y - 9, 5, 5); }
             else { c.fillStyle = '#3f3b32'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2); }
         }
-        for (const animal of world.animals) this.animal(c, animal);
+        for (const vehicle of world.vehicles) draw_vehicle(c, vehicle, kingdoms.get(vehicle.kingdom_id)?.color || '#b3c697', now);
+        for (const animal of world.animals) this.animal(c, animal, now);
         for (const p of world.people) {
             if (p.voyage_id) continue;
             this.person(c, p, kingdoms.get(p.village_id), now);
@@ -292,7 +315,7 @@ export class Renderer {
             }
             c.fillStyle = '#11221ce8'; c.fillRect(x - 12, y - 27, 27, 18);
             c.fillStyle = '#dedfc4'; c.fillRect(x - 8, y - 24, 2, 15);
-            c.fillStyle = kingdom.color; c.beginPath(); c.moveTo(x - 6, y - 24); c.lineTo(x + 4, y - 20); c.lineTo(x - 6, y - 16); c.fill();
+            draw_flag(c, x - 6, y - 24, kingdom, 12, 8);
             c.fillStyle = '#eff4df'; c.font = 'bold 9px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
             c.fillText(String(army.count), x + 9, y - 15);
         }
@@ -301,9 +324,10 @@ export class Renderer {
             const x = o.x + v.x * CELL * s, y = o.y + (v.y * CELL - 38) * s;
             if (x < -100 || x > this.width + 100 || y < -20 || y > this.height + 20) continue;
             c.font = '600 9px -apple-system, Segoe UI, sans-serif';
-            const w = c.measureText(v.name).width + 19;
+            const w = c.measureText(v.name).width + 43;
             c.fillStyle = '#152d24df'; c.beginPath(); c.roundRect(x - w / 2, y - 9, w, 19, 4); c.fill();
-            c.fillStyle = v.color; c.textAlign = 'center'; c.fillText(v.name, x, y + 3);
+            draw_flag(c, x - w / 2 + 5, y - 5, v, 16, 10);
+            c.fillStyle = v.color; c.textAlign = 'center'; c.fillText(v.name, x + 10, y + 3);
         }
         if (this.borders && this.zoom > 2.4) for (const colony of world.colonies) {
             const x = o.x + colony.x * CELL * s, y = o.y + (colony.y * CELL - 26) * s;
@@ -314,9 +338,28 @@ export class Renderer {
             c.fillText(colony.name.slice(0, 14), x, y + 2);
         }
     }
-    animal(c, animal) {
+    animal(c, animal, now = 0) {
         const x = Math.round(animal.x * CELL), y = Math.round(animal.y * CELL);
         const face = animal.dx < 0 ? -1 : 1;
+        if (['angel', 'demon'].includes(animal.species)) {
+            const angel = animal.species === 'angel', flap = Math.round(Math.sin(now / 240 + animal.id) * 3);
+            c.fillStyle = angel ? '#f3edd0' : '#703a49';
+            for (const side of [-1, 1]) {
+                c.beginPath(); c.moveTo(x + side * 2, y - 8); c.lineTo(x + side * 17, y - 15 - flap);
+                c.lineTo(x + side * 13, y - 3); c.lineTo(x + side * 4, y); c.fill();
+                c.fillStyle = angel ? '#b7d3cd' : '#a9504c';
+                c.fillRect(x + side * 10 - 1, y - 8, 2, 5);
+                c.fillStyle = angel ? '#f3edd0' : '#703a49';
+            }
+            c.fillStyle = angel ? '#e8f1dd' : '#b45142'; c.fillRect(x - 4, y - 9, 9, 12);
+            c.fillStyle = angel ? '#f2d2a5' : '#df8060'; c.fillRect(x - 3, y - 15, 6, 6);
+            c.fillStyle = '#edc968';
+            if (angel) { c.fillRect(x - 4, y - 19, 9, 1); c.fillRect(x - 5, y - 18, 1, 2); c.fillRect(x + 5, y - 18, 1, 2); }
+            else { c.fillRect(x - 5, y - 20, 2, 7); c.fillRect(x + 3, y - 20, 2, 7); c.fillStyle = '#f29c55'; c.fillRect(x - 3, y + 3, 2, 3); c.fillRect(x + 2, y + 3, 2, 3); }
+            c.fillStyle = angel ? '#cbad59' : '#552d30'; c.fillRect(x + face * 7, y - 16, 2, 20);
+            c.fillStyle = angel ? '#fff1a9' : '#f4ac5d'; c.fillRect(x + face * 7 - 2, y - 18, 6, 3);
+            return;
+        }
         c.fillStyle = '#10262277'; c.fillRect(x - 5, y + 4, 10, 2);
         if (animal.species === 'bear') {
             c.fillStyle = '#65432f'; c.fillRect(x - 6, y - 4, 11, 8); c.fillRect(x + face * 5 - 2, y - 3, 4, 5);
@@ -399,17 +442,66 @@ export class Renderer {
         if (person.race === 'frogfolk') { c.fillStyle = '#e4f0af'; c.fillRect(x - 3, y - 9, 2, 2); c.fillRect(x + 2, y - 9, 2, 2); }
         if (person.race === 'beetlefolk') { c.fillStyle = '#477e83'; c.fillRect(x - 3, y - 10, 6, 3); c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         if (armor > 0) { c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
+        if (armor >= 9) {
+            c.strokeStyle = `${TECH_AGES[armor].color}70`; c.lineWidth = 1;
+            c.beginPath(); c.ellipse(x, y - 4, 7, 12, 0, 0, Math.PI * 2); c.stroke();
+            c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 3, y - 10, 6, 2);
+        }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
-        const sway = Math.round(Math.sin(now / 250 + person.id) * 1);
-        c.fillStyle = level === 0 ? '#705845' : '#554735'; c.fillRect(x + face * 4 - 1, y - 8 + sway, 2, 9);
-        c.fillStyle = metal;
-        if (level === 0) c.fillRect(x + face * 4 - 2, y - 9 + sway, 4, 3);
-        else { c.fillRect(x + face * 4 - 1, y - 12 + sway, 2, 6); c.fillRect(x + face * 4 - 3, y - 6 + sway, 6, 1); }
-        if (level >= 2 || person.role === 'soldier') { c.fillStyle = metal; c.fillRect(x - face * 4 - 2, y - 3, 3, 5); }
+        draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
+            level >= 6 && person.attack_timer > (level === 6 ? 1.8 : 0.6));
+        if (level < 5 && (level >= 2 || person.role === 'soldier')) {
+            c.fillStyle = metal; c.fillRect(x - face * 5 - 2, y - 4, 4, 6);
+            c.fillStyle = kingdom?.color || '#b4be9b'; c.fillRect(x - face * 5 - 1, y - 3, 2, 4);
+        }
+        if (level >= 7 && person.role === 'soldier') {
+            c.fillStyle = '#4d6356'; c.fillRect(x - 4, y - 10, 8, 3);
+            c.fillStyle = '#a8bcb0'; c.fillRect(x - 2, y - 10, 3, 1);
+        }
+        if (kingdom?.king_id === person.id) {
+            c.fillStyle = '#f0ca65'; c.fillRect(x - 4, y - 13, 8, 3);
+            c.fillRect(x - 4, y - 16, 2, 4); c.fillRect(x - 1, y - 15, 2, 3); c.fillRect(x + 2, y - 16, 2, 4);
+            c.fillStyle = '#c98061'; c.fillRect(x - 1, y - 12, 2, 1);
+        }
     }
-    house(c, x, y, color, town, level = 0) {
+    house(c, x, y, color, town, level = 0, kingdom = null) {
         const w = town ? 13 : 8, h = town ? 10 : 7;
+        if (level >= 9) {
+            const glow = TECH_AGES[level].color;
+            c.fillStyle = '#243e4b66'; c.fillRect(x - w / 2 - 2, y + 1, w + 5, 4);
+            c.fillStyle = '#526c80'; c.fillRect(x - w / 2, y - 23, w, 24);
+            c.fillStyle = '#334b64'; c.fillRect(x + w / 2 - 3, y - 23, 3, 24);
+            c.fillStyle = glow; c.fillRect(x - w / 2 - 1, y - 25, w + 2, 3);
+            for (let row = 0; row < 3; row++) {
+                c.fillStyle = glow; c.fillRect(x - w / 2 + 1, y - 20 + row * 5, 2, 2);
+                c.fillRect(x + w / 2 - 3, y - 20 + row * 5, 2, 2);
+            }
+            c.fillStyle = color; c.fillRect(x - w / 2, y - 3, w, 2);
+            if (town) {
+                c.fillStyle = '#c6d4c8'; c.fillRect(x, y - 42, 1, 17);
+                draw_flag(c, x + 1, y - 42, kingdom || { color }, 14, 9);
+            }
+            return;
+        }
+        if (level >= 5) {
+            const floors = level >= 8 ? 3 : level >= 7 ? 2 : 1;
+            const height = 9 + floors * 5;
+            c.fillStyle = '#29392766'; c.fillRect(x - w / 2, y + 1, w + 4, 4);
+            c.fillStyle = level >= 8 ? '#becdca' : '#c4aa89'; c.fillRect(x - w / 2, y - height, w, height);
+            c.fillStyle = level >= 8 ? '#496a75' : '#745c58'; c.fillRect(x - w / 2 - 1, y - height - 3, w + 2, 4);
+            c.fillStyle = color; c.fillRect(x - w / 2, y - height + 1, w, 2);
+            for (let floor = 0; floor < floors; floor++) {
+                c.fillStyle = '#355c69'; c.fillRect(x - w / 2 + 1, y - 8 - floor * 5, 2, 3);
+                c.fillStyle = '#bedcce'; c.fillRect(x + w / 2 - 3, y - 8 - floor * 5, 2, 3);
+            }
+            c.fillStyle = '#414e49'; c.fillRect(x - 1, y - 4, 2, 4);
+            if (town) {
+                c.fillStyle = '#dfcf9a'; c.fillRect(x - 2, y - height - 16, 2, 13);
+                draw_flag(c, x, y - height - 16, kingdom || { color }, 13, 8);
+            }
+            return;
+        }
         c.fillStyle = '#29392766'; c.fillRect(x - w / 2 + 2, y + 2, w + 2, 3);
         c.fillStyle = level >= 3 ? '#b9c0bd' : level >= 2 ? '#ddc99d' : '#e3cd9c'; c.fillRect(x - w / 2, y - h, w, h);
         c.fillStyle = '#b0a075'; c.fillRect(x + w / 2 - 3, y - h, 3, h);
@@ -417,7 +509,7 @@ export class Renderer {
         c.fillStyle = color; c.fillRect(x - w / 2 + 1, y - h - 5, w - 2, 3);
         c.fillStyle = '#574d38'; c.fillRect(x - 1, y - 4, 2, 4);
         c.fillStyle = '#f7dd8d'; c.fillRect(x - w / 2 + 1, y - 5, 1, 2);
-        if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 20, 1, 10); c.fillStyle = color; c.fillRect(x + 4, y - 20, 5, 3); }
+        if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 25, 1, 15); draw_flag(c, x + 4, y - 25, kingdom || { color }, 13, 8); }
         if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
     }
     building(c, building, color, now) {
@@ -444,14 +536,14 @@ export class Renderer {
             c.fillStyle = color; c.fillRect(x - 7, y - 9, 3, 6);
             c.fillStyle = '#e2d8ac'; c.fillRect(x + 2, y - 9, 1, 8); c.fillRect(x, y - 5, 5, 1);
             c.fillStyle = '#3c4947'; c.fillRect(x - 2, y - 2, 4, 5);
-        } else {
+        } else if (building.type === 'camp') {
             c.fillStyle = '#776748'; c.fillRect(x - 11, y, 23, 9);
             c.fillStyle = color; c.beginPath(); c.moveTo(x - 9, y); c.lineTo(x - 3, y - 10); c.lineTo(x + 4, y); c.fill();
             c.fillStyle = '#c1a574'; c.fillRect(x + 6, y - 8, 2, 14);
             c.fillRect(x + 2, y - 5, 10, 2);
             c.fillStyle = '#594b35'; c.fillRect(x + 5, y - 12, 4, 4);
             c.fillStyle = '#e6d18d'; c.fillRect(x - 7, y + 4, 2, 2);
-        }
+        } else draw_landmark(c, building, color, now);
     }
     industry(c, x, y, kingdom) {
         if (kingdom.mine_level) {
@@ -477,7 +569,17 @@ export class Renderer {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = e.radius * CELL;
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'lightning') {
+        if (e.type === 'beam') {
+            c.strokeStyle = e.color || '#c3f4f0'; c.lineWidth = 3 * e.life;
+            c.beginPath(); c.moveTo(x, y - 8); c.lineTo(e.target_x * CELL, e.target_y * CELL - 6); c.stroke();
+            c.strokeStyle = '#edfff8'; c.lineWidth = Math.max(0.4, e.life); c.stroke();
+        } else if (e.type === 'shot' || e.type === 'bolt') {
+            const progress = 1 - e.life;
+            const tx = e.target_x * CELL, ty = e.target_y * CELL - 6;
+            c.strokeStyle = e.type === 'bolt' ? '#dfc89a' : '#ffeda0'; c.lineWidth = e.type === 'bolt' ? 1 : 1.5;
+            c.beginPath(); c.moveTo(x + (tx - x) * Math.max(0, progress - 0.25), y - 6 + (ty - y + 6) * Math.max(0, progress - 0.25));
+            c.lineTo(x + (tx - x) * progress, y - 6 + (ty - y + 6) * progress); c.stroke();
+        } else if (e.type === 'lightning') {
             c.strokeStyle = '#f7f8c0'; c.lineWidth = 3;
             c.beginPath(); c.moveTo(x + 20, y - 140); c.lineTo(x - 6, y - 70); c.lineTo(x + 9, y - 72); c.lineTo(x, y); c.stroke();
             c.fillStyle = '#ffffc433'; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();

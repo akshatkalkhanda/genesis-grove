@@ -3,19 +3,43 @@ import { find_path } from './pathfinding.js';
 import { kingdom_plan, diplomatic_choice } from './strategy.js';
 import { BUILDINGS, advance_buildings } from './settlements.js';
 import { DAY_LENGTHS } from './daylight.js';
+import { advance_roads, advance_transport, VEHICLES, MAX_VEHICLES } from './infrastructure.js';
+import { MYTHIC, advance_mythic } from './mythic.js';
+import { choose_ruler } from './heraldry.js';
 export const WIDTH = 192;
 export const HEIGHT = 128;
 export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8, JUNGLE: 9, SAVANNA: 10, SNOW: 11, MAPLE: 12, MUSHROOM: 13, CRYSTAL: 14, CELESTIAL: 15, DESERT: 16 });
 export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash', 'Jungle', 'Savanna', 'Snowfield', 'Maple grove', 'Mushroom glade', 'Crystal wilds', 'Starbloom', 'Desert'];
-export const ORES = Object.freeze({ copper: 1, tin: 2, iron: 3, coal: 4 });
-export const ORE_NAMES = Object.freeze(['None', 'Copper ore', 'Tin ore', 'Iron ore', 'Coal']);
+export const ORES = Object.freeze({ copper: 1, tin: 2, iron: 3, coal: 4, stardust: 5 });
+export const ORE_NAMES = Object.freeze(['None', 'Copper ore', 'Tin ore', 'Iron ore', 'Coal', 'Stardust']);
 export const TECH_AGES = Object.freeze([
     { name: 'Stone Age', threshold: 0, weapon: 'Stone club', color: '#b2a18a' },
     { name: 'Copper Age', threshold: 8, weapon: 'Copper spear', color: '#e59b65' },
     { name: 'Bronze Age', threshold: 22, weapon: 'Bronze blade', color: '#e2bd70' },
     { name: 'Iron Age', threshold: 50, weapon: 'Iron sword', color: '#aab8c4' },
-    { name: 'Steel Age', threshold: 100, weapon: 'Steel sword', color: '#85d9e2' }
+    { name: 'Steel Age', threshold: 100, weapon: 'Steel sword', color: '#85d9e2' },
+    { name: 'Renaissance Age', threshold: 170, weapon: 'Crossbow', color: '#c5a4e5' },
+    { name: 'Gunpowder Age', threshold: 250, weapon: 'Musket', color: '#d9aa7a' },
+    { name: 'Industrial Age', threshold: 380, weapon: 'Rifle', color: '#a2bdca' },
+    { name: 'Modern Age', threshold: 560, weapon: 'Carbine', color: '#7ed4be' },
+    { name: 'Lightyear Age', threshold: 800, weapon: 'Photon lance', color: '#b7edff' },
+    { name: 'Interstellar Age', threshold: 1100, weapon: 'Plasma projector', color: '#92b5ff' },
+    { name: 'Alien Age', threshold: 1500, weapon: 'Void beam', color: '#a8ef9c' },
+    { name: 'Supreme Age', threshold: 2000, weapon: 'Sovereign ray', color: '#f4d992' },
+    { name: 'Cosmic Dust Age', threshold: 2700, weapon: 'Stardust staff', color: '#e8b8f5' }
 ]);
+export const RESEARCH_COSTS = [null, { copper: 3 }, { copper: 5, tin: 2 },
+    { iron: 6, coal: 2 }, { iron: 8, coal: 4 }, { copper: 4, iron: 8 },
+    { coal: 8, iron: 8 }, { iron: 12, coal: 12 }, { copper: 10, iron: 16, coal: 12 },
+    { copper: 8, iron: 12, stardust: 5 }, { iron: 12, stardust: 12 },
+    { copper: 10, stardust: 20 }, { iron: 16, stardust: 30 }, { stardust: 40 }];
+export const EQUIPMENT_RECIPES = [null, { copper: 1 }, { copper: 1, tin: 1 },
+    { iron: 1, coal: 1 }, { iron: 2, coal: 1 }, { iron: 1, copper: 1 },
+    { iron: 2, coal: 1 }, { iron: 2, coal: 2 }, { iron: 2, copper: 1, coal: 1 },
+    { iron: 1, stardust: 1 }, { iron: 1, stardust: 2 }, { copper: 1, stardust: 2 },
+    { iron: 1, stardust: 3 }, { stardust: 3 }];
+export const RESEARCH_BUILDINGS = { 6: 'university', 7: 'workshop', 8: 'factory',
+    9: 'observatory', 10: 'astral_forge', 12: 'stargate', 13: 'condenser' };
 export function technology_level(kingdom) {
     if (Number.isInteger(kingdom?.research_level)) return clamp(kingdom.research_level, 0, TECH_AGES.length - 1);
     const points = kingdom?.tech_points || 0;
@@ -31,7 +55,7 @@ const MAX_VOYAGES = 40;
 const MAX_TRADES = 60;
 export const JOBS = Object.freeze(['farmer', 'lumberjack', 'miner', 'smith', 'builder']);
 export const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' }, foxfolk: { label: 'Foxfolk', color: '#ed9a63' }, harefolk: { label: 'Harefolk', color: '#f2d8bb' }, catfolk: { label: 'Catfolk', color: '#ddbd82' }, frogfolk: { label: 'Frogfolk', color: '#80caa2' }, wolfkin: { label: 'Wolfkin', color: '#b6c9dc' }, hyenafolk: { label: 'Hyenafolk', color: '#d0af71' }, beetlefolk: { label: 'Beetlefolk', color: '#8dbdaf' } });
-export const ANIMALS = Object.freeze(['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'fox', 'cat', 'frog', 'beetle', 'hyena', 'owl', 'boar', 'turtle', 'buffalo', 'butterfly', 'moth', 'lizard']);
+export const ANIMALS = Object.freeze(['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'fox', 'cat', 'frog', 'beetle', 'hyena', 'owl', 'boar', 'turtle', 'buffalo', 'butterfly', 'moth', 'lizard', 'angel', 'demon']);
 const PREDATORS = new Set(['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl']);
 const GRAZERS = new Set(['sheep', 'deer', 'rabbit', 'chicken', 'boar', 'buffalo', 'turtle', 'lizard']);
 const FLAMMABLE = new Set([T.GRASS, T.FOREST, T.JUNGLE, T.SAVANNA, T.MAPLE,
@@ -77,6 +101,8 @@ export class World {
         this.next_id = 1;
         this.tiles = new Uint8Array(WIDTH * HEIGHT);
         this.ores = new Uint8Array(WIDTH * HEIGHT);
+        this.strata = new Uint8Array(WIDTH * HEIGHT);
+        this.roads = new Uint8Array(WIDTH * HEIGHT);
         this.fire = new Float32Array(WIDTH * HEIGHT);
         this.fertility = new Float32Array(WIDTH * HEIGHT).fill(0.8);
         this.people = [];
@@ -85,6 +111,7 @@ export class World {
         this.colonies = [];
         this.voyages = [];
         this.trades = [];
+        this.vehicles = [];
         this.armies = [];
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
@@ -126,6 +153,7 @@ export class World {
         const before = this.walkable(x, y);
         this.tiles[i] = type;
         if (before !== this.walkable(x, y)) this.navigation_revision++;
+        if (!this.walkable(x, y)) this.roads[i] = 0;
         if (type <= T.SHALLOW) this.fire[i] = 0;
         this.revision++;
     }
@@ -163,7 +191,7 @@ export class World {
                 if (t === T.SAND && h > 0.46 && climate < 0.43) t = T.DESERT;
             }
             this.tiles[this.index(x, y)] = t;
-            if ([T.HILL, T.MOUNTAIN, T.CRYSTAL].includes(t) && this.random() < 0.24) this.ores[this.index(x, y)] = 1 + Math.floor(this.random() * 4);
+            if ([T.HILL, T.MOUNTAIN, T.CRYSTAL].includes(t) && this.random() < 0.24) this.ores[this.index(x, y)] = t === T.CRYSTAL && this.random() < 0.15 ? 5 : 1 + Math.floor(this.random() * 4);
         }
     }
     seed_life() {
@@ -268,7 +296,10 @@ export class World {
     }
     log(text, kind = 'life') {
         this.events.unshift({ text, year: this.year, kind });
-        this.events = this.events.slice(0, 40);
+        if (this.events.length > 40) {
+            const oldest = this.events.findLastIndex(event => !/^Year (100|250|500|1000):/.test(event.text));
+            this.events.splice(oldest >= 0 ? oldest : 40, 1);
+        }
     }
     relation_status(a, b) {
         if (a === b) return 'peace';
@@ -294,10 +325,12 @@ export class World {
         const profile = RACES[race] || RACES.human;
         const name = n < NAMES.length ? NAMES[n] : `${NAMES[n % NAMES.length]} ${Math.floor(n / NAMES.length) + 1}`;
         const color = kingdom_color(n);
-        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, ore: { copper: 0, tin: 0, iron: 0, coal: 0 }, weapons: 0, armor_stock: 0, mine_timer: 0, forge_timer: 0, training_timer: 0, barracks: 0, mine_level: 0, forge_level: 0, research_level: 0, tech_points: 0, houses: [], alive: true, founded_year: this.year, deaths: 0, siege: 0 };
+        const village = { id: this.next_id++, x, y, race, name: `${profile.label} ${name}`, color, food: 35, wood: 15, age: 0, birth_timer: 0, expansion_timer: 0, ore: { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }, weapons: 0, armor_stock: 0, mine_timer: 0, forge_timer: 0, training_timer: 0, barracks: 0, mine_level: 0, forge_level: 0, research_level: 0, tech_points: 0, houses: [], alive: true, founded_year: this.year, deaths: 0, siege: 0 };
         this.villages.push(village);
         village.buildings = [];
         village.build_timer = 0;
+        village.road_timer = 0; village.road_cursor = 0; village.vehicle_timer = 0;
+        village.king_id = null;
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village');
         return village;
@@ -520,15 +553,20 @@ export class World {
             nearest.alive = true;
             village_id = nearest.id;
         }
-        const residents = this.people.filter(p => p.village_id === village_id && p.role !== 'soldier').length;
-        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job: JOBS[residents % JOBS.length], role: 'civilian', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
+        const counts = Object.fromEntries(JOBS.map(job => [job, 0]));
+        for (const person of this.people) if (person.village_id === village_id && person.role !== 'soldier') counts[person.job]++;
+        const job = JOBS.reduce((least, candidate) => counts[candidate] < counts[least] ? candidate : least);
+        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job, role: 'civilian', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
         initialize_creature(this.people.at(-1));
+        const kingdom = this.villages.find(v => v.id === village_id);
+        if (kingdom && !kingdom.king_id) kingdom.king_id = this.people.at(-1).id;
         return true;
     }
     add_animal(x, y, species) {
         if (!ANIMALS.includes(species) || !this.walkable(x, y) || this.animals.length >= 350) return false;
         this.animals.push({ id: this.next_id++, x, y, species, health: 100, age: 0, dx: 0, dy: 0, decision: 0, infection: 0 });
         initialize_creature(this.animals.at(-1));
+        if (MYTHIC[species]) this.animals.at(-1).health = MYTHIC[species].health;
         return true;
     }
     unit_near(x, y, radius = 2.5) {
@@ -609,12 +647,24 @@ export class World {
             v.houses = v.houses.filter(h => Math.hypot(h.x - x, h.y - y) > r);
             v.buildings = (v.buildings || []).filter(b => Math.hypot(b.x - x, b.y - y) > r);
         }
+        if (['meteor', 'nuke', 'erase'].includes(tool)) {
+            this.vehicles = this.vehicles.filter(vehicle => Math.hypot(vehicle.x - x, vehicle.y - y) > r);
+            this.revision++;
+        }
         this.clean_up();
     }
     clean_up() {
         for (const person of this.people) if (person.health <= 0 || !this.walkable(person.x, person.y)) {
             const kingdom = this.villages.find(v => v.id === person.village_id);
-            if (kingdom) kingdom.deaths = (kingdom.deaths || 0) + 1;
+            if (kingdom) {
+                kingdom.deaths = (kingdom.deaths || 0) + 1;
+                if (kingdom.buildings?.some(building => building.type === 'armory')) {
+                    const recipe = EQUIPMENT_RECIPES[person.weapon_level] || {};
+                    const metal = recipe.iron ? 'iron' : recipe.copper ? 'copper' : recipe.stardust ? 'stardust' : null;
+                    if (metal) kingdom.ore[metal] = Math.min(1e6, kingdom.ore[metal] + 1);
+                    if (person.armor_level >= 2) kingdom.ore.iron = Math.min(1e6, kingdom.ore.iron + 1);
+                }
+            }
         }
         this.people = this.people.filter(p => p.health > 0 && this.walkable(p.x, p.y));
         const survivors = new Set(this.people.map(p => p.id));
@@ -623,7 +673,7 @@ export class World {
             for (const person of this.people) if (person.voyage_id === voyage.id) person.voyage_id = null;
             return false;
         });
-        this.animals = this.animals.filter(p => p.health > 0 && this.walkable(p.x, p.y));
+        this.animals = this.animals.filter(p => p.health > 0 && (MYTHIC[p.species] || this.walkable(p.x, p.y)));
         for (const v of this.villages) {
             v.houses = v.houses.filter(h => this.walkable(h.x, h.y) && this.fire[this.index(h.x, h.y)] < 5);
             v.buildings = (v.buildings || []).filter(b => this.walkable(b.x, b.y)
@@ -632,11 +682,15 @@ export class World {
                 v.alive = false;
                 this.log(`${v.name} falls silent. Its story lives on.`, 'disaster');
             }
+            const ruler = choose_ruler(v, this.people.filter(p => p.village_id === v.id));
+            if (ruler && ruler.id !== v.king_id) this.log(`${ruler.name} becomes ruler of ${v.name}.`, 'village');
+            v.king_id = ruler?.id || null;
         }
         const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
         this.colonies = this.colonies.filter(c => living.has(c.kingdom_id));
     }
     move(unit, dt, speed) {
+        speed *= 1 + (this.roads[this.index(unit.x, unit.y)] || 0) * 0.15;
         const nx = clamp(unit.x + unit.dx * dt * speed, 0.5, WIDTH - 0.5);
         const ny = clamp(unit.y + unit.dy * dt * speed, 0.5, HEIGHT - 0.5);
         if (this.walkable(nx, ny)) { unit.x = nx; unit.y = ny; }
@@ -665,6 +719,7 @@ export class World {
         return best;
     }
     march(unit, target, dt, speed) {
+        const travel_speed = speed * (1 + (this.roads[this.index(unit.x, unit.y)] || 0) * 0.15);
         if (target.route) {
             const key = `${Math.floor(unit.x)},${Math.floor(unit.y)}>${Math.floor(target.x)},${Math.floor(target.y)}:${this.navigation_revision}`;
             if (!this._routes.has(key)) {
@@ -677,7 +732,7 @@ export class World {
         const side = unit.id % 2 ? 1 : -1;
         for (const offset of [0, side * 0.55, side * 1.1, side * 1.65, -side * 0.55, -side * 1.1, -side * 1.65]) {
             const dx = Math.cos(angle + offset), dy = Math.sin(angle + offset);
-            const nx = unit.x + dx * dt * speed, ny = unit.y + dy * dt * speed;
+            const nx = unit.x + dx * dt * travel_speed, ny = unit.y + dy * dt * travel_speed;
             if (!this.walkable(nx, ny)) continue;
             unit.dx = dx; unit.dy = dy; this.move(unit, dt, speed); return;
         }
@@ -717,6 +772,15 @@ export class World {
     }
     advance_history() {
         if (this.tick % 80 === 0) for (const kingdom of this.villages.filter(v => v.alive)) {
+            const civilians = this.people.filter(p => p.village_id === kingdom.id && p.role !== 'soldier' && p.health > 0);
+            if (civilians.length >= JOBS.length) {
+                const counts = Object.fromEntries(JOBS.map(job => [job, civilians.filter(p => p.job === job).length]));
+                for (const job of JOBS.filter(job => !counts[job])) {
+                    const surplus = JOBS.reduce((most, candidate) => counts[candidate] > counts[most] ? candidate : most);
+                    const recruit = civilians.find(p => p.job === surplus);
+                    if (recruit && counts[surplus] > 1) { recruit.job = job; counts[surplus]--; counts[job]++; delete recruit.work_target; }
+                }
+            }
             kingdom.plan = kingdom_plan(kingdom, this.people.filter(p => p.village_id === kingdom.id),
                 this.relations.some(r => r.status === 'war' && (r.a === kingdom.id || r.b === kingdom.id)));
         }
@@ -809,6 +873,7 @@ export class World {
             if (p.health <= 0) continue;
             develop_creature(p, dt, this.year_length);
             const attributes = creature_stats(p, this.year_length);
+            p.attack_timer = Math.max(0, (p.attack_timer || 0) - dt);
             if (p.voyage_id) continue;
             p.decision -= dt;
             p.gather += dt;
@@ -826,13 +891,15 @@ export class World {
                 }
             }
             const order = p.role === 'soldier' ? army_orders.get(p.home_id || p.village_id) : null;
+            let holding_position = false;
             let march_target = order?.target_id && p.age > 5
                 ? Math.hypot(p.x - order.x, p.y - order.y) > 5 ? { x: order.x, y: order.y }
                     : { x: order.target_x, y: order.target_y, route: true } : null;
             if (p.role !== 'soldier') march_target = p.work_target || null;
             p.task = march_target?.task || (order?.target_id ? 'Marching' : p.role === 'soldier' ? 'Guarding' : 'Exploring');
             if (enemies && p.role === 'soldier') {
-                let foe = null, nearest = 100;
+                const range = p.weapon_level >= 5 ? 7 + (p.weapon_level - 5) * 1.5 : 1.5;
+                let foe = null, nearest = Math.max(100, range * range + 1);
                 for (const other of this.people) {
                     if (other.health <= 0 || !enemies.has(other.village_id)) continue;
                     const distance = (other.x - p.x) ** 2 + (other.y - p.y) ** 2;
@@ -842,10 +909,21 @@ export class World {
                     const angle = Math.atan2(foe.y - p.y, foe.x - p.x);
                     p.dx = Math.cos(angle); p.dy = Math.sin(angle);
                     march_target = foe;
-                    if (nearest < 2.25) {
+                    if (nearest < range * range) {
                         const weapon = 1 + (p.weapon_level || 0) * 0.28;
                         const armor = 1 + (foe.armor_level || 0) * 0.10;
-                        foe.health -= dt * (['orc', 'wolfkin', 'hyenafolk'].includes(p.race) ? 18 : 14) * weapon / armor * (['orc', 'beetlefolk'].includes(foe.race) ? 0.75 : 1) * attributes.strength / 10;
+                        const ranged = p.weapon_level >= 5;
+                        const interval = p.weapon_level === 6 ? 2 : p.weapon_level === 5 ? 1.5 : 0.8;
+                        holding_position = ranged;
+                        if (!ranged || p.attack_timer <= 0) {
+                            foe.health -= (ranged ? interval : dt) * (['orc', 'wolfkin', 'hyenafolk'].includes(p.race) ? 18 : 14) * weapon / armor * (['orc', 'beetlefolk'].includes(foe.race) ? 0.75 : 1) * attributes.strength / 10;
+                            if (ranged) {
+                                p.attack_timer = interval;
+                                this.effects.push({ type: p.weapon_level >= 9 ? 'beam' : p.weapon_level === 5 ? 'bolt' : 'shot',
+                                    x: p.x, y: p.y, target_x: foe.x, target_y: foe.y,
+                                    color: TECH_AGES[p.weapon_level].color, radius: 1, life: 1, duration: 0.35 });
+                            }
+                        }
                         develop_creature(p, 0, this.year_length, dt * 0.6);
                         p.task = 'Fighting';
                         if (foe.health <= 0) { p.kills++; develop_creature(p, 0, this.year_length, 10); }
@@ -864,8 +942,11 @@ export class World {
                 && p.health < attributes.max_health * (p.trait === 'careful' ? 0.5 : 0.3)) {
                 march_target = { x: home.x, y: home.y, route: true }; p.task = 'Retreating';
             }
-            if (march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) > 1) this.march(p, march_target, dt, 1.55);
-            else this.move(p, dt, (p.role === 'soldier' ? 1.55 : 1.3) * (p.race === 'foxfolk' ? 1.15 : 1));
+            if (p.task === 'Retreating') holding_position = false;
+            if (!holding_position) {
+                if (march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) > 1) this.march(p, march_target, dt, 1.55);
+                else this.move(p, dt, (p.role === 'soldier' ? 1.55 : 1.3) * (p.race === 'foxfolk' ? 1.15 : 1));
+            }
             const i = this.index(p.x, p.y);
             if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); p.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
             if (this.fire[i] > 0) p.health -= dt * 38;
@@ -895,6 +976,7 @@ export class World {
             if (animal.health <= 0) continue;
             develop_creature(animal, dt, this.year_length);
             const attributes = creature_stats(animal, this.year_length);
+            if (MYTHIC[animal.species]) { advance_mythic(this, animal, dt); continue; }
             animal.decision -= dt;
             if (animal.decision <= 0) {
                 const a = this.random() * Math.PI * 2;
@@ -950,49 +1032,72 @@ export class World {
         for (const v of this.villages) {
             if (!v.alive) continue;
             v.age += dt; v.birth_timer += dt; v.expansion_timer += dt;
-            v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0 };
+            v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0;
             v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer = (v.mine_timer || 0) + dt; v.forge_timer = (v.forge_timer || 0) + dt;
             const before_technology = technology_level(v);
             const sites = this.settlements_of(v.id);
             const pop = kingdom_populations.get(v.id) || 0;
             const jobs = workers.get(v.id) || {};
             advance_buildings(this, v, dt, pop, before_technology);
+            advance_roads(this, v, dt, before_technology);
             if (v.buildings.some(building => building.type === 'armory')) v.forge_timer += dt * 0.75;
+            if (v.buildings.some(building => building.type === 'workshop')) v.forge_timer += dt;
+            if (v.buildings.some(building => building.type === 'factory')) v.forge_timer += dt * 2;
+            if (v.buildings.some(building => building.type === 'astral_forge')) v.forge_timer += dt * 3;
             v.mine_level = jobs.miner > 0 ? 1 : 0;
             if (jobs.miner > 0 && v.mine_timer >= 8) {
                 v.mine_timer = 0;
                 let mined = 0;
+                const mining_radius = Math.min(64, 12 + Math.floor(v.age / this.year_length / 2)
+                    + Math.floor(pop / 5) + (before_technology >= 5 ? 12 : 0));
                 for (const site of sites) {
-                    for (let dy = -12; dy <= 12 && mined < Math.min(3, jobs.miner); dy++) for (let dx = -12; dx <= 12 && mined < Math.min(3, jobs.miner); dx++) {
-                        if (dx * dx + dy * dy > 144) continue;
+                    const landmass = this._army_masses[this.index(site.x, site.y)];
+                    for (let dy = -mining_radius; dy <= mining_radius && mined < Math.min(3, jobs.miner); dy++) for (let dx = -mining_radius; dx <= mining_radius && mined < Math.min(3, jobs.miner); dx++) {
+                        if (dx * dx + dy * dy > mining_radius * mining_radius) continue;
                         const x = Math.floor(site.x) + dx, y = Math.floor(site.y) + dy;
                         if (!this.inside(x, y)) continue;
-                        const ore = this.ores[this.index(x, y)];
-                        if (ore) { const material = ['','copper','tin','iron','coal'][ore]; v.ore[material] += v.race === 'beetlefolk' ? 6 : 4; this.ores[this.index(x, y)] = 0; mined++; this.revision++; }
+                        const index = this.index(x, y);
+                        const underground = before_technology >= 3 && this.strata[index] < 3
+                            && [T.HILL, T.MOUNTAIN, T.CRYSTAL].includes(this.tiles[index]);
+                        const ore = this.ores[index] || (underground
+                            ? 1 + ((Math.imul(x + 1, 73856093) ^ Math.imul(y + 1, 19349663)
+                                ^ Math.imul(this.strata[index] + 1, 83492791)) >>> 0) % 4 : 0);
+                        const reachable = ore && [[0, 0], ...DIRECTIONS].some(([mx, my]) =>
+                            this.inside(x + mx, y + my) && this._army_masses[this.index(x + mx, y + my)] === landmass);
+                        if (reachable && landmass >= 0) {
+                            const material = ['','copper','tin','iron','coal','stardust'][ore];
+                            v.ore[material] += v.race === 'beetlefolk' ? 6 : 4;
+                            this.ores[index] = 0; this.strata[index] = Math.min(3, this.strata[index] + 1);
+                            mined++; this.revision++;
+                        }
                     }
                 }
             }
-            const research_cost = [null, { copper: 3 }, { copper: 5, tin: 2 }, { iron: 6, coal: 2 }, { iron: 8, coal: 4 }];
+            const research_cost = RESEARCH_COSTS;
             const next_level = before_technology + 1;
             const next_threshold = TECH_AGES[next_level]?.threshold;
             const cost = research_cost[next_level];
             const research_rate = dt / this.year_length * (0.35 + Math.min(pop, 30) * 0.035 + Math.min(v.houses.length, 10) * 0.04)
-                * (1 + Math.max(0, (jobs.intelligence || 0) / Math.max(1, pop) - 10) * 0.015);
+                * (1 + Math.max(0, (jobs.intelligence || 0) / Math.max(1, pop) - 10) * 0.015)
+                * (v.buildings.some(b => b.type === 'university') ? 1.5 : 1)
+                * (v.buildings.some(b => b.type === 'monument') ? 1.15 : 1);
             if (next_threshold && v.tech_points < next_threshold) v.tech_points = Math.min(next_threshold, v.tech_points + research_rate);
             const has_materials = cost && Object.entries(cost).every(([ore, amount]) => v.ore[ore] >= amount);
             const known_technology = !has_materials && next_threshold && v.tech_points >= next_threshold
                 && this.villages.some(other => other.id !== v.id && technology_level(other) >= next_level);
-            if (next_threshold && v.tech_points >= next_threshold && (has_materials || known_technology)) {
+            const required_building = RESEARCH_BUILDINGS[next_level];
+            const has_institution = !required_building || v.buildings.some(b => b.type === required_building);
+            if (next_threshold && v.tech_points >= next_threshold && has_institution && (has_materials || known_technology)) {
                 if (has_materials) for (const [ore, amount] of Object.entries(cost)) v.ore[ore] -= amount;
                 v.research_level = next_level;
-            } else if (!next_threshold) v.tech_points = Math.min(1000, (v.tech_points || 0) + research_rate);
+            } else if (!next_threshold) v.tech_points = Math.min(1e6, (v.tech_points || 0) + research_rate);
             const after_technology = technology_level(v);
             v.forge_level = after_technology > 0 && jobs.smith > 0 ? 1 : 0;
             if (after_technology > before_technology) this.log(`${v.name} enters the ${TECH_AGES[after_technology].name}. Their forges can now craft ${TECH_AGES[after_technology].weapon.toLowerCase()}s.`, 'village');
             if (after_technology > 0 && jobs.smith > 0 && v.forge_timer >= 10) {
                 v.forge_timer = 0;
                 const level = after_technology;
-                const recipes = [null, { copper: 1 }, { copper: 1, tin: 1 }, { iron: 1, coal: 1 }, { iron: 2, coal: 1 }];
+                const recipes = EQUIPMENT_RECIPES;
                 const recipe = recipes[level];
                 const reserve = research_cost[level + 1] || {};
                 if (recipe && Object.entries(recipe).every(([ore, amount]) => v.ore[ore] - amount >= (reserve[ore] || 0)) && v.wood >= 1) {
@@ -1003,7 +1108,7 @@ export class World {
                     if (unequipped) unequipped.weapon_level = level;
                     else v.weapons++;
                     const unarmored = this.people.find(p => p.village_id === v.id && (p.armor_level || 0) < level);
-                    if (level >= 2 && v.ore.iron > 0 && unarmored) { v.ore.iron--; unarmored.armor_level = level; }
+                    if (level >= 2 && v.ore.iron > (reserve.iron || 0) && unarmored) { v.ore.iron--; unarmored.armor_level = level; }
                 }
             }
             const house_cost = (v.race === 'dwarf' ? 4 : 5) - (jobs.builder > 0 ? 1 : 0);
@@ -1045,6 +1150,7 @@ export class World {
                 }
             }
         }
+        advance_transport(this, dt, technology_level, RESEARCH_COSTS);
         if (this.tick % 240 === 0) this.schedule_trades();
         // Sample ecological growth; active fires are updated together to keep spread rate stable.
         for (let n = 0; n < 80; n++) {
@@ -1060,7 +1166,7 @@ export class World {
         for (let i = 0; i < this.fire.length; i++) {
             if (this.fire[i] <= 0) continue;
             this.fire[i] -= dt;
-            if (this.fire[i] <= 0) { this.tiles[i] = T.ASH; this.revision++; continue; }
+            if (this.fire[i] <= 0) { this.set_tile(i % WIDTH, Math.floor(i / WIDTH), T.ASH); continue; }
             if (this.random() < dt * 0.45) {
                 const [dx, dy] = DIRECTIONS[Math.floor(this.random() * 4)];
                 const x = i % WIDTH + dx, y = Math.floor(i / WIDTH) + dy;
@@ -1086,7 +1192,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1097,7 +1203,12 @@ export class World {
         if (!data || data.format !== 'genesis-grove' || data.version !== 1 || typeof data.name !== 'string' || !data.name.trim() || data.name.length > 40 || typeof data.seed !== 'string' || data.seed.length > 100) invalid();
         const size = WIDTH * HEIGHT;
         if (!array(data.tiles, size) || data.tiles.length !== size || !data.tiles.every(t => integer(t, 0, T.DESERT))) invalid();
-        if (data.ores !== undefined && (!array(data.ores, size) || data.ores.length !== size || !data.ores.every(n => integer(n, 0, 4)))) invalid();
+        if (data.ores !== undefined && (!array(data.ores, size) || data.ores.length !== size || !data.ores.every(n => integer(n, 0, 5)))) invalid();
+        if (data.strata !== undefined && (!array(data.strata, size) || data.strata.length !== size
+            || !data.strata.every(n => integer(n, 0, 3)))) invalid();
+        if (data.roads !== undefined && (!array(data.roads, size) || data.roads.length !== size
+            || !data.roads.every(n => integer(n, 0, 3)))) invalid();
+        if (data.vehicles !== undefined && !array(data.vehicles, MAX_VEHICLES)) invalid();
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
@@ -1113,20 +1224,32 @@ export class World {
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
-            if (v.buildings !== undefined && (!array(v.buildings, 6) || v.buildings.some(b =>
+            if (v.buildings !== undefined && (!array(v.buildings, 16) || v.buildings.some(b =>
                 !point(b) || !BUILDINGS[b.type] || !num(b.growth, 0, 1)
-                || !integer(b.harvests, 0, 1e6)))) invalid();
+                || !integer(b.harvests, 0, 1e6) || (b.stock !== undefined && !num(b.stock, 0, 120))))) invalid();
             if (v.build_timer !== undefined && !num(v.build_timer, 0, 60)) invalid();
+            if (v.king_id !== undefined && v.king_id !== null && !integer(v.king_id, 1, data.next_id - 1)) invalid();
+            if ((v.road_timer !== undefined && !num(v.road_timer, 0, 8))
+                || (v.road_cursor !== undefined && !integer(v.road_cursor, 0, 1000))
+                || (v.vehicle_timer !== undefined && !num(v.vehicle_timer, 0, 24))) invalid();
             if (v.plan !== undefined && (!v.plan || !['recover', 'build', 'defend', 'expand', 'develop'].includes(v.plan.mode)
                 || typeof v.plan.reason !== 'string' || v.plan.reason.length > 100)) invalid();
-            if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000)) || (v.tech_points !== undefined && !num(v.tech_points, 0, 1000)) || (v.research_level !== undefined && !integer(v.research_level, 0, TECH_AGES.length - 1))) invalid();
+            if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000)) || (v.tech_points !== undefined && !num(v.tech_points, 0, 1e6)) || (v.research_level !== undefined && !integer(v.research_level, 0, TECH_AGES.length - 1))) invalid();
             if (v.ore !== undefined && (!v.ore || !['copper','tin','iron','coal'].every(k => num(v.ore[k], 0, 1e6)))) invalid();
+            if (v.ore?.stardust !== undefined && !num(v.ore.stardust, 0, 1e6)) invalid();
             if (v.weapons !== undefined && !integer(v.weapons, 0, 1e6)) invalid();
             if (v.training_timer !== undefined && !num(v.training_timer, 0, 1e6)) invalid();
             if (['barracks','mine_level','forge_level'].some(k => v[k] !== undefined && !integer(v[k], 0, 1))) invalid();
             id(v.id);
         }
         const villages = new Set(data.villages.map(v => v.id));
+        for (const vehicle of data.vehicles || []) {
+            if (!point(vehicle) || !point({ x: vehicle.target_x, y: vehicle.target_y })
+                || !villages.has(vehicle.kingdom_id) || !VEHICLES[vehicle.kind]
+                || typeof vehicle.returning !== 'boolean' || !num(vehicle.cargo, 0, 64)
+                || !integer(vehicle.deliveries, 0, 1e6)) invalid();
+            id(vehicle.id);
+        }
         const colonies = new Map();
         for (const c of data.colonies || []) {
             if (!point(c) || !villages.has(c.kingdom_id) || typeof c.name !== 'string' || c.name.length > 40 || !array(c.houses, 220) || !c.houses.every(point) || !['age', 'birth_timer', 'expansion_timer', 'siege'].every(k => num(c[k]))) invalid();
@@ -1138,7 +1261,7 @@ export class World {
             id(v.id); voyages.set(v.id, v);
         }
         for (const trade of data.trades || []) {
-            if (!villages.has(trade.from_id) || !villages.has(trade.to_id) || trade.from_id === trade.to_id || !['food','wood','copper','tin','iron','coal'].includes(trade.good) || !integer(trade.amount, 1, 100) || !num(trade.progress, 0, 1) || !num(trade.duration, 0.001, 500) || !['ship','caravan'].includes(trade.kind)) invalid();
+            if (!villages.has(trade.from_id) || !villages.has(trade.to_id) || trade.from_id === trade.to_id || !['food','wood','copper','tin','iron','coal','stardust'].includes(trade.good) || !integer(trade.amount, 1, 100) || !num(trade.progress, 0, 1) || !num(trade.duration, 0.001, 500) || !['ship','caravan'].includes(trade.kind)) invalid();
             id(trade.id);
         }
         for (const u of [...data.people, ...data.animals]) {
@@ -1155,6 +1278,7 @@ export class World {
             id(u.id);
         }
         for (const p of data.people) {
+            if (p.attack_timer !== undefined && !num(p.attack_timer, 0, 2)) invalid();
             if (p.work_target !== undefined && (!point(p.work_target) || p.work_target.route !== true
                 || !['Gathering food', 'Gathering timber'].includes(p.work_target.task))) invalid();
             if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
@@ -1177,6 +1301,7 @@ export class World {
         w.colonies = structuredClone(data.colonies || []);
         w.voyages = structuredClone(data.voyages || []);
         w.trades = structuredClone(data.trades || []);
+        w.vehicles = structuredClone(data.vehicles || []);
         w.scenario = data.scenario || 'sandbox';
         w.year_length = data.year_length || 20;
         w.lighting = structuredClone(data.lighting || { phase: 0.35, cycle_seconds: 600 });
@@ -1184,14 +1309,20 @@ export class World {
             unit.xp ??= Math.min(1e6, unit.age / w.year_length * 2);
             initialize_creature(unit);
         }
-        for (const kingdom of w.villages) { kingdom.buildings ||= []; kingdom.build_timer ||= 0; }
+        for (const kingdom of w.villages) {
+            kingdom.buildings ||= []; kingdom.build_timer ||= 0;
+            kingdom.road_timer ||= 0; kingdom.road_cursor ||= 0; kingdom.vehicle_timer ||= 0;
+            kingdom.king_id ??= null;
+        }
         w.laws = { rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };
         w.milestone = data.milestone || 0;
         const legacy_jobs = new Map();
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; p.home_id ||= p.village_id; p.voyage_id ||= null; p.weapon_level ||= 0; p.armor_level ||= 0; p.job ||= JOBS[(legacy_jobs.get(p.village_id) || 0) % JOBS.length]; p.role ||= 'civilian'; legacy_jobs.set(p.village_id, (legacy_jobs.get(p.village_id) || 0) + 1); }
         for (const a of w.animals) a.infection ||= 0;
-        for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); v.research_level ??= (() => { let level = 0; for (let i = 1; i < TECH_AGES.length; i++) if (v.tech_points >= TECH_AGES[i].threshold) level = i; return level; })(); v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0 }; v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer ||= 0; v.forge_timer ||= 0; v.training_timer ||= 0; v.barracks ||= 0; v.mine_level ||= 0; v.forge_level ||= 0; }
+        for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); v.research_level ??= (() => { let level = 0; for (let i = 1; i < TECH_AGES.length; i++) if (v.tech_points >= TECH_AGES[i].threshold) level = i; return level; })(); v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0; v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer ||= 0; v.forge_timer ||= 0; v.training_timer ||= 0; v.barracks ||= 0; v.mine_level ||= 0; v.forge_level ||= 0; }
         w.tiles = Uint8Array.from(data.tiles); w.ores = data.ores ? Uint8Array.from(data.ores) : new Uint8Array(size); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
+        w.roads = data.roads ? Uint8Array.from(data.roads) : new Uint8Array(size);
+        w.strata = data.strata ? Uint8Array.from(data.strata) : new Uint8Array(size);
         if (!data.ores) for (let i = 0; i < size; i++) {
             if (w.tiles[i] < T.HILL || noise((i % WIDTH) / 3, Math.floor(i / WIDTH) / 3, hash_string(w.seed) + 33) < 0.74) continue;
             w.ores[i] = 1 + Math.floor(noise((i % WIDTH) / 7, Math.floor(i / WIDTH) / 7, hash_string(w.seed) + 977) * 4);
