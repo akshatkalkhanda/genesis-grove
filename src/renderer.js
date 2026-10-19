@@ -1,4 +1,6 @@
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
+import { creature_stats } from './creatures.js';
+import { night_opacity } from './daylight.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
@@ -37,14 +39,17 @@ export class Renderer {
     }
     zoom_at(multiplier, x = this.width / 2, y = this.height / 2) {
         const before = this.world_point(x, y);
-        this.zoom = Math.max(0.65, Math.min(7, this.zoom * multiplier));
+        this.zoom = Math.max(0.65, Math.min(24, this.zoom * multiplier));
         const after = this.world_point(x, y);
         this.pan_x += (after.x - before.x) * CELL * this.scale;
         this.pan_y += (after.y - before.y) * CELL * this.scale;
     }
     fit() { this.zoom = 1; this.pan_x = 0; this.pan_y = 0; }
-    focus(x, y) {
-        this.zoom = 2.4;
+    focus(x, y, zoom = 2.4) {
+        this.zoom = zoom;
+        this.center_on(x, y);
+    }
+    center_on(x, y) {
         this.pan_x = (WIDTH / 2 - x) * CELL * this.scale;
         this.pan_y = (HEIGHT / 2 - y) * CELL * this.scale;
     }
@@ -183,6 +188,7 @@ export class Renderer {
             for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
             this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v));
             this.industry(c, v.x * CELL, v.y * CELL, v);
+            for (const building of v.buildings || []) this.building(c, building, v.color, now);
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
@@ -213,6 +219,13 @@ export class Renderer {
             if (p.voyage_id) continue;
             this.person(c, p, kingdoms.get(p.village_id), now);
         }
+        if (this.selected_unit_id) {
+            const selected = [...world.people, ...world.animals].find(unit => unit.id === this.selected_unit_id);
+            if (selected) {
+                c.strokeStyle = '#f5e8a8'; c.lineWidth = 1 / s;
+                c.beginPath(); c.ellipse(selected.x * CELL, selected.y * CELL + 3, 7, 4, 0, 0, Math.PI * 2); c.stroke();
+            }
+        }
         for (let i = 0; i < world.fire.length; i++) if (world.fire[i] > 0) {
             const x = (i % WIDTH) * CELL, y = Math.floor(i / WIDTH) * CELL;
             const flicker = Math.sin(now / 80 + i) > 0 ? 1 : 0;
@@ -229,6 +242,14 @@ export class Renderer {
             c.fillStyle = '#041e2b0b'; c.fillRect(x + 20, y + 30, 72, 15); c.fillRect(x + 35, y + 20, 48, 35);
             c.fillStyle = '#d6eee510'; c.fillRect(x, y, 55, 10); c.fillRect(x + 13, y - 8, 28, 25);
         }
+        const darkness = night_opacity(world.lighting?.phase ?? 0.5);
+        if (darkness > 0) {
+            c.fillStyle = `rgba(7,16,48,${darkness})`; c.fillRect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+            for (const village of world.villages.filter(v => v.alive)) {
+                c.fillStyle = `rgba(255,211,115,${darkness * 2})`;
+                for (const house of village.houses) c.fillRect(house.x * CELL - 2, house.y * CELL - 5, 2, 2);
+            }
+        }
         if (this.pointer) {
             const p = this.world_point(this.pointer.x, this.pointer.y);
             if (world.inside(p.x, p.y)) {
@@ -238,6 +259,27 @@ export class Renderer {
             }
         }
         c.restore();
+        const label_boxes = [];
+        const labeled_units = this.zoom >= 6 ? [...world.people, ...world.animals].sort((a, b) =>
+            Number(b.id === this.selected_unit_id) - Number(a.id === this.selected_unit_id)) : [];
+        for (const unit of labeled_units) {
+            if (label_boxes.length >= 12) break;
+            if (unit.voyage_id || unit.health <= 0) continue;
+            const x = o.x + unit.x * CELL * s, y = o.y + (unit.y * CELL - 17) * s;
+            if (x < 48 || x > this.width - 48 || y < 105 || y > this.height - 30) continue;
+            const box = { x: x - 48, y: y - 14, width: 96, height: unit.task ? 34 : 23 };
+            if (label_boxes.some(other => box.x < other.x + other.width + 4
+                && box.x + box.width + 4 > other.x && box.y < other.y + other.height + 4
+                && box.y + box.height + 4 > other.y)) continue;
+            label_boxes.push(box);
+            const stats = creature_stats(unit, world.year_length);
+            c.font = '600 10px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
+            c.fillStyle = '#15251fdd'; c.fillRect(x - 48, y - 14, 96, unit.task ? 34 : 23);
+            c.fillStyle = '#e9efd3'; c.fillText(`${unit.name?.split(' ')[0] || unit.species} · Lv ${stats.level}`, x, y - 3);
+            c.fillStyle = '#385041'; c.fillRect(x - 28, y + 2, 56, 3);
+            c.fillStyle = '#a7d479'; c.fillRect(x - 28, y + 2, 56 * Math.max(0, unit.health / stats.max_health), 3);
+            if (unit.task) { c.font = '9px -apple-system, Segoe UI, sans-serif'; c.fillStyle = '#b8c8b1'; c.fillText(unit.task, x, y + 15); }
+        }
         for (const army of world.armies || []) {
             if (army.count < 2 || (!army.target_id && army.kingdom_id !== this.selected_kingdom_id)) continue;
             const kingdom = kingdoms.get(army.kingdom_id);
@@ -338,7 +380,8 @@ export class Renderer {
         const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
         const skin = { orc: '#8fbc6c', dwarf: '#d69b75', foxfolk: '#d88953', harefolk: '#e7d6be', catfolk: '#d5b078', frogfolk: '#78c991', wolfkin: '#aab9c4', hyenafolk: '#b99566', beetlefolk: '#68aaa1' }[person.race] || '#f0c9a0';
         c.fillStyle = '#172a2266'; c.fillRect(x - 3, y + 3, 7, 2);
-        c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1, 2, 4); c.fillRect(x + 1, y + 1, 2, 4);
+        const stride = Math.round(Math.sin(now / 140 + person.id));
+        c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1 + stride, 2, 4); c.fillRect(x + 1, y + 1 - stride, 2, 4);
         c.fillStyle = kingdom?.color || '#e4dfb2'; c.fillRect(x - 3, y - 4, 6, 6);
         c.fillStyle = '#213129'; c.fillRect(x - 3, y, 6, 1);
         c.fillStyle = skin; c.fillRect(x - 2, y - 8, 4, 4);
@@ -376,6 +419,39 @@ export class Renderer {
         c.fillStyle = '#f7dd8d'; c.fillRect(x - w / 2 + 1, y - 5, 1, 2);
         if (town) { c.fillStyle = '#665b3e'; c.fillRect(x + 3, y - 20, 1, 10); c.fillStyle = color; c.fillRect(x + 4, y - 20, 5, 3); }
         if (town && level >= 2) { c.fillStyle = level >= 3 ? '#aeb6b1' : '#bc9968'; c.fillRect(x - 10, y - 15, 4, 15); c.fillRect(x + 8, y - 13, 4, 13); }
+    }
+    building(c, building, color, now) {
+        const x = building.x * CELL, y = building.y * CELL;
+        if (building.type === 'farm') {
+            c.fillStyle = '#60482f'; c.fillRect(x - 10, y - 5, 21, 14);
+            const crop = building.growth > 0.7 ? '#e6c367' : building.growth > 0.3 ? '#87ae51' : '#83613c';
+            for (let row = 0; row < 4; row++) for (let col = 0; col < 6; col++) {
+                c.fillStyle = crop; c.fillRect(x - 8 + col * 3, y - 3 + row * 3, 1, 2);
+            }
+            c.fillStyle = '#c8b48b'; c.fillRect(x - 11, y + 9, 23, 1);
+        } else if (building.type === 'windmill') {
+            c.fillStyle = '#d3c5a0'; c.fillRect(x - 4, y - 14, 9, 17);
+            c.fillStyle = '#875a48'; c.beginPath(); c.moveTo(x - 6, y - 14); c.lineTo(x, y - 21); c.lineTo(x + 6, y - 14); c.fill();
+            c.save(); c.translate(x, y - 12); c.rotate(now / 1900);
+            for (let arm = 0; arm < 4; arm++) {
+                c.rotate(Math.PI / 2); c.fillStyle = '#69513a'; c.fillRect(0, -1, 14, 1);
+                c.fillStyle = '#e4dcb6'; c.fillRect(4, 0, 10, 3);
+            }
+            c.restore(); c.fillStyle = '#533f2c'; c.fillRect(x - 1, y, 3, 4);
+        } else if (building.type === 'armory') {
+            c.fillStyle = '#a8b5ad'; c.fillRect(x - 8, y - 11, 17, 14);
+            c.fillStyle = '#52697a'; c.fillRect(x - 10, y - 15, 21, 5);
+            c.fillStyle = color; c.fillRect(x - 7, y - 9, 3, 6);
+            c.fillStyle = '#e2d8ac'; c.fillRect(x + 2, y - 9, 1, 8); c.fillRect(x, y - 5, 5, 1);
+            c.fillStyle = '#3c4947'; c.fillRect(x - 2, y - 2, 4, 5);
+        } else {
+            c.fillStyle = '#776748'; c.fillRect(x - 11, y, 23, 9);
+            c.fillStyle = color; c.beginPath(); c.moveTo(x - 9, y); c.lineTo(x - 3, y - 10); c.lineTo(x + 4, y); c.fill();
+            c.fillStyle = '#c1a574'; c.fillRect(x + 6, y - 8, 2, 14);
+            c.fillRect(x + 2, y - 5, 10, 2);
+            c.fillStyle = '#594b35'; c.fillRect(x + 5, y - 12, 4, 4);
+            c.fillStyle = '#e6d18d'; c.fillRect(x - 7, y + 4, 2, 2);
+        }
     }
     industry(c, x, y, kingdom) {
         if (kingdom.mine_level) {

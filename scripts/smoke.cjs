@@ -113,10 +113,21 @@ app.whenReady().then(async () => {
             assert.equal(await js('document.getElementById("entity-card").hidden'), false);
             assert.ok(await js('document.getElementById("entity-card").textContent.includes("Health")'));
             assert.ok(await js(`document.getElementById('entity-card').textContent.includes('${kind === 'people' ? 'Weapon' : 'Nature'}')`));
+            assert.ok(await js('document.getElementById("entity-card").textContent.includes("Strength / Intelligence")'));
+            if (kind === 'people') {
+                await click('[data-action="zoom-creature"]');
+                assert.equal(await js('genesis.camera().zoom'), 12);
+                await click('[data-action="follow-creature"]');
+                assert.ok(await js('document.querySelector("[data-action=follow-creature]").textContent.includes("Stop")'));
+                await delay(450);
+                await fs.writeFile(path.join(artifact_dir, 'creature-closeup.png'), (await win.webContents.capturePage()).toPNG());
+            }
             if (kind === 'people') await fs.writeFile(path.join(artifact_dir, 'creature-inspection.png'), (await win.webContents.capturePage()).toPNG());
             await click('#entity-card button');
+            await click('#zoom-reset');
         }
         checks.push('Native clicks inspect individual people and wildlife with live health and equipment');
+        checks.push('Close zoom and creature-follow controls expose experience, traits, and attributes');
         await click('#help'); assert.equal(await js('document.getElementById("help-dialog").open'), true); await click('#help-dialog [data-close]');
         checks.push('Help dialog opens and closes');
         await click('#diplomacy');
@@ -167,6 +178,32 @@ app.whenReady().then(async () => {
         assert.ok(await js('genesis.snapshot().tiles.includes(15)'));
         await fs.writeFile(path.join(artifact_dir, 'world-wildlands.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('Prismatic Wildlands starts eight peoples on a colorful generated map');
+        await click('#lighting');
+        await click('[data-day-phase="0"]');
+        assert.equal(await js('genesis.snapshot().lighting.phase'), 0);
+        await js(`document.getElementById('day-length').value='1440';document.getElementById('day-length').dispatchEvent(new Event('change'))`);
+        await click('#lighting-dialog [data-close]');
+        await fs.writeFile(path.join(artifact_dir, 'world-night.png'), (await win.webContents.capturePage()).toPNG());
+        assert.equal(await js('genesis.snapshot().lighting.cycle_seconds'), 1440);
+        await click('#lighting'); await click('[data-day-phase="0.5"]'); await click('#lighting-dialog [data-close]');
+        checks.push('Day/night settings preview readable nights and choose a separate lighting clock');
+        const { World } = await import(path.join(__dirname, '..', 'src', 'simulation.js'));
+        const developed = new World({ seed: 'color-world', preset: 'wildlands', name: 'The Living Wildlands' });
+        developed.laws.expansion = true;
+        for (let step = 0; step < 3200; step++) developed.step(0.125);
+        developed.lighting.phase = 0.5;
+        const living_towns = developed.serialize();
+        await fs.writeFile(path.join(artifact_dir, 'developed-wildlands.json'), JSON.stringify(living_towns));
+        await click('#load');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(living_towns))}],'living-towns.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150); await click('#pause');
+        assert.equal(await js('new Set(genesis.snapshot().villages.flatMap(v=>v.buildings||[]).map(b=>b.type)).size'), 4);
+        assert.ok(await js('genesis.snapshot().people.some(p=>p.health>100&&p.xp>0)'));
+        await click('#civilizations button');
+        for (let zoom = 0; zoom < 4; zoom++) await click('#zoom-in');
+        await delay(500);
+        await fs.writeFile(path.join(artifact_dir, 'town-industry-closeup.png'), (await win.webContents.capturePage()).toPNG());
+        checks.push('A grown world restores veteran health and renders working farms, windmills, armories, and camps');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         await click('#menu-start');
