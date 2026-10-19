@@ -1,4 +1,4 @@
-import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, technology_level } from './simulation.js';
+import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RACES, ANIMALS, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
 const $ = id => document.getElementById(id);
 const TOOLS = {
@@ -8,6 +8,14 @@ const TOOLS = {
         ['ocean', 'Deep ocean', '≈', '#6aafc4', 'Carve oceans and separate continents. Land creatures cannot cross water.'],
         ['shallow', 'Shallows', '≋', '#82c7bb', 'Shape gentle coastlines with clear, shallow water.'],
         ['sand', 'Sand', '⠿', '#dfcb93', 'Paint golden beaches and quiet deserts. Life grows slowly here.'],
+        ['desert', 'Desert', '☀', '#e4b567', 'Warm dunes where catfolk can thrive.'],
+        ['savanna', 'Savanna', '✳', '#d5bd65', 'Dry golden grassland suited to hyena clans.'],
+        ['jungle', 'Jungle', '♣', '#52b87b', 'Dense green canopy with food and timber for frogfolk.'],
+        ['snow', 'Snowfield', '❄', '#c4e7e7', 'Cold white land favored by wolfkin.'],
+        ['maple', 'Maple grove', '✿', '#e98d7a', 'Warm red woodland where harefolk flourish.'],
+        ['mushroom', 'Mushroom glade', '◕', '#ab83cb', 'A violet forest rich in curious growth.'],
+        ['crystal', 'Crystal wilds', '✧', '#75d2d5', 'Shimmering stone loved by beetlefolk.'],
+        ['celestial', 'Starbloom', '✦', '#cba7ed', 'A luminous magical woodland.'],
         ['hill', 'Highlands', '▰', '#a6b18b', 'Raise rolling highlands. A rugged home for adventurous settlers.'],
         ['mountain', 'Mountain', '▲', '#c3cec3', 'Raise impassable peaks. Nature has its own boundaries.'],
         ['lava', 'Lava', '♨', '#e8a26e', 'Pour molten rock. It cools to ash, and eventually life returns.']
@@ -17,6 +25,13 @@ const TOOLS = {
         ['elf', 'Elves', '♧', '#a8d89b', 'Forest folk who gather timber faster and thrive among trees.'],
         ['dwarf', 'Dwarves', '⛏', '#d7a878', 'Hardy highland settlers who gather food from rugged land.'],
         ['orc', 'Orcs', '♜', '#99bd7a', 'Tough settlers who grow quickly and favor border raids.'],
+        ['foxfolk', 'Foxfolk', '♞', '#ed9a63', 'Quick settlers who forage well in mushroom glades.'],
+        ['harefolk', 'Harefolk', '♟', '#f2d8bb', 'Fast-growing woodland settlers at home in maple groves.'],
+        ['catfolk', 'Catfolk', '♧', '#ddbd82', 'Desert settlers skilled at finding food among dunes.'],
+        ['frogfolk', 'Frogfolk', '♣', '#80caa2', 'Jungle settlers comfortable under dense canopies.'],
+        ['wolfkin', 'Wolfkin', '♜', '#b6c9dc', 'Hardy northern clans that endure snowfields.'],
+        ['hyenafolk', 'Hyenafolk', '♞', '#d0af71', 'Savanna clans that fight fiercely and grow quickly.'],
+        ['beetlefolk', 'Beetlefolk', '⬡', '#8dbdaf', 'Armored crystal-land settlers with patient builders.'],
         ['forest', 'Forest', '♠', '#8eb66c', 'Bring a woodland to life. Villagers gather timber here.'],
     ],
     creatures: [
@@ -25,7 +40,19 @@ const TOOLS = {
         ['deer', 'Deer', '🦌', '#c79d69', 'Shy forest grazers that flee from predators.'],
         ['bear', 'Bears', '🐻', '#b6825b', 'Powerful, territorial predators that hunt nearby wildlife.'],
         ['rabbit', 'Rabbits', '🐇', '#e0d7c5', 'Quick little grazers that multiply in fertile meadows.'],
-        ['chicken', 'Chickens', '🐓', '#e8c866', 'Peaceful birds that forage and grow their flocks.']
+        ['chicken', 'Chickens', '🐓', '#e8c866', 'Peaceful birds that forage and grow their flocks.'],
+        ['fox', 'Foxes', '🦊', '#dd9561', 'Swift hunters that stalk small grazers.'],
+        ['cat', 'Wildcats', '🐈', '#d3b16c', 'Quiet predators that roam the warm lands.'],
+        ['frog', 'Frogs', '🐸', '#77c77d', 'Tiny amphibians that multiply in green places.'],
+        ['beetle', 'Beetles', '🐞', '#80b6aa', 'Bright shelled insects that spread through the undergrowth.'],
+        ['hyena', 'Hyenas', '🐾', '#c6a66c', 'Pack hunters at home on savannas.'],
+        ['owl', 'Owls', '🦉', '#aa907c', 'Nocturnal hunters that seek small prey.'],
+        ['boar', 'Boars', '🐗', '#99724e', 'Sturdy foragers that breed in woodlands.'],
+        ['turtle', 'Turtles', '🐢', '#78a387', 'Slow, hardy grazers along the coast.'],
+        ['buffalo', 'Buffalo', '♉', '#8d6248', 'Large herd animals of open grassland.'],
+        ['butterfly', 'Butterflies', '🦋', '#dba8db', 'Colorful pollinators of flowered land.'],
+        ['moth', 'Moths', '✿', '#c7d3af', 'Moonlit insects of forests and starbloom.'],
+        ['lizard', 'Lizards', '🦎', '#94ad67', 'Small sun-loving reptiles of the desert.']
     ],
     powers: [
         ['copper', 'Copper vein', '◆', '#dc9464', 'Place a copper deposit. Miners can collect it for copper-age research and weapons.'],
@@ -43,10 +70,12 @@ const TOOLS = {
         ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
     ]
 };
+const LIFE_TOOLS = new Set([...Object.keys(RACES), ...ANIMALS]);
 let world = new World({ preset: 'empty', inhabited: false });
 const renderer = new Renderer($('world'), $('minimap'));
 let category = 'terrain', tool = 'grass', previous_tool = 'grass', brush = 4, paused = false, speed = 1;
 let focused_village_id = null;
+let inspected_unit = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
 let toast_timer, audio_context, audio_gain, sound_on = false;
 const storage_key = 'genesis-grove-world-v1';
@@ -57,11 +86,12 @@ function toast(message) {
 }
 function select_tool(id) {
     tool = id; renderer.tool = id;
+    if (id !== 'inspect') { inspected_unit = null; $('entity-card').hidden = true; }
     $('inspect').classList.toggle('active', id === 'inspect');
     $('world-tooltip').hidden = true;
     if (id === 'inspect') {
         $('selected-icon').textContent = '⌕'; $('selected-name').textContent = 'Inspect world';
-        $('selected-description').textContent = 'Move over the world to discover its terrain, creatures, and nearby villages.';
+        $('selected-description').textContent = 'Move over land for tile details. Click a person or animal for its own profile.';
     } else {
         previous_tool = id;
         const item = Object.values(TOOLS).flat().find(t => t[0] === id);
@@ -106,11 +136,11 @@ function local_point(event) {
 }
 function paint(p, continuous = false) {
     if (tool === 'inspect') return;
-    if (continuous && ['meteor', 'nuke', 'lightning', 'human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool)) return;
+    if (continuous && (['meteor', 'nuke', 'lightning'].includes(tool) || LIFE_TOOLS.has(tool))) return;
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) return;
-    if (['human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on meadows, forests, sand, or highlands.'); return; }
-    if (last_paint && !['meteor', 'nuke', 'lightning', 'human', 'elf', 'dwarf', 'orc', 'sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'rain', 'bless'].includes(tool)) {
+    if (LIFE_TOOLS.has(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on walkable land.'); return; }
+    if (last_paint && !['meteor', 'nuke', 'lightning', 'rain', 'bless'].includes(tool) && !LIFE_TOOLS.has(tool)) {
         const distance = Math.hypot(tile.x - last_paint.x, tile.y - last_paint.y);
         const steps = Math.min(100, Math.ceil(distance / Math.max(1, brush / 2)));
         for (let i = 1; i < steps; i++) world.apply(tool, last_paint.x + (tile.x - last_paint.x) * i / steps, last_paint.y + (tile.y - last_paint.y) * i / steps, brush);
@@ -123,6 +153,7 @@ canvas.oncontextmenu = event => event.preventDefault();
 canvas.onpointerdown = event => {
     if (![0, 1, 2].includes(event.button)) return;
     const p = local_point(event); last_pointer = p; renderer.pointer = p;
+    if (event.button === 0 && !event.altKey && tool === 'inspect') { inspect_click(p); return; }
     panning = event.button !== 0 || event.altKey;
     pointer_down = !panning; last_paint = null; paint_elapsed = 0;
     canvas.setPointerCapture(event.pointerId);
@@ -148,6 +179,7 @@ $('minimap').onclick = event => {
     renderer.focus((event.clientX - rect.left) / rect.width * WIDTH, (event.clientY - rect.top) / rect.height * HEIGHT); update_zoom();
 };
 function inspect(p) {
+    if (inspected_unit) { $('world-tooltip').hidden = true; return; }
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) { $('world-tooltip').hidden = true; return; }
     const box = $('world-tooltip'); box.replaceChildren();
@@ -172,7 +204,53 @@ function inspect(p) {
         }
     }
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
+    add('Click a person or animal to inspect it');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
+}
+function inspect_click(p) {
+    const tile = renderer.world_point(p.x, p.y);
+    const found = world.unit_near(tile.x, tile.y);
+    inspected_unit = found ? { kind: found.kind, id: found.unit.id } : null;
+    const card = $('entity-card'); card.hidden = !found;
+    if (found) {
+        update_entity_card();
+        card.style.left = `${Math.max(8, Math.min(p.x + 16, canvas.clientWidth - card.offsetWidth - 8))}px`;
+        card.style.top = `${Math.max(8, Math.min(p.y + 16, canvas.clientHeight - card.offsetHeight - 8))}px`;
+        $('world-tooltip').hidden = true;
+    }
+}
+function update_entity_card() {
+    if (!inspected_unit) return;
+    const unit = (inspected_unit.kind === 'person' ? world.people : world.animals).find(u => u.id === inspected_unit.id);
+    if (!unit) { inspected_unit = null; $('entity-card').hidden = true; return; }
+    const card = $('entity-card'); card.replaceChildren();
+    const heading = document.createElement('div'); heading.className = 'entity-heading';
+    const name = document.createElement('strong');
+    name.textContent = inspected_unit.kind === 'person' ? `${RACES[unit.race]?.label || 'Human'} #${unit.id}` : `${unit.species[0].toUpperCase()}${unit.species.slice(1)} #${unit.id}`;
+    const close = document.createElement('button'); close.textContent = '×'; close.setAttribute('aria-label', 'Close creature details');
+    close.onclick = () => { inspected_unit = null; card.hidden = true; };
+    heading.append(name, close); card.append(heading);
+    const portrait = document.createElement('canvas'); portrait.width = 64; portrait.height = 64; portrait.className = 'entity-portrait';
+    const art = portrait.getContext('2d'); art.imageSmoothingEnabled = false; art.setTransform(3, 0, 0, 3, 32, 47);
+    if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now());
+    else renderer.animal(art, { ...unit, x: 0, y: 0 });
+    card.append(portrait);
+    const health = document.createElement('div'); health.className = 'entity-health';
+    const meter = document.createElement('span'); meter.style.width = `${Math.max(0, Math.min(100, unit.health))}%`; health.append(meter); card.append(health);
+    const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
+    line('Health', `${Math.ceil(unit.health)} / 100`);
+    line('Age', `${Math.floor(unit.age / world.year_length)} years`);
+    line('Terrain', TERRAIN_NAMES[world.tile(unit.x, unit.y)]);
+    if (inspected_unit.kind === 'person') {
+        const kingdom = world.villages.find(v => v.id === unit.village_id);
+        line('Kingdom', kingdom?.name || 'No kingdom');
+        line('Role', unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        line('Weapon', TECH_AGES[unit.weapon_level || 0].weapon);
+        line('Armor', unit.armor_level ? `${TECH_AGES[unit.armor_level].name} armor` : 'None');
+    } else {
+        line('Nature', ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
+    }
+    if (unit.infection > 0) line('Condition', 'Infected');
 }
 function update_diplomacy(preferred_source = null) {
     const alive = world.villages.filter(v => v.alive);
@@ -273,6 +351,7 @@ function update_selected_kingdom() {
     box.append(heading, status, stats, age, stores, metals, settlements, march, diplomacy, manage);
 }
 function update_ui() {
+    update_entity_card();
     const stats = world.stats();
     for (const id of ['population', 'soldiers', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
@@ -337,11 +416,11 @@ function update_ui() {
     }
 }
 function replace_world(next) {
-    world = next; focused_village_id = null; renderer.selected_kingdom_id = null;
+    world = next; focused_village_id = null; inspected_unit = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
     renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
-const terrain_colors = ['#173e53', '#4e8f9b', '#d9c998', '#8cb873', '#537c59', '#89946b', '#a3aaa3', '#df8055', '#635f54'];
+const terrain_colors = ['#173e53', '#4e8f9b', '#d9c998', '#8cb873', '#537c59', '#89946b', '#a3aaa3', '#df8055', '#635f54', '#52b87b', '#d5bd65', '#c4e7e7', '#e98d7a', '#ab83cb', '#75d2d5', '#cba7ed', '#e4b567'];
 let preview_timer;
 function refresh_preview() {
     const form = $('new-form');

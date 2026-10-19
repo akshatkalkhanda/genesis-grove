@@ -1,7 +1,7 @@
 export const WIDTH = 192;
 export const HEIGHT = 128;
-export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8 });
-export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash'];
+export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8, JUNGLE: 9, SAVANNA: 10, SNOW: 11, MAPLE: 12, MUSHROOM: 13, CRYSTAL: 14, CELESTIAL: 15, DESERT: 16 });
+export const TERRAIN_NAMES = ['Deep ocean', 'Shallow water', 'Sand', 'Meadow', 'Forest', 'Highlands', 'Mountain', 'Lava', 'Ash', 'Jungle', 'Savanna', 'Snowfield', 'Maple grove', 'Mushroom glade', 'Crystal wilds', 'Starbloom', 'Desert'];
 export const ORES = Object.freeze({ copper: 1, tin: 2, iron: 3, coal: 4 });
 export const ORE_NAMES = Object.freeze(['None', 'Copper ore', 'Tin ore', 'Iron ore', 'Coal']);
 export const TECH_AGES = Object.freeze([
@@ -25,7 +25,12 @@ const MAX_COLONIES = 240;
 const MAX_VOYAGES = 40;
 const MAX_TRADES = 60;
 export const JOBS = Object.freeze(['farmer', 'lumberjack', 'miner', 'smith', 'builder']);
-const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' } });
+export const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }, elf: { label: 'Elven', color: '#9bcf91' }, dwarf: { label: 'Dwarven', color: '#d5a776' }, orc: { label: 'Orcish', color: '#a9bd77' }, foxfolk: { label: 'Foxfolk', color: '#ed9a63' }, harefolk: { label: 'Harefolk', color: '#f2d8bb' }, catfolk: { label: 'Catfolk', color: '#ddbd82' }, frogfolk: { label: 'Frogfolk', color: '#80caa2' }, wolfkin: { label: 'Wolfkin', color: '#b6c9dc' }, hyenafolk: { label: 'Hyenafolk', color: '#d0af71' }, beetlefolk: { label: 'Beetlefolk', color: '#8dbdaf' } });
+export const ANIMALS = Object.freeze(['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'fox', 'cat', 'frog', 'beetle', 'hyena', 'owl', 'boar', 'turtle', 'buffalo', 'butterfly', 'moth', 'lizard']);
+const PREDATORS = new Set(['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl']);
+const GRAZERS = new Set(['sheep', 'deer', 'rabbit', 'chicken', 'boar', 'buffalo', 'turtle', 'lizard']);
+const FLAMMABLE = new Set([T.GRASS, T.FOREST, T.JUNGLE, T.SAVANNA, T.MAPLE,
+    T.MUSHROOM, T.CELESTIAL]);
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function kingdom_color(index) {
@@ -89,7 +94,9 @@ export class World {
         this.log('A new world awakens. What will you make of it?', 'creation');
         if ((inhabited || this.scenario === 'hundred') && landscape !== 'empty') {
             if (this.scenario === 'hundred') this.seed_hundred_kingdoms();
+            else if (landscape === 'wildlands') this.seed_realms();
             else this.seed_life();
+            this.seed_biome_wildlife();
         }
     }
     random() {
@@ -103,7 +110,7 @@ export class World {
     index(x, y) { return Math.floor(y) * WIDTH + Math.floor(x); }
     inside(x, y) { return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT; }
     tile(x, y) { return this.inside(x, y) ? this.tiles[this.index(x, y)] : T.OCEAN; }
-    walkable(x, y) { const t = this.tile(x, y); return t >= T.SAND && t <= T.HILL; }
+    walkable(x, y) { const t = this.tile(x, y); return t >= T.SAND && t !== T.MOUNTAIN && t !== T.LAVA && t !== T.ASH; }
     set_tile(x, y, type) {
         if (!this.inside(x, y)) return;
         const i = this.index(x, y);
@@ -122,6 +129,7 @@ export class World {
             const fine = noise(x / 4, y / 4, seed + 97);
             let h = broad * 0.64 + detail * 0.27 + fine * 0.09 - edge;
             if (preset === 'continent') h += 0.15 * (1 - nx * nx - ny * ny);
+            if (preset === 'wildlands') h += 0.11 * (1 - nx * nx - ny * ny) + 0.055 * noise(x / 25, y / 25, seed + 401);
             if (preset === 'fractured') {
                 const lobes = [[-0.55, -0.48, 0.68, 0.5], [0.54, -0.45, 0.63, 0.53], [-0.5, 0.5, 0.67, 0.5], [0.57, 0.49, 0.61, 0.48]];
                 const land = Math.max(0, ...lobes.map(([cx, cy, rx, ry]) => 1 - ((nx - cx) / rx) ** 2 - ((ny - cy) / ry) ** 2));
@@ -130,15 +138,28 @@ export class World {
             }
             let t = h < 0.39 ? T.OCEAN : h < 0.445 ? T.SHALLOW : h < 0.478 ? T.SAND : h < 0.65 ? T.GRASS : h < 0.73 ? T.HILL : T.MOUNTAIN;
             if (t === T.GRASS && noise(x / 8, y / 8, seed + 51) > 0.48 && this.random() > 0.2) t = T.FOREST;
+            if (t === T.GRASS || t === T.FOREST || t === T.SAND) {
+                const climate = noise(x / 45, y / 45, seed + 193) * 0.7 + noise(x / 18, y / 18, seed + 211) * 0.3;
+                const wonder = noise(x / 32, y / 32, seed + 307);
+                const latitude = Math.abs(ny);
+                if (latitude > 0.66 && t !== T.SAND) t = T.SNOW;
+                else if (wonder > 0.72 && t !== T.SAND) t = T.CELESTIAL;
+                else if (wonder < 0.26 && t !== T.SAND) t = T.CRYSTAL;
+                else if (climate > 0.65 && t !== T.SAND) t = T.JUNGLE;
+                else if (climate < 0.35 && t !== T.SAND) t = T.SAVANNA;
+                else if (wonder > 0.6 && t !== T.SAND) t = T.MAPLE;
+                else if (wonder < 0.39 && t !== T.SAND) t = T.MUSHROOM;
+                if (t === T.SAND && h > 0.46 && climate < 0.43) t = T.DESERT;
+            }
             this.tiles[this.index(x, y)] = t;
-            if (t >= T.HILL && this.random() < 0.24) this.ores[this.index(x, y)] = 1 + Math.floor(this.random() * 4);
+            if ([T.HILL, T.MOUNTAIN, T.CRYSTAL].includes(t) && this.random() < 0.24) this.ores[this.index(x, y)] = 1 + Math.floor(this.random() * 4);
         }
     }
     seed_life() {
         const spots = [];
         for (let attempts = 0; attempts < 3000 && spots.length < 3; attempts++) {
             const x = 15 + this.random() * (WIDTH - 30), y = 15 + this.random() * (HEIGHT - 30);
-            if (this.tile(x, y) !== T.GRASS || spots.some(p => Math.hypot(p.x - x, p.y - y) < 32)) continue;
+            if (![T.GRASS, T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(this.tile(x, y)) || spots.some(p => Math.hypot(p.x - x, p.y - y) < 32)) continue;
             let land = 0;
             for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) if (this.walkable(x + dx, y + dy)) land++;
             if (land < 100) continue;
@@ -151,6 +172,50 @@ export class World {
             for (let i = 0; i < 7; i++) {
                 const p = this.land_near(x, y, 12);
                 if (p) this.add_animal(p.x, p.y, i === 0 ? 'wolf' : 'sheep');
+            }
+        }
+    }
+    seed_realms() {
+        const realms = [['elf', T.CELESTIAL], ['wolfkin', T.SNOW], ['harefolk', T.MAPLE],
+            ['hyenafolk', T.SAVANNA], ['catfolk', T.DESERT], ['frogfolk', T.JUNGLE],
+            ['beetlefolk', T.CRYSTAL], ['foxfolk', T.MUSHROOM]];
+        for (const [race, habitat] of realms) {
+            let chosen = null;
+            for (const preferred of [true, false]) {
+                let best = -Infinity;
+                for (let y = 5; y < HEIGHT - 5; y += 2) for (let x = 5; x < WIDTH - 5; x += 2) {
+                    if (!this.walkable(x, y) || (preferred && this.tile(x, y) !== habitat)) continue;
+                    const gap = this.villages.length ? Math.min(...this.villages.map(v => Math.hypot(v.x - x, v.y - y))) : 30;
+                    if (gap < 12) continue;
+                    let land = 0;
+                    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (this.walkable(x + dx, y + dy)) land++;
+                    if (land < 32) continue;
+                    const score = gap + this.random() * 3;
+                    if (score > best) { chosen = { x, y }; best = score; }
+                }
+                if (chosen) break;
+            }
+            if (!chosen) continue;
+            const village = this.found_village(chosen.x, chosen.y, race);
+            for (let i = 0; i < 9; i++) {
+                const point = this.land_near(chosen.x, chosen.y, 3);
+                if (point) this.add_person(point.x, point.y, village.id, race);
+            }
+        }
+        this.log(`${this.villages.length} peoples begin their stories among the prismatic wildlands.`, 'creation');
+    }
+    seed_biome_wildlife() {
+        const habitats = [[T.JUNGLE, ['frog', 'beetle', 'turtle']], [T.SAVANNA, ['buffalo', 'hyena']],
+            [T.SNOW, ['wolf', 'deer']], [T.MAPLE, ['rabbit', 'boar', 'owl']],
+            [T.MUSHROOM, ['fox', 'moth']], [T.CRYSTAL, ['beetle', 'lizard']],
+            [T.CELESTIAL, ['butterfly', 'moth']], [T.DESERT, ['cat', 'lizard']]];
+        for (const [habitat, species] of habitats) {
+            const places = [];
+            for (let i = 0; i < this.tiles.length; i++) if (this.tiles[i] === habitat) places.push(i);
+            if (!places.length) continue;
+            for (let n = 0; n < 6; n++) {
+                const i = places[Math.floor(this.random() * places.length)];
+                this.add_animal(i % WIDTH + 0.5, Math.floor(i / WIDTH) + 0.5, species[n % species.length]);
             }
         }
     }
@@ -167,7 +232,7 @@ export class World {
                 const { x, y } = candidate;
                 if (spots.some(p => (p.x - x) ** 2 + (p.y - y) ** 2 < distance)) continue;
                 spots.push({ x, y });
-                const race = ['human', 'elf', 'dwarf', 'orc'][spots.length % 4];
+                const race = Object.keys(RACES)[spots.length % Object.keys(RACES).length];
                 const village = this.found_village(x, y, race);
                 for (let i = 0; i < 3; i++) {
                     const p = this.land_near(x, y, 2);
@@ -230,7 +295,7 @@ export class World {
             const p = this.land_near(v.x, v.y, radius);
             if (!p || v.houses.some(h => Math.hypot(h.x - p.x, h.y - p.y) < 2.5)) continue;
             p.x = Math.floor(p.x); p.y = Math.floor(p.y);
-            this.set_tile(p.x, p.y, T.GRASS);
+            if (this.tile(p.x, p.y) <= T.HILL) this.set_tile(p.x, p.y, T.GRASS);
             v.houses.push(p);
             return true;
         }
@@ -446,14 +511,25 @@ export class World {
         return true;
     }
     add_animal(x, y, species) {
-        if (!this.walkable(x, y) || this.animals.length >= 350) return false;
+        if (!ANIMALS.includes(species) || !this.walkable(x, y) || this.animals.length >= 350) return false;
         this.animals.push({ id: this.next_id++, x, y, species, health: 100, age: 0, dx: 0, dy: 0, decision: 0, infection: 0 });
         return true;
+    }
+    unit_near(x, y, radius = 2.5) {
+        let nearest = null, distance = radius;
+        for (const [kind, units] of [['person', this.people], ['animal', this.animals]]) {
+            for (const unit of units) {
+                if (unit.voyage_id || unit.health <= 0) continue;
+                const gap = Math.hypot(unit.x - x, unit.y - y);
+                if (gap < distance) { nearest = { kind, unit }; distance = gap; }
+            }
+        }
+        return nearest;
     }
     apply(tool, x, y, radius = 4) {
         x = Math.floor(x); y = Math.floor(y);
         if (!this.inside(x, y)) return;
-        const terrain = { ocean: T.OCEAN, shallow: T.SHALLOW, sand: T.SAND, grass: T.GRASS, forest: T.FOREST, hill: T.HILL, mountain: T.MOUNTAIN, lava: T.LAVA };
+        const terrain = { ocean: T.OCEAN, shallow: T.SHALLOW, sand: T.SAND, grass: T.GRASS, forest: T.FOREST, hill: T.HILL, mountain: T.MOUNTAIN, lava: T.LAVA, jungle: T.JUNGLE, savanna: T.SAVANNA, snow: T.SNOW, maple: T.MAPLE, mushroom: T.MUSHROOM, crystal: T.CRYSTAL, celestial: T.CELESTIAL, desert: T.DESERT };
         const ore_tool = ORES[tool];
         if (ore_tool) {
             for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -462,7 +538,7 @@ export class World {
             this.revision++;
             return;
         }
-        if (tool in RACES || ['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(tool)) {
+        if (tool in RACES || ANIMALS.includes(tool)) {
             if (!this.walkable(x, y)) return;
             if (tool in RACES) {
                 for (let i = 0; i < 3; i++) {
@@ -477,7 +553,7 @@ export class World {
             if (dx * dx + dy * dy > r * r || !this.inside(x + dx, y + dy)) continue;
             const i = this.index(x + dx, y + dy), t = this.tiles[i];
             if (tool in terrain) this.set_tile(x + dx, y + dy, terrain[tool]);
-            if (tool === 'fire' && t >= T.GRASS && t <= T.HILL) this.fire[i] = 10 + this.random() * 10;
+            if (tool === 'fire' && FLAMMABLE.has(t)) this.fire[i] = 10 + this.random() * 10;
             if (tool === 'rain') {
                 this.fire[i] = 0;
                 this.fertility[i] = 1;
@@ -494,7 +570,7 @@ export class World {
                 this.set_tile(x + dx, y + dy, dx * dx + dy * dy < r * r * 0.3 ? T.LAVA : T.ASH);
                 this.fire[i] = dx * dx + dy * dy > r * r * 0.55 ? 12 + this.random() * 10 : 0;
             }
-            if (tool === 'lightning' && Math.abs(dx) + Math.abs(dy) < 3 && t >= T.GRASS && t <= T.HILL) this.fire[i] = 12;
+            if (tool === 'lightning' && Math.abs(dx) + Math.abs(dy) < 3 && FLAMMABLE.has(t)) this.fire[i] = 12;
         }
         if (['meteor', 'nuke', 'lightning', 'rain', 'bless', 'acid'].includes(tool)) {
             this.effects.push({ type: tool, x, y, radius: r, life: 1, duration: tool === 'rain' ? 1.5 : 0.8 });
@@ -707,12 +783,12 @@ export class World {
                     if (nearest < 2.25) {
                         const weapon = 1 + (p.weapon_level || 0) * 0.28;
                         const armor = 1 + (foe.armor_level || 0) * 0.10;
-                        foe.health -= dt * (p.race === 'orc' ? 18 : 14) * weapon / armor * (foe.race === 'orc' ? 0.75 : 1);
+                        foe.health -= dt * (['orc', 'wolfkin', 'hyenafolk'].includes(p.race) ? 18 : 14) * weapon / armor * (['orc', 'beetlefolk'].includes(foe.race) ? 0.75 : 1);
                     }
                 }
             }
             if (march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) > 1) this.march(p, march_target, dt, 1.55);
-            else this.move(p, dt, p.role === 'soldier' ? 1.55 : 1.3);
+            else this.move(p, dt, (p.role === 'soldier' ? 1.55 : 1.3) * (p.race === 'foxfolk' ? 1.15 : 1));
             const i = this.index(p.x, p.y);
             if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); p.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
             if (this.fire[i] > 0) p.health -= dt * 38;
@@ -720,19 +796,22 @@ export class World {
             if (v && p.gather >= 3) {
                 p.gather = 0;
                 const terrain = this.tiles[i];
-                let food = terrain === T.GRASS || terrain === T.FOREST ? this.fertility[i] * 2.4 : 0.4;
-                if (p.race === 'elf' && terrain === T.FOREST) food *= 1.25;
+                let food = [T.GRASS, T.FOREST, T.JUNGLE, T.SAVANNA, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(terrain) ? this.fertility[i] * 2.4 : 0.4;
+                if (p.race === 'elf' && [T.FOREST, T.CELESTIAL].includes(terrain)) food *= 1.25;
                 if (p.race === 'dwarf' && terrain === T.HILL) food = this.fertility[i] * 2.4;
+                if ((p.race === 'wolfkin' && terrain === T.SNOW) || (p.race === 'catfolk' && terrain === T.DESERT) || (p.race === 'frogfolk' && terrain === T.JUNGLE) || (p.race === 'hyenafolk' && terrain === T.SAVANNA)) food = this.fertility[i] * 2.7;
+                if ((p.race === 'foxfolk' && terrain === T.MUSHROOM) || (p.race === 'harefolk' && terrain === T.MAPLE) || (p.race === 'beetlefolk' && terrain === T.CRYSTAL)) food = this.fertility[i] * 2.7;
                 if (p.race === 'human') food *= 1.15;
                 if (p.role === 'soldier') food *= 0.35;
                 else if (p.job === 'farmer') food *= 1.6;
                 v.food += food;
-                if (terrain === T.FOREST && p.role !== 'soldier') v.wood += (p.race === 'elf' ? 2 : 1) + (p.job === 'lumberjack' ? 1 : 0);
+                if ([T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(terrain) && p.role !== 'soldier') v.wood += (p.race === 'elf' ? 2 : 1) + (p.job === 'lumberjack' ? 1 : 0);
                 const meal = p.role === 'soldier' ? 1.7 : 0.9;
                 if (v.food < meal) p.health -= 6;
                 else { v.food -= meal; p.health = Math.min(100, p.health + 1); }
             }
         }
+        const hunters = this.animals.filter(animal => PREDATORS.has(animal.species) && animal.health > 0);
         for (const animal of this.animals) {
             animal.age += dt;
             animal.decision -= dt;
@@ -740,9 +819,9 @@ export class World {
                 const a = this.random() * Math.PI * 2;
                 animal.dx = Math.cos(a); animal.dy = Math.sin(a); animal.decision = 1 + this.random() * 3;
             }
-            if (['wolf', 'bear'].includes(animal.species)) {
+            if (PREDATORS.has(animal.species)) {
                 let prey = null, nearest = animal.species === 'bear' ? 6 : 10;
-                for (const other of this.animals) if (['sheep', 'deer', 'rabbit', 'chicken'].includes(other.species) && other.health > 0) {
+                for (const other of this.animals) if (GRAZERS.has(other.species) && other.health > 0) {
                     const d = Math.hypot(other.x - animal.x, other.y - animal.y);
                     if (d < nearest) { prey = other; nearest = d; }
                 }
@@ -750,10 +829,23 @@ export class World {
                     const a = Math.atan2(prey.y - animal.y, prey.x - animal.x);
                     animal.dx = Math.cos(a); animal.dy = Math.sin(a);
                     if (nearest < 1) { prey.health -= dt * 35; animal.health = Math.min(100, animal.health + dt * 5); }
-                } else if (animal.species === 'wolf') animal.health -= dt * 0.1;
-            } else if (['sheep', 'deer', 'rabbit', 'chicken'].includes(animal.species) && this.tile(animal.x, animal.y) === T.GRASS) animal.health = Math.min(100, animal.health + dt);
+                } else if (animal.species === 'wolf' || animal.species === 'hyena') animal.health -= dt * 0.1;
+            } else if (GRAZERS.has(animal.species) && this.walkable(animal.x, animal.y)) animal.health = Math.min(100, animal.health + dt);
             if (animal.infection > 0) { animal.infection = Math.max(0, animal.infection - dt * 0.025); animal.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.animals.find(q => q !== animal && Math.hypot(q.x - animal.x, q.y - animal.y) < 2); if (nearby) nearby.infection = 1; } }
-            this.move(animal, dt, animal.species === 'wolf' || animal.species === 'bear' ? 1.7 : animal.species === 'rabbit' ? 1.5 : 0.7);
+            if (!PREDATORS.has(animal.species)) {
+                const threat = hunters.find(other => Math.hypot(other.x - animal.x, other.y - animal.y) < 4);
+                if (threat) {
+                    const away = Math.atan2(animal.y - threat.y, animal.x - threat.x);
+                    animal.dx = Math.cos(away); animal.dy = Math.sin(away);
+                }
+            }
+            if (['butterfly', 'moth'].includes(animal.species)) {
+                const tile = this.index(animal.x, animal.y);
+                this.fertility[tile] = Math.min(1, this.fertility[tile] + dt * 0.03);
+            }
+            const speed = { turtle: 0.3, buffalo: 0.55, beetle: 0.45, rabbit: 1.5,
+                frog: 1.05, lizard: 1.1, butterfly: 1.25, moth: 1.15 }[animal.species];
+            this.move(animal, dt, speed ?? (PREDATORS.has(animal.species) ? 1.7 : 0.7));
             if (this.fire[this.index(animal.x, animal.y)] > 0) animal.health -= dt * 45;
             if (animal.age > 450) animal.health -= dt;
         }
@@ -787,7 +879,7 @@ export class World {
                         const x = Math.floor(site.x) + dx, y = Math.floor(site.y) + dy;
                         if (!this.inside(x, y)) continue;
                         const ore = this.ores[this.index(x, y)];
-                        if (ore) { const material = ['','copper','tin','iron','coal'][ore]; v.ore[material] += 4; this.ores[this.index(x, y)] = 0; mined++; this.revision++; }
+                        if (ore) { const material = ['','copper','tin','iron','coal'][ore]; v.ore[material] += v.race === 'beetlefolk' ? 6 : 4; this.ores[this.index(x, y)] = 0; mined++; this.revision++; }
                     }
                 }
             }
@@ -833,7 +925,7 @@ export class World {
                     if (this.add_house(site)) v.wood -= house_cost;
                 }
             }
-            const birth_delay = v.race === 'orc' ? 8 : 12;
+            const birth_delay = v.race === 'orc' || v.race === 'harefolk' ? 8 : v.race === 'hyenafolk' ? 10 : 12;
             if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < sites.reduce((sum, site) => sum + site.houses.length * 5, 0) && this.people.length < this.max_people) {
                 const site = sites[Math.floor(this.random() * sites.length)];
                 const p = this.land_near(site.x, site.y, 4);
@@ -876,7 +968,7 @@ export class World {
                 const [dx, dy] = DIRECTIONS[Math.floor(this.random() * 4)];
                 const x = i % WIDTH + dx, y = Math.floor(i / WIDTH) + dy;
                 const t = this.tile(x, y), j = this.index(x, y);
-                if (this.inside(x, y) && (t === T.FOREST || t === T.GRASS) && !this.fire[j]) ignite.push(j);
+                if (this.inside(x, y) && FLAMMABLE.has(t) && !this.fire[j]) ignite.push(j);
             }
         }
         for (const i of ignite) this.fire[i] = 8 + this.random() * 8;
@@ -884,7 +976,7 @@ export class World {
             this.clean_up();
             if (this.animals.length < 240 && this.random() < 0.25) {
                 const parent = this.animals[Math.floor(this.random() * this.animals.length)];
-                if (parent && ['sheep', 'deer', 'rabbit', 'chicken'].includes(parent.species) && parent.age > 15) this.add_animal(parent.x, parent.y, parent.species);
+                if (parent && (GRAZERS.has(parent.species) || ['frog', 'beetle', 'butterfly', 'moth'].includes(parent.species)) && parent.age > 15) this.add_animal(parent.x, parent.y, parent.species);
             }
         }
         for (const effect of this.effects) effect.life -= dt / effect.duration;
@@ -892,7 +984,7 @@ export class World {
     }
     stats() {
         let trees = 0, land = 0;
-        for (const t of this.tiles) { if (t === T.FOREST) trees++; if (t > T.SHALLOW) land++; }
+        for (const t of this.tiles) { if ([T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(t)) trees++; if (t > T.SHALLOW) land++; }
         const kingdoms = this.villages.filter(v => v.alive).length;
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
@@ -907,7 +999,7 @@ export class World {
         const array = (a, limit) => Array.isArray(a) && a.length <= limit;
         if (!data || data.format !== 'genesis-grove' || data.version !== 1 || typeof data.name !== 'string' || !data.name.trim() || data.name.length > 40 || typeof data.seed !== 'string' || data.seed.length > 100) invalid();
         const size = WIDTH * HEIGHT;
-        if (!array(data.tiles, size) || data.tiles.length !== size || !data.tiles.every(t => integer(t, 0, 8))) invalid();
+        if (!array(data.tiles, size) || data.tiles.length !== size || !data.tiles.every(t => integer(t, 0, T.DESERT))) invalid();
         if (data.ores !== undefined && (!array(data.ores, size) || data.ores.length !== size || !data.ores.every(n => integer(n, 0, 4)))) invalid();
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
@@ -956,7 +1048,7 @@ export class World {
             if (p.voyage_id !== undefined && p.voyage_id !== null && (!voyages.has(p.voyage_id) || !voyages.get(p.voyage_id).crew_ids.includes(p.id))) invalid();
         }
         for (const voyage of voyages.values()) if (!voyage.crew_ids.every(crew_id => data.people.some(p => p.id === crew_id && p.village_id === voyage.kingdom_id && p.voyage_id === voyage.id))) invalid();
-        for (const a of data.animals) if (!['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken'].includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
+        for (const a of data.animals) if (!ANIMALS.includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
         for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind)) invalid();
         const relation_keys = new Set();
         for (const r of data.relations || []) {

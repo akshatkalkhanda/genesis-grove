@@ -21,14 +21,14 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.9.1 fixes late-world age regression: breakaway kingdoms inherit their parent's knowledge, and kingdoms can rediscover technology already reached elsewhere in the world's history. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
+Version 0.10.0 adds colorful biomes, eight founding peoples in Prismatic Wildlands, an expanded wildlife roster, and individual creature inspection. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
 
 ## A living sandbox
 
-- Eight terrain brushes: meadow, forest, ocean, shallows, sand, highlands, mountains, lava.
-- Seeded islands, a great continent, or four separated continents, plus empty ocean for building from scratch.
+- Sixteen terrain brushes, including desert, savanna, jungle, snowfields, maple groves, mushroom glades, crystal wilds, and luminous Starbloom. New generated maps contain biome regions with distinct pixel vegetation and colors.
+- Seeded islands, a great continent, four separated continents, or Prismatic Wildlands, plus empty ocean for building from scratch. Inhabited Wildlands starts eight different peoples, with wildlife placed in matching biomes.
 - A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused, and the four tool categories use a two-row selector that fits smaller windows.
-- Four playable peoples with distinct strengths: humans gather more food everywhere, elves thrive in forests, dwarves gather food on hills and build cheaper homes, and orcs grow faster and fight harder.
+- Eleven playable peoples: humans, elves, dwarves, orcs, foxfolk, harefolk, catfolk, frogfolk, wolfkin, hyenafolk, and beetlefolk. Habitat bonuses improve food gathering; foxfolk move faster, harefolk reproduce faster, and beetlefolk mine more ore and resist damage.
 - Each kingdom has its own banner color and finite claims around its towns, leaving distant wilderness unclaimed. Captured towns change the border. Creatures have different pixel silhouettes and selection icons.
 - Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins.
 - Kingdoms research Copper, Bronze, Iron, and Steel by reaching age milestones and paying the required ore for a new discovery. Once another kingdom has discovered an age, its knowledge can spread without a second ore payment. Rebellions inherit their parent's technology. Forging still consumes metal and wood; people wear their own weapons and armor, changing combat damage and protection. Kingdom profiles show material and spare-gear stocks.
@@ -37,7 +37,8 @@ Version 0.9.1 fixes late-world age regression: breakaway kingdoms inherit their 
 - Peaceful neighbours send surplus food, wood, or ore by caravan or ship; goods leave the sender immediately and arrive after travel. With expansion enabled, kingdoms also send settlers to found towns. Open Kingdoms to inspect jobs, soldiers, supplies, routes, and relations or set peace, alliances, and wars.
 - Click a kingdom in the sidebar to focus it and open a detail card with its towns, supplies, age, armies, allies, and enemies. Inspect mode identifies claimed and unclaimed land.
 - A 100-kingdom challenge starts across four landmasses with 300 settlers, autonomous diplomacy and expansion, rebellions off, fast calendar years, and chronicle milestones at years 100, 250, 500, and 1,000. The survival counter tracks the original founders. Toggle diplomacy, expansion, or rebellions under Kingdoms at any time.
-- Six kinds of wildlife: sheep, wolves, deer, bears, rabbits, and chickens. Grazers reproduce; wolves and bears hunt. Forests spread, lava cools, and ash recovers.
+- Eighteen wildlife choices: sheep, wolves, deer, bears, rabbits, chickens, foxes, wildcats, frogs, beetles, hyenas, owls, boars, turtles, buffalo, butterflies, moths, and lizards. Predators hunt, prey flee, turtles move slowly, and butterflies and moths restore soil fertility. Forests spread, lava cools, and ash recovers.
+- Turn on Inspect and click a person or animal for a portrait and live health, age, terrain, role, kingdom, and equipment details. Close the card or press Esc to return to painting.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
 - Pause, 1×/2×/5×/20× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
@@ -59,7 +60,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Manage kingdoms | Kingdoms button; inspect a kingdom, switch world laws, or set alliance, peace, and war |
 | Pause | Space |
 | Speed | 1 / 2 / 3 / 4 for 1× / 2× / 5× / 20× |
-| Inspect | I; Esc exits |
+| Inspect creature | I, then click a person or animal; Esc exits |
 | Brush size | [ / ] |
 | Device save | Cmd+S / Ctrl+S |
 

@@ -1,5 +1,18 @@
 # WorldBox video comparison
 
+## Colorful world and species reference, 19 October 2026
+
+The supplied [eight-kingdom video](https://www.youtube.com/watch?v=Dwz6yEqh9B4),
+its transcript, and the user's screenshots show animal peoples in ice, maple,
+savanna, desert, jungle, mushroom, crystal, and magical regions. The map in the
+video is a handcrafted community map. Version 0.10.0 adds original procedural
+biomes, eleven peoples, eighteen wildlife species, and a portrait inspection card.
+Prismatic Wildlands starts eight peoples, with habitat preferences affecting food.
+It does not reproduce the community map or WorldBox artwork. Genetics, families,
+languages, subspecies, and the full reference game's roster are not implemented.
+
+## Earlier challenge reference
+
 Reference: [Mellon's 100 kingdoms / 1,000 years video](https://www.youtube.com/watch?v=f4EIP_n-6Ng).
 Its description says the run spawns 100 kingdoms, disables rebellions, and follows survival over 1,000 years. Sampled frames around 10 and 30 minutes show a crowded, color-coded map across several landmasses, multiple cities per kingdom, ships, and kingdom statistics. The video has no available transcript, so this comparison is limited to those observed elements.
 

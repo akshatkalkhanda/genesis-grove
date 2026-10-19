@@ -1,7 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { World, T, WIDTH, HEIGHT, TECH_AGES, technology_level } from '../src/simulation.js';
+import { World, T, WIDTH, HEIGHT, TECH_AGES, RACES, ANIMALS, technology_level } from '../src/simulation.js';
 const blank = () => new World({ preset: 'empty', inhabited: false });
+test('generated wildlands contain colorful biomes and preserve them through saves', () => {
+    const world = new World({ seed: 'color-world', preset: 'wildlands' });
+    assert.equal(new Set(world.villages.map(v => v.race)).size, 8);
+    for (const terrain of [T.JUNGLE, T.SAVANNA, T.SNOW, T.MAPLE, T.MUSHROOM, T.CRYSTAL, T.CELESTIAL, T.DESERT]) {
+        const index = world.tiles.findIndex(tile => tile === terrain);
+        assert.ok(index >= 0, `missing biome ${terrain}`);
+        assert.ok(world.walkable(index % WIDTH, Math.floor(index / WIDTH)));
+    }
+    assert.deepEqual(World.deserialize(world.serialize()).tiles, world.tiles);
+});
+test('biomes affect survival, pollinators restore soil, and snow resists wildfire', () => {
+    const world = blank(); world.tiles.fill(T.SNOW);
+    const native = world.found_village(40, 40, 'wolfkin');
+    world.add_person(40, 40, native.id, 'wolfkin');
+    native.food = 0;
+    world.people[0].gather = 3;
+    world.people[0].decision = 10;
+    world.step(0.125);
+    assert.ok(native.food > 1, 'wolfkin can gather enough food on snow');
+    world.apply('fire', 40, 40, 2);
+    assert.equal(world.fire[world.index(40, 40)], 0);
+    world.apply('celestial', 60, 60, 3);
+    const tile = world.index(60, 60);
+    world.fertility[tile] = 0.2;
+    world.add_animal(60.5, 60.5, 'butterfly');
+    world.step(0.125);
+    assert.ok(world.fertility[tile] > 0.2);
+});
+test('all peoples and wildlife can be placed, simulated, and restored', () => {
+    const world = blank();
+    world.tiles.fill(T.GRASS);
+    let x = 10;
+    for (const race of Object.keys(RACES)) {
+        world.apply(race, x, 40, 1);
+        x += 15;
+    }
+    for (const species of ANIMALS) world.add_animal(40, 70, species);
+    assert.equal(new Set(world.people.map(p => p.race)).size, 11);
+    assert.equal(world.animals.length, 18);
+    for (let tick = 0; tick < 16; tick++) world.step(0.125);
+    const restored = World.deserialize(world.serialize());
+    assert.deepEqual(restored.people, world.people);
+    assert.deepEqual(restored.animals, world.animals);
+    assert.equal(world.add_animal(40, 70, 'unknown'), false);
+});
+test('individual inspection finds the nearest living unit and ignores ship passengers', () => {
+    const world = blank(); world.tiles.fill(T.GRASS);
+    const kingdom = world.found_village(40, 40);
+    world.add_person(40, 40, kingdom.id);
+    world.add_animal(45, 40, 'fox');
+    assert.equal(world.unit_near(40, 40).kind, 'person');
+    assert.equal(world.unit_near(45, 40).unit.species, 'fox');
+    world.people[0].voyage_id = 123;
+    assert.equal(world.unit_near(40, 40), null);
+    world.animals[0].health = 0;
+    assert.equal(world.unit_near(45, 40), null);
+});
 test('same seed gives identical terrain, settlements and deterministic evolution', () => {
     const a = new World({ seed: 'known world' }), b = new World({ seed: 'known world' });
     assert.deepEqual(a.serialize(), b.serialize());

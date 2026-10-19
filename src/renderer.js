@@ -1,5 +1,5 @@
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
-export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56'];
+export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
 export class Renderer {
@@ -81,6 +81,30 @@ export class Renderer {
             } else if (t === T.LAVA) {
                 c.fillStyle = '#ee9c4a'; c.fillRect(px + 1, py + 2, 3, 2);
                 c.fillStyle = '#f4c66c'; c.fillRect(px + 2, py + 2, 1, 1);
+            } else if (t === T.JUNGLE) {
+                c.fillStyle = '#246b4b'; c.fillRect(px + 1, py + 1, 4, 4);
+                c.fillStyle = '#75ce82'; c.fillRect(px + 2, py, 2, 2); c.fillRect(px, py + 2, 2, 2);
+            } else if (t === T.SAVANNA) {
+                c.fillStyle = '#eed17b'; c.fillRect(px + 1, py + 1, 2, 1); c.fillRect(px + 4, py + 3, 1, 2);
+                if (h > 0.7) { c.fillStyle = '#6e834d'; c.fillRect(px + 2, py, 1, 4); }
+            } else if (t === T.SNOW) {
+                c.fillStyle = '#ecf8ee'; c.fillRect(px + 1, py + 1, 3, 2); c.fillRect(px + 4, py + 4, 2, 1);
+                c.fillStyle = '#8dbcc4'; c.fillRect(px, py + 4, 2, 1);
+            } else if (t === T.MAPLE) {
+                c.fillStyle = '#75444a'; c.fillRect(px + 2, py + 2, 2, 4);
+                c.fillStyle = h > 0.5 ? '#e6915f' : '#e46a75'; c.fillRect(px + 1, py, 4, 3);
+            } else if (t === T.MUSHROOM) {
+                c.fillStyle = '#d1a8d1'; c.fillRect(px + 2, py + 2, 1, 3);
+                c.fillStyle = '#dfa6ec'; c.fillRect(px + 1, py + 1, 4, 2);
+                c.fillStyle = '#e9d3b2'; c.fillRect(px + 2, py + 1, 1, 1);
+            } else if (t === T.CRYSTAL) {
+                c.fillStyle = '#a7eeee'; c.fillRect(px + 2, py, 1, 5); c.fillRect(px + 1, py + 2, 3, 2);
+                c.fillStyle = '#e1fbf6'; c.fillRect(px + 2, py + 1, 1, 2);
+            } else if (t === T.CELESTIAL) {
+                c.fillStyle = '#e7b8e8'; c.fillRect(px + 2, py + 1, 1, 4); c.fillRect(px, py + 3, 5, 1);
+                c.fillStyle = '#fff3c9'; c.fillRect(px + 2, py + 2, 1, 1);
+            } else if (t === T.DESERT) {
+                c.fillStyle = '#f1ce7f'; c.fillRect(px + 1, py + 1, 3, 1); c.fillRect(px + 3, py + 4, 3, 1);
             }
             const ore = world.ores?.[y * WIDTH + x] || 0;
             if (ore && (h > 0.38 || t >= T.MOUNTAIN)) {
@@ -107,7 +131,7 @@ export class Renderer {
         const colors = new Map([...kingdoms].map(([id, kingdom]) => [id, [1, 3, 5].map(i => parseInt(kingdom.color.slice(i, i + 2), 16))]));
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x;
-            if (world.tiles[i] < T.SAND || world.tiles[i] > T.HILL) continue;
+            if (!world.walkable(x, y)) continue;
             owners[i] = world.territory_at(x, y, sites) ?? -1;
         }
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
@@ -272,6 +296,36 @@ export class Renderer {
             c.fillStyle = '#f2df9b'; c.fillRect(x - 3, y - 2, 6, 5); c.fillRect(x + face * 3 - 1, y - 4, 3, 3);
             c.fillStyle = '#d75e45'; c.fillRect(x + face * 2 - 1, y - 7, 2, 3);
             c.fillStyle = '#edaa4e'; c.fillRect(x + face * 5 - 1, y - 2, 3, 1);
+        } else if (['fox', 'cat', 'hyena', 'boar', 'buffalo'].includes(animal.species)) {
+            const color = { fox: '#d78249', cat: '#ccad72', hyena: '#aa875d', boar: '#745441', buffalo: '#664b40' }[animal.species];
+            const large = animal.species === 'buffalo';
+            c.fillStyle = color; c.fillRect(x - (large ? 7 : 5), y - 4, large ? 14 : 10, large ? 9 : 6);
+            c.fillRect(x + face * 5 - 2, y - 6, large ? 6 : 4, 6);
+            c.fillStyle = animal.species === 'fox' ? '#f1dfbe' : '#524338';
+            c.fillRect(x - face * 7, y - 2, animal.species === 'fox' ? 4 : 2, 2);
+            if (animal.species === 'buffalo' || animal.species === 'boar') {
+                c.fillStyle = '#e8d8aa'; c.fillRect(x + face * 6 - 3, y - 9, 2, 4); c.fillRect(x + face * 8 - 2, y - 8, 2, 3);
+            } else {
+                c.fillStyle = color; c.fillRect(x + face * 4 - 2, y - 9, 2, 4); c.fillRect(x + face * 7 - 2, y - 8, 2, 3);
+            }
+            if (animal.species === 'hyena') { c.fillStyle = '#443b35'; c.fillRect(x - 3, y - 5, 2, 2); c.fillRect(x + 1, y - 3, 2, 2); }
+        } else if (['frog', 'beetle', 'turtle', 'lizard'].includes(animal.species)) {
+            const color = { frog: '#62b96b', beetle: '#62aab5', turtle: '#648b65', lizard: '#99a65c' }[animal.species];
+            c.fillStyle = color; c.fillRect(x - 4, y - 2, 8, 5);
+            if (animal.species === 'beetle' || animal.species === 'turtle') {
+                c.fillStyle = animal.species === 'beetle' ? '#328295' : '#476b50'; c.fillRect(x - 3, y - 4, 6, 4);
+                c.fillStyle = '#a9d4a5'; c.fillRect(x, y - 3, 1, 3);
+            } else if (animal.species === 'frog') {
+                c.fillStyle = '#daf2a2'; c.fillRect(x - 3, y - 5, 2, 2); c.fillRect(x + 2, y - 5, 2, 2);
+            } else { c.fillStyle = color; c.fillRect(x - face * 7, y + 1, 5, 2); }
+            c.fillStyle = '#354a37'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2);
+        } else if (['owl', 'butterfly', 'moth'].includes(animal.species)) {
+            const insect = animal.species !== 'owl';
+            c.fillStyle = animal.species === 'owl' ? '#9b7b64' : animal.species === 'moth' ? '#c4ceb0' : '#d89bd2';
+            c.fillRect(x - (insect ? 6 : 4), y - 5, insect ? 12 : 8, 6);
+            c.fillStyle = animal.species === 'owl' ? '#e3c590' : '#9ce1d1'; c.fillRect(x - 2, y - 4, 4, 5);
+            if (animal.species === 'owl') { c.fillStyle = '#eddfb0'; c.fillRect(x - 3, y - 7, 2, 3); c.fillRect(x + 2, y - 7, 2, 3); }
+            else { c.fillStyle = '#f0dbee'; c.fillRect(x - 5, y - 6, 2, 3); c.fillRect(x + 4, y - 6, 2, 3); }
         } else {
             c.fillStyle = '#e8e9df'; c.fillRect(x - 5, y - 3, 9, 6); c.fillRect(x - 4, y - 5, 3, 3); c.fillRect(x, y - 5, 3, 3);
             c.fillStyle = '#454a42'; c.fillRect(x + face * 5 - 2, y - 4, 4, 5);
@@ -282,18 +336,25 @@ export class Renderer {
     person(c, person, kingdom, now) {
         const x = Math.round(person.x * CELL), y = Math.round(person.y * CELL);
         const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
-        const skin = person.race === 'orc' ? '#8fbc6c' : person.race === 'dwarf' ? '#d69b75' : '#f0c9a0';
+        const skin = { orc: '#8fbc6c', dwarf: '#d69b75', foxfolk: '#d88953', harefolk: '#e7d6be', catfolk: '#d5b078', frogfolk: '#78c991', wolfkin: '#aab9c4', hyenafolk: '#b99566', beetlefolk: '#68aaa1' }[person.race] || '#f0c9a0';
         c.fillStyle = '#172a2266'; c.fillRect(x - 3, y + 3, 7, 2);
         c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1, 2, 4); c.fillRect(x + 1, y + 1, 2, 4);
         c.fillStyle = kingdom?.color || '#e4dfb2'; c.fillRect(x - 3, y - 4, 6, 6);
         c.fillStyle = '#213129'; c.fillRect(x - 3, y, 6, 1);
         c.fillStyle = skin; c.fillRect(x - 2, y - 8, 4, 4);
-        c.fillStyle = person.race === 'elf' ? '#e5d9a2' : person.race === 'orc' ? '#344330' : '#493d32';
+        c.fillStyle = person.race === 'elf' ? '#e5d9a2' : person.race === 'orc' ? '#344330' : ['frogfolk', 'beetlefolk'].includes(person.race) ? '#426b60' : '#493d32';
         c.fillRect(x - 2, y - 9, 4, 2);
         if (person.role === 'soldier') { c.fillStyle = TECH_AGES[Math.max(level, 1)].color; c.fillRect(x - 3, y - 10, 6, 2); c.fillRect(x - 3, y - 4, 1, 4); c.fillRect(x + 2, y - 4, 1, 4); }
         if (person.race === 'elf') { c.fillStyle = skin; c.fillRect(x - 4, y - 7, 2, 1); c.fillRect(x + 2, y - 7, 2, 1); }
         if (person.race === 'dwarf') { c.fillStyle = '#a5683f'; c.fillRect(x - 2, y - 5, 4, 3); }
         if (person.race === 'orc') { c.fillStyle = '#e9dfb8'; c.fillRect(x - 3, y - 5, 1, 2); c.fillRect(x + 2, y - 5, 1, 2); }
+        if (['foxfolk', 'catfolk', 'wolfkin', 'hyenafolk'].includes(person.race)) {
+            c.fillStyle = skin; c.fillRect(x - 3, y - 11, 2, 4); c.fillRect(x + 1, y - 11, 2, 4);
+            c.fillRect(x - face * 5, y - 3, 3, 2);
+        }
+        if (person.race === 'harefolk') { c.fillStyle = skin; c.fillRect(x - 3, y - 14, 2, 7); c.fillRect(x + 1, y - 14, 2, 7); }
+        if (person.race === 'frogfolk') { c.fillStyle = '#e4f0af'; c.fillRect(x - 3, y - 9, 2, 2); c.fillRect(x + 2, y - 9, 2, 2); }
+        if (person.race === 'beetlefolk') { c.fillStyle = '#477e83'; c.fillRect(x - 3, y - 10, 6, 3); c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         if (armor > 0) { c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
