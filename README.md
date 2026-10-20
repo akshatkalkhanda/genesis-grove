@@ -21,13 +21,13 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.13.0 adds coastal boats, artillery, watchtowers, castles, prisons, hot-air survey balloons, courier aircraft, and flying transports to the fourteen-age world. Packages are rebuilt for each release; see `docs/validation.md` for the current artifacts and platform verification.
+Version 0.15.0 adds a full-map interface with a bottom power tray, illustrated People, Animals, and Plants catalogs, clearer live creature profiles with camera follow, and filterable world history with saved map locations. It includes the boats, artillery, castles, prisons, and aircraft introduced in 0.13.0. The update passed 65 simulation tests and 39 desktop interface checks on Windows. The Windows installer and portable package are built in `dist/0.15.0/`; build output is excluded from source control.
 
 ## A living sandbox
 
 - Sixteen terrain brushes, including desert, savanna, jungle, snowfields, maple groves, mushroom glades, crystal wilds, and luminous Starbloom. New generated maps contain biome regions with distinct pixel vegetation and colors.
 - Seeded islands, a great continent, four separated continents, or Prismatic Wildlands, plus empty ocean for building from scratch. Inhabited Wildlands starts eight different peoples, with wildlife placed in matching biomes.
-- A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused, and the four tool categories use a two-row selector that fits smaller windows.
+- A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused. The bottom tray separates Land, People, Animals, Plants, and Events, with illustrated life choices and placement instructions. World information opens in a drawer over the full-screen map.
 - Eleven playable peoples: humans, elves, dwarves, orcs, foxfolk, harefolk, catfolk, frogfolk, wolfkin, hyenafolk, and beetlefolk. Habitat bonuses improve food gathering; foxfolk move faster, harefolk reproduce faster, and beetlefolk mine more ore and resist damage.
 - Each kingdom has its own banner color and finite claims around its towns, leaving distant wilderness unclaimed. Captured towns change the border. Creatures have different pixel silhouettes and selection icons.
 - Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins. Iron Age miners can prospect up to three deeper seams per rocky tile; the save records depletion.
@@ -53,6 +53,7 @@ Version 0.13.0 adds coastal boats, artillery, watchtowers, castles, prisons, hot
 - Day/night lighting has a separate clock with smooth dawn and dusk and warm windows at night. Use the map clock to choose 10 minutes, 24 minutes, or 24 real hours per cycle at 1×, or preview any time of day. At high simulation speeds, a lighting cycle still takes at least three real minutes. Lighting pauses with the game and is saved with the world.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
 - Pause, 1×/2×/5×/20× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
+- World → View history opens a filterable record of up to 200 events. Kingdom founding, rulers, discoveries, diplomacy, trade, and disasters record their locations. Select Visit location to focus the present-day map on that place. Existing world files without event coordinates still load.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 

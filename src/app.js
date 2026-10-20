@@ -7,6 +7,7 @@ import { VEHICLES } from './infrastructure.js';
 import { draw_flag } from './heraldry.js';
 import { MACHINES } from './machines.js';
 import { advance_detention } from './defenses.js';
+import { draw_tree } from './world_art.js';
 const $ = id => document.getElementById(id);
 function kingdom_flag(kingdom) {
     const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
@@ -46,7 +47,6 @@ const TOOLS = {
         ['wolfkin', 'Wolfkin', '♜', '#b6c9dc', 'Hardy northern clans that endure snowfields.'],
         ['hyenafolk', 'Hyenafolk', '♞', '#d0af71', 'Savanna clans that fight fiercely and grow quickly.'],
         ['beetlefolk', 'Beetlefolk', '⬡', '#8dbdaf', 'Armored crystal-land settlers with patient builders.'],
-        ['forest', 'Forest', '♠', '#8eb66c', 'Bring a woodland to life. Villagers gather timber here.'],
     ],
     creatures: [
         ['sheep', 'Sheep', '🐑', '#e9e3ca', 'Gentle grazers that feed on meadows and raise little flocks.'],
@@ -87,6 +87,14 @@ const TOOLS = {
         ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
     ]
 };
+TOOLS.plants = TOOLS.terrain.filter(item => ['forest', 'jungle', 'maple', 'mushroom', 'celestial'].includes(item[0]));
+const CATALOG_INFO = {
+    terrain: 'Shape the landscape · drag to paint',
+    life: 'Civilizations · each click places three settlers on land',
+    creatures: 'Wildlife & mythical beings · click land to place one',
+    plants: 'Living biomes · paint woodland for food and timber',
+    powers: 'World powers · choose a tool, then use it on the map'
+};
 const LIFE_TOOLS = new Set([...Object.keys(RACES), ...ANIMALS]);
 let world = new World({ preset: 'empty', inhabited: false });
 const renderer = new Renderer($('world'), $('minimap'));
@@ -104,27 +112,57 @@ function toast(message) {
 }
 function select_tool(id) {
     tool = id; renderer.tool = id;
+    document.body.classList.toggle('inspecting', id === 'inspect');
     if (id !== 'inspect') { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; }
     $('inspect').classList.toggle('active', id === 'inspect');
     $('world-tooltip').hidden = true;
     if (id === 'inspect') {
         $('selected-icon').textContent = '⌕'; $('selected-name').textContent = 'Inspect world';
         $('selected-description').textContent = 'Move over land for tile details. Click a person or animal for its own profile.';
+        $('selected-action').textContent = 'CLICK A CREATURE OR HOVER OVER LAND';
     } else {
         previous_tool = id;
         const item = Object.values(TOOLS).flat().find(t => t[0] === id);
         $('selected-icon').textContent = item[2]; $('selected-name').textContent = item[1]; $('selected-description').textContent = item[4];
+        $('selected-action').textContent = LIFE_TOOLS.has(id) ? 'CLICK WALKABLE LAND TO PLACE' : 'DRAG ON THE MAP TO APPLY';
     }
-    for (const button of $('tools').children) button.classList.toggle('active', button.dataset.tool === id);
+    const tool_name = $('selected-name').textContent;
+    const instruction = id === 'inspect' ? 'Click a creature for details' : LIFE_TOOLS.has(id) ? 'Click land to place' : 'Drag on the map to apply';
+    $('interaction-hint').replaceChildren();
+    const hint_name = document.createElement('b'); hint_name.textContent = `${tool_name} selected`;
+    const hint_action = document.createElement('span'); hint_action.textContent = `${instruction} · right-drag to move · scroll to zoom`;
+    $('interaction-hint').append(hint_name, hint_action);
+    $('footer-status').replaceChildren();
+    const footer_icon = document.createElement('span'); footer_icon.textContent = $('selected-icon').textContent;
+    $('footer-status').append(footer_icon, `${tool_name} · ${instruction.toLowerCase()}`);
+    $('brush').closest('.brush-section').hidden = id === 'inspect' || LIFE_TOOLS.has(id);
+    for (const button of $('tools').children) {
+        button.classList.toggle('active', button.dataset.tool === id);
+        button.setAttribute('aria-pressed', String(button.dataset.tool === id));
+    }
 }
 function show_tools() {
+    $('catalog-summary').textContent = CATALOG_INFO[category];
     $('tools').replaceChildren();
-    for (const [id, name, glyph, color] of TOOLS[category]) {
+    for (const [id, name, glyph, color, description] of TOOLS[category]) {
         const button = document.createElement('button'); button.className = 'tool'; button.dataset.tool = id;
-        button.style.setProperty('--tool-color', color); button.title = name;
+        button.style.setProperty('--tool-color', color); button.title = `${name}: ${description}`;
+        button.setAttribute('aria-label', `${name}. ${description}`);
         const icon = document.createElement('span'); icon.className = 'glyph'; icon.textContent = glyph;
         const label = document.createElement('span'); label.textContent = name;
-        button.append(icon, label); button.onclick = () => select_tool(id); $('tools').append(button);
+        if (LIFE_TOOLS.has(id) || category === 'plants') {
+            const art = document.createElement('canvas'); art.width = 64; art.height = 48;
+            art.className = 'catalog-portrait'; art.setAttribute('aria-hidden', 'true');
+            const context = art.getContext('2d'); context.imageSmoothingEnabled = false;
+            const scale = category === 'plants' || ['angel', 'demon'].includes(id) ? 1.5 : 2.5;
+            context.setTransform(scale, 0, 0, scale, 32, 36);
+            const unit = { id: 1, x: 0, y: 0, age: 20, health: 100, race: id, species: id, role: 'civilian', job: 'farmer', weapon_level: 0, armor_level: 0 };
+            if (RACES[id]) renderer.person(context, unit, { color }, 0);
+            else if (ANIMALS.includes(id)) renderer.animal(context, unit);
+            else draw_tree(context, 0, 0, id, 0.6);
+            button.append(art);
+        } else button.append(icon);
+        button.append(label); button.onclick = () => select_tool(id); $('tools').append(button);
     }
     select_tool(TOOLS[category].some(t => t[0] === tool) ? tool : TOOLS[category][0][0]);
 }
@@ -133,9 +171,13 @@ for (const tab of document.querySelectorAll('[data-category]')) tab.onclick = ()
     for (const other of document.querySelectorAll('[data-category]')) other.setAttribute('aria-selected', String(other === tab));
     show_tools();
 };
+$('guide-land').onclick = () => { document.querySelector('[data-category="terrain"]').click(); select_tool('grass'); };
+$('guide-people').onclick = () => { document.querySelector('[data-category="life"]').click(); select_tool('human'); };
+$('guide-time').onclick = () => set_pause(false);
 $('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
 function set_pause(value) {
-    paused = value; $('pause').textContent = paused ? '▶' : 'Ⅱ'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
+    paused = value; $('pause').textContent = paused ? '▶ Resume' : 'Ⅱ Pause'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
+    update_world_guidance();
 }
 $('pause').onclick = () => set_pause(!paused);
 function set_speed(value) {
@@ -203,7 +245,12 @@ function paint(p, continuous = false) {
         const steps = Math.min(100, Math.ceil(distance / Math.max(1, brush / 2)));
         for (let i = 1; i < steps; i++) world.apply(tool, last_paint.x + (tile.x - last_paint.x) * i / steps, last_paint.y + (tile.y - last_paint.y) * i / steps, brush);
     }
+    const before_life = LIFE_TOOLS.has(tool) ? world.people.length + world.animals.length : 0;
     world.apply(tool, tile.x, tile.y, brush); last_paint = tile;
+    if (LIFE_TOOLS.has(tool)) {
+        const placed = world.people.length + world.animals.length - before_life;
+        toast(placed ? `${placed} ${RACES[tool] ? 'settlers' : 'creature'} placed. Choose Inspect to follow their story.` : 'No life placed. This world may have reached its population limit.');
+    }
     if (['meteor', 'lightning'].includes(tool)) power_sound(tool);
 }
 const canvas = $('world');
@@ -298,13 +345,16 @@ function inspect_click(p) {
 function update_entity_card() {
     if (!inspected_unit) return;
     const unit = (inspected_unit.kind === 'person' ? world.people : world.animals).find(u => u.id === inspected_unit.id);
-    if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; return; }
+    if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
     const attributes = creature_stats(unit, world.year_length);
-    const card = $('entity-card'); card.replaceChildren();
+    const card = $('entity-card');
+    const scroll_top = card.scrollTop;
+    const focused_action = card.contains(document.activeElement) ? document.activeElement.dataset.action : null;
+    card.replaceChildren();
     const heading = document.createElement('div'); heading.className = 'entity-heading';
     const name = document.createElement('strong');
     name.textContent = unit.name;
-    const close = document.createElement('button'); close.textContent = '×'; close.setAttribute('aria-label', 'Close creature details');
+    const close = document.createElement('button'); close.dataset.action = 'close-creature'; close.textContent = '×'; close.setAttribute('aria-label', 'Close creature details');
     close.onclick = () => { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; card.hidden = true; };
     heading.append(name, close); card.append(heading);
     const portrait = document.createElement('canvas'); portrait.width = 64; portrait.height = 64; portrait.className = 'entity-portrait';
@@ -312,7 +362,12 @@ function update_entity_card() {
     if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now());
     else renderer.animal(art, { ...unit, x: 0, y: 0 });
     card.append(portrait);
+    const activity = document.createElement('div'); activity.className = 'entity-activity';
+    activity.textContent = `${followed_unit_id === unit.id ? '◉ Following · ' : ''}${unit.task || (inspected_unit.kind === 'person' ? 'Exploring' : 'Roaming the wilds')}`;
+    card.append(activity);
     const health = document.createElement('div'); health.className = 'entity-health';
+    health.setAttribute('role', 'meter'); health.setAttribute('aria-label', 'Health');
+    health.setAttribute('aria-valuemin', '0'); health.setAttribute('aria-valuemax', String(attributes.max_health)); health.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(unit.health))));
     const meter = document.createElement('span'); meter.style.width = `${Math.max(0, Math.min(100, unit.health / attributes.max_health * 100))}%`; health.append(meter); card.append(health);
     const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
     line('Species', `${inspected_unit.kind === 'person' ? RACES[unit.race]?.label || 'Human' : unit.species} · #${unit.id}`);
@@ -320,13 +375,13 @@ function update_entity_card() {
     line('Age', `${Math.floor(unit.age / world.year_length)} years`);
     line('Level / XP', `${attributes.level} · ${Math.floor(unit.xp || 0)} / ${attributes.next_xp ?? 'Master'}`);
     line('Strength / Intelligence', `${attributes.strength} / ${attributes.intelligence}`);
-    line('Trait', unit.trait);
-    line('Task', unit.task || 'Exploring');
+    line('Trait', unit.trait || 'Unknown');
     line('Kills', unit.kills || 0);
     line('Terrain', TERRAIN_NAMES[world.tile(unit.x, unit.y)]);
     if (inspected_unit.kind === 'person') {
         const kingdom = world.villages.find(v => v.id === unit.village_id);
         line('Kingdom', kingdom?.name || 'No kingdom');
+        line('Food supply', kingdom ? `${Math.floor(kingdom.food)} shared · ${kingdom.food < 5 ? 'Food shortage' : 'Available'}` : 'No shared stores');
         if (kingdom?.king_id === unit.id) line('Title', 'Ruler');
         line('Role', unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
         line('Weapon', TECH_AGES[unit.weapon_level || 0].weapon);
@@ -337,7 +392,7 @@ function update_entity_card() {
         line('Nature', unit.species === 'angel' ? 'Guardian · healing aura' : unit.species === 'demon'
             ? 'Hostile · spreads fire' : ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
     }
-    if (unit.infection > 0) line('Condition', 'Infected');
+    line('Condition', unit.infection > 0 ? 'Infected' : unit.health < attributes.max_health * 0.35 ? 'Badly hurt' : unit.health < attributes.max_health * 0.9 ? 'Wounded' : 'Healthy');
     if (unit.prisoner_of) {
         line('Held by', world.villages.find(v => v.id === unit.prisoner_of)?.name || 'Lost kingdom');
         line('Sentence', `${Math.ceil((unit.sentence || 0) / world.year_length)} years remaining`);
@@ -353,7 +408,46 @@ function update_entity_card() {
         update_entity_card();
     };
     actions.append(zoom, follow); card.append(actions);
+    card.scrollTop = scroll_top;
+    follow.setAttribute('aria-pressed', String(followed_unit_id === unit.id));
+    if (focused_action) card.querySelector(`[data-action="${focused_action}"]`)?.focus({ preventScroll: true });
 }
+let history_filter = 'all';
+function event_row(event) {
+    const located = Number.isFinite(event.x) && Number.isFinite(event.y);
+    const row = document.createElement(located ? 'button' : 'div');
+    row.className = `event history-event event-${event.kind}`;
+    const when = document.createElement('small');
+    when.textContent = `${event.kind === 'disaster' ? 'ϟ' : event.kind === 'village' ? '⚑' : '✦'} YEAR ${event.year}`;
+    const text = document.createElement('p'); text.textContent = event.text;
+    row.append(when, text);
+    if (located) {
+        const visit = document.createElement('span'); visit.className = 'event-visit'; visit.textContent = 'Visit location ↗'; row.append(visit);
+        row.onclick = () => {
+            followed_unit_id = null;
+            renderer.focus(event.x, event.y, 4); update_zoom();
+            if ($('history-dialog').open) $('history-dialog').close();
+            document.body.classList.remove('info-open'); $('world-info').classList.remove('active');
+            toast(`Year ${event.year} · ${event.text}`);
+        };
+    }
+    return row;
+}
+function update_history() {
+    const events = world.events.filter(event => history_filter === 'all' || event.kind === history_filter);
+    $('history-count').textContent = `${events.length} events shown · keeps the latest 200 events · locations show the present-day world`;
+    $('history-list').replaceChildren(...events.map(event_row));
+    if (!events.length) {
+        const empty = document.createElement('p'); empty.className = 'history-empty';
+        empty.textContent = 'No events here yet. Let time run and watch a story begin.'; $('history-list').append(empty);
+    }
+}
+$('open-history').onclick = () => { update_history(); $('history-dialog').showModal(); };
+for (const button of document.querySelectorAll('[data-history]')) button.onclick = () => {
+    history_filter = button.dataset.history;
+    for (const other of document.querySelectorAll('[data-history]')) other.setAttribute('aria-pressed', String(other === button));
+    update_history();
+};
 function update_diplomacy(preferred_source = null) {
     const alive = world.villages.filter(v => v.alive);
     const source_select = $('source-kingdom'), target_select = $('target-kingdom');
@@ -468,11 +562,37 @@ function update_selected_kingdom() {
     release.onclick = () => { for (const person of prisoners) person.sentence = 0; advance_detention(world, 0); update_ui(); };
     box.append(heading, ruler, status, stats, age, research, stores, metals, settlements, buildings, transport, fleet_detail, plan, march, diplomacy, manage, release);
 }
+function update_world_guidance(stats = world.stats()) {
+    const progress = [stats.land > 0, stats.population > 0, world.time > 0.25];
+    for (const [index, id] of ['guide-land', 'guide-people', 'guide-time'].entries()) {
+        $(id).classList.toggle('complete', progress[index]);
+        $(id).setAttribute('aria-label', `${progress[index] ? 'Complete: ' : ''}${$(id).querySelector('b').textContent}`);
+    }
+    $('guide-progress').textContent = `${progress.filter(Boolean).length}/3`;
+    const wars = world.relations.filter(relation => relation.status === 'war').length;
+    let icon = paused ? 'Ⅱ' : '▶', kicker = paused ? 'SIMULATION PAUSED' : `RUNNING AT ${speed}×`, title, detail;
+    if (!stats.land) {
+        title = 'Begin by shaping land'; detail = 'Choose Land, then drag across the ocean.';
+    } else if (!stats.population) {
+        title = 'Your land is ready'; detail = 'Choose People and place settlers on the shore.';
+    } else if (paused) {
+        title = 'Ready when you are'; detail = `${stats.villages} ${stats.villages === 1 ? 'kingdom is' : 'kingdoms are'} waiting for time to resume.`;
+    } else if (wars) {
+        icon = '⚔'; kicker = `${wars} ACTIVE ${wars === 1 ? 'WAR' : 'WARS'}`; title = 'Conflict is reshaping the world'; detail = `${stats.soldiers} soldiers are serving across ${stats.villages} kingdoms.`;
+    } else {
+        icon = '✦'; title = 'The world is evolving'; detail = `${stats.population} people in ${stats.villages} ${stats.villages === 1 ? 'kingdom' : 'kingdoms'} · ${stats.wildlife} wildlife.`;
+    }
+    $('world-state-icon').textContent = icon;
+    $('world-state-kicker').textContent = kicker;
+    $('world-state-title').textContent = title;
+    $('world-state-detail').textContent = detail;
+}
 function update_ui() {
     update_entity_card();
     const minutes = Math.floor(world.lighting.phase * 1440) % 1440;
     $('lighting').textContent = `${minutes < 360 || minutes > 1080 ? '☾' : '☀'} ${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     const stats = world.stats();
+    update_world_guidance(stats);
     for (const id of ['population', 'soldiers', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
     $('survival').hidden = world.scenario !== 'hundred';
@@ -527,14 +647,11 @@ function update_ui() {
     }
     if (!stats.villages) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Place people on land to begin a civilization.'; $('civilizations').append(p); }
     update_selected_kingdom();
-    const signature = JSON.stringify(world.events.slice(0, 6));
+    const signature = JSON.stringify(world.events);
     if ($('chronicle').dataset.signature !== signature) {
         $('chronicle').dataset.signature = signature; $('chronicle').replaceChildren();
-        for (const event of world.events.slice(0, 6)) {
-            const item = document.createElement('div'); item.className = 'event';
-            const when = document.createElement('small'); when.textContent = `YEAR ${event.year}`;
-            const text = document.createElement('p'); text.textContent = event.text; item.append(when, text); $('chronicle').append(item);
-        }
+        $('chronicle').append(...world.events.slice(0, 6).map(event_row));
+        if ($('history-dialog').open) update_history();
     }
 }
 function replace_world(next) {
@@ -579,6 +696,7 @@ function show_start_ready() {
 function close_start() { $('start-screen').hidden = true; set_pause(false); }
 function show_start_home() {
     set_pause(true);
+    document.body.classList.remove('info-open'); $('world-info').classList.remove('active');
     $('start-home').hidden = false; $('start-ready').hidden = true;
     $('menu-resume').hidden = !world_started;
     let saved = false;
@@ -589,6 +707,11 @@ function show_start_home() {
     $('start-screen').hidden = false;
 }
 $('menu').onclick = show_start_home;
+$('world-info').onclick = () => {
+    const open = !document.body.classList.contains('info-open');
+    document.body.classList.toggle('info-open', open); $('world-info').classList.toggle('active', open);
+};
+$('close-world-info').onclick = () => { document.body.classList.remove('info-open'); $('world-info').classList.remove('active'); };
 $('menu-create').onclick = $('menu-edit').onclick = $('new-world').onclick = open_world_setup;
 $('menu-resume').onclick = close_start;
 $('menu-start').onclick = close_start;

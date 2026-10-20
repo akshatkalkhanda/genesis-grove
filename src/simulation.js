@@ -297,11 +297,15 @@ export class World {
         }
         return this.walkable(x, y) ? { x, y } : null;
     }
-    log(text, kind = 'life') {
-        this.events.unshift({ text, year: this.year, kind });
-        if (this.events.length > 40) {
+    log(text, kind = 'life', location = null) {
+        const event = { text, year: this.year, kind };
+        if (location && this.inside(location.x, location.y)) {
+            event.x = location.x; event.y = location.y;
+        }
+        this.events.unshift(event);
+        if (this.events.length > 200) {
             const oldest = this.events.findLastIndex(event => !/^Year (100|250|500|1000):/.test(event.text));
-            this.events.splice(oldest >= 0 ? oldest : 40, 1);
+            this.events.splice(oldest >= 0 ? oldest : 200, 1);
         }
     }
     relation_status(a, b) {
@@ -319,7 +323,7 @@ export class World {
         if (existing) existing.status = status;
         else this.relations.push({ a: low, b: high, status });
         const action = status === 'war' ? 'declare war' : status === 'alliance' ? 'form an alliance' : 'make peace';
-        this.log(`${first.name} and ${second.name} ${action}.`, status === 'war' ? 'disaster' : 'village');
+        this.log(`${first.name} and ${second.name} ${action}.`, status === 'war' ? 'disaster' : 'village', first);
         return true;
     }
     found_village(x, y, race = 'human') {
@@ -336,7 +340,7 @@ export class World {
         village.king_id = null;
         village.machine_timer = 0;
         this.add_house(village);
-        this.log(`${village.name} is founded. A new story begins.`, 'village');
+        this.log(`${village.name} is founded. A new story begins.`, 'village', village);
         return village;
     }
     add_house(v) {
@@ -380,7 +384,7 @@ export class World {
         const colony = { id: this.next_id++, kingdom_id, x, y, name: `${kingdom.name} ${count}`, houses: [], age: 0, birth_timer: 0, expansion_timer: 0, siege: 0 };
         this.colonies.push(colony);
         this.add_house(colony);
-        this.log(`${kingdom.name} establishes ${colony.name}.`, 'village');
+        this.log(`${kingdom.name} establishes ${colony.name}.`, 'village', colony);
         return colony;
     }
     landmasses() {
@@ -418,7 +422,7 @@ export class World {
         this.voyages.push(voyage);
         for (const person of crew) person.voyage_id = voyage.id;
         kingdom.food -= 10; kingdom.wood -= 6;
-        this.log(`${kingdom.name} sends ${ship ? 'a ship' : 'settlers'} toward new land.`, 'village');
+        this.log(`${kingdom.name} sends ${ship ? 'a ship' : 'settlers'} toward new land.`, 'village', kingdom);
         return true;
     }
     advance_voyages(dt) {
@@ -453,7 +457,7 @@ export class World {
         const kind = masses[this.index(sender.x, sender.y)] === masses[this.index(recipient.x, recipient.y)] ? 'caravan' : 'ship';
         this.change_resource(sender, good, -amount);
         this.trades.push({ id: this.next_id++, from_id: sender.id, to_id: recipient.id, good, amount, progress: 0, duration: Math.max(6, distance / (kind === 'ship' ? 3 : 5)), kind });
-        this.log(`${sender.name} sends ${amount} ${good} to ${recipient.name} by ${kind}.`, 'village');
+        this.log(`${sender.name} sends ${amount} ${good} to ${recipient.name} by ${kind}.`, 'village', sender);
         return true;
     }
     schedule_trades() {
@@ -490,7 +494,7 @@ export class World {
             trade.progress = Math.min(1, trade.progress + dt / trade.duration);
             if (trade.progress === 1) {
                 this.change_resource(recipient, trade.good, trade.amount);
-                this.log(`${recipient.name} receives ${trade.amount} ${trade.good} from ${sender?.name || 'a lost kingdom'}.`, 'village');
+                this.log(`${recipient.name} receives ${trade.amount} ${trade.good} from ${sender?.name || 'a lost kingdom'}.`, 'village', recipient);
             }
         }
         this.trades = this.trades.filter(trade => trade.progress < 1);
@@ -508,7 +512,7 @@ export class World {
                     person.village_id = attacker.id; person.home_id = site.id;
                 }
             }
-            this.log(`${attacker.name} captures ${site.name} from ${defender.name}.`, 'disaster');
+            this.log(`${attacker.name} captures ${site.name} from ${defender.name}.`, 'disaster', site);
         } else {
             if (this.colonies.length >= MAX_COLONIES) return false;
             const captured = { id: this.next_id++, kingdom_id: attacker.id, x: site.x, y: site.y, name: site.name, houses: structuredClone(site.houses), age: site.age, birth_timer: 0, expansion_timer: 0, siege: 0 };
@@ -520,7 +524,7 @@ export class World {
                 if (person.home_id === defender.id) person.home_id = captured.id;
             }
             defender.alive = false; defender.houses = []; defender.siege = 0;
-            this.log(`${attacker.name} conquers ${defender.name} and its towns.`, 'disaster');
+            this.log(`${attacker.name} conquers ${defender.name} and its towns.`, 'disaster', defender);
         }
         return true;
     }
@@ -635,11 +639,11 @@ export class World {
         if (['meteor', 'nuke', 'lightning', 'rain', 'bless', 'acid'].includes(tool)) {
             this.effects.push({ type: tool, x, y, radius: r, life: 1, duration: tool === 'rain' ? 1.5 : 0.8 });
         }
-        if (tool === 'meteor') this.log('A star falls. The earth will remember.', 'disaster');
-        if (tool === 'nuke') this.log('A terrible flash reshapes the land.', 'disaster');
-        if (tool === 'plague') this.log('A strange sickness takes hold.', 'disaster');
-        if (tool === 'acid') this.log('Caustic rain poisons the land.', 'disaster');
-        if (tool === 'lightning') this.log('Thunder breaks the quiet.', 'disaster');
+        if (tool === 'meteor') this.log('A star falls. The earth will remember.', 'disaster', { x, y });
+        if (tool === 'nuke') this.log('A terrible flash reshapes the land.', 'disaster', { x, y });
+        if (tool === 'plague') this.log('A strange sickness takes hold.', 'disaster', { x, y });
+        if (tool === 'acid') this.log('Caustic rain poisons the land.', 'disaster', { x, y });
+        if (tool === 'lightning') this.log('Thunder breaks the quiet.', 'disaster', { x, y });
         const damage = tool === 'nuke' ? 300 : tool === 'meteor' ? 200 : tool === 'lightning' ? 75 : tool === 'acid' ? 35 : tool === 'erase' ? 1000 : 0;
         for (const list of [this.people, this.animals]) for (const unit of list) {
             if (unit.voyage_id) continue;
@@ -690,10 +694,10 @@ export class World {
                 && this.fire[this.index(b.x, b.y)] < 5);
             if (v.alive && !this.people.some(p => p.village_id === v.id)) {
                 v.alive = false;
-                this.log(`${v.name} falls silent. Its story lives on.`, 'disaster');
+                this.log(`${v.name} falls silent. Its story lives on.`, 'disaster', v);
             }
             const ruler = choose_ruler(v, this.people.filter(p => p.village_id === v.id));
-            if (ruler && ruler.id !== v.king_id) this.log(`${ruler.name} becomes ruler of ${v.name}.`, 'village');
+            if (ruler && ruler.id !== v.king_id) this.log(`${ruler.name} becomes ruler of ${v.name}.`, 'village', ruler);
             v.king_id = ruler?.id || null;
         }
         const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
@@ -827,7 +831,7 @@ export class World {
                     child.tech_points = parent.tech_points;
                     for (const person of rebels) person.village_id = child.id;
                     this.set_relation(parent.id, child.id, 'war');
-                    this.log(`${child.name} breaks away from ${parent.name}.`, 'disaster');
+                    this.log(`${child.name} breaks away from ${parent.name}.`, 'disaster', child);
                 }
             }
         }
@@ -1105,7 +1109,7 @@ export class World {
             } else if (!next_threshold) v.tech_points = Math.min(1e6, (v.tech_points || 0) + research_rate);
             const after_technology = technology_level(v);
             v.forge_level = after_technology > 0 && jobs.smith > 0 ? 1 : 0;
-            if (after_technology > before_technology) this.log(`${v.name} enters the ${TECH_AGES[after_technology].name}. Their forges can now craft ${TECH_AGES[after_technology].weapon.toLowerCase()}s.`, 'village');
+            if (after_technology > before_technology) this.log(`${v.name} enters the ${TECH_AGES[after_technology].name}. Their forges can now craft ${TECH_AGES[after_technology].weapon.toLowerCase()}s.`, 'village', v);
             if (after_technology > 0 && jobs.smith > 0 && v.forge_timer >= 10) {
                 v.forge_timer = 0;
                 const level = after_technology;
@@ -1148,7 +1152,7 @@ export class World {
             v.training_timer = (v.training_timer || 0) + dt;
             if (!v.barracks && pop >= 8 && v.houses.length >= 2 && v.wood >= 12) {
                 v.wood -= 12; v.barracks = 1;
-                this.log(`${v.name} builds a barracks and begins training defenders.`, 'village');
+                this.log(`${v.name} builds a barracks and begins training defenders.`, 'village', v);
             }
             const at_war = war_targets.has(v.id);
             const target_soldiers = at_war ? Math.max(2, Math.floor(pop / 3)) : Math.max(1, Math.floor(pop / 8));
@@ -1158,7 +1162,7 @@ export class World {
                     if (after_technology > 0 && !recruit.weapon_level && v.weapons > 0) { v.weapons--; recruit.weapon_level = after_technology; }
                     recruit.role = 'soldier'; v.food -= 3; v.wood--; v.training_timer = 0;
                     soldier_counts.set(v.id, (soldier_counts.get(v.id) || 0) + 1);
-                    this.log(`${v.name} trains a soldier at its barracks.`, 'village');
+                    this.log(`${v.name} trains a soldier at its barracks.`, 'village', v);
                 }
             }
         }
@@ -1227,7 +1231,7 @@ export class World {
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
-        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 40) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
+        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 200) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
         if (data.scenario !== undefined && !['sandbox', 'hundred'].includes(data.scenario)) invalid();
         if (data.year_length !== undefined && ![2, 20].includes(data.year_length)) invalid();
         if (data.lighting !== undefined && (!data.lighting || !num(data.lighting.phase, 0, 1)
@@ -1319,7 +1323,7 @@ export class World {
         }
         for (const voyage of voyages.values()) if (!voyage.crew_ids.every(crew_id => data.people.some(p => p.id === crew_id && p.village_id === voyage.kingdom_id && p.voyage_id === voyage.id))) invalid();
         for (const a of data.animals) if (!ANIMALS.includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
-        for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind)) invalid();
+        for (const e of data.events) if (!e || typeof e.text !== 'string' || e.text.length > 300 || !integer(e.year, 1, 1e9) || !['life', 'creation', 'village', 'disaster'].includes(e.kind) || ((e.x !== undefined || e.y !== undefined) && !point(e))) invalid();
         const relation_keys = new Set();
         for (const r of data.relations || []) {
             if (!r || !integer(r.a, 1, data.next_id - 1) || !integer(r.b, 1, data.next_id - 1) || r.a >= r.b || !villages.has(r.a) || !villages.has(r.b) || !['peace', 'alliance', 'war'].includes(r.status) || relation_keys.has(`${r.a}:${r.b}`)) invalid();
