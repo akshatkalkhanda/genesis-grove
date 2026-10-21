@@ -9,6 +9,15 @@ larger maps. See the [visual roadmap](video-analysis/roadmap.svg) and
 [UI requirements](video-analysis/ui-plan.md). These are planned changes, not shipped
 features. Environmental and deeper character systems remain later options.
 
+## Completed first slice, 0.18.0
+
+The first M0 slice now provides Observe default, a compact dock, contextual tools,
+concise inspectors and native input checks. A Nature slice adds moving rain and
+storms, lightning, drought, blizzards and deep-ocean coastal tsunamis, with optional
+automatic events and saved state. Layer selection, full army/ship inspectors and
+presentation mode remain future UI work. Next: M1 four-kingdom setup and save recovery.
+See [nature mechanics](nature.md) for current effects and later hazards.
+
 ## Earlier feature priorities
 
 The current release implements the first three priorities: supply-aware kingdom

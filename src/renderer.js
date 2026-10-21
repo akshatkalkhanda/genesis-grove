@@ -1,3 +1,4 @@
+import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
 import { night_opacity } from './daylight.js';
@@ -272,6 +273,7 @@ export class Renderer {
             if (i % 3 === 0) { c.fillStyle = '#636b6255'; c.fillRect(x + 2, y - 6 - (now / 60 + i) % 10, 4, 4); }
         }
         for (const e of world.effects) this.effect(c, e, now);
+        draw_weather(c, world, CELL);
         // Drifting, translucent cloud shadows; all artwork is generated in code.
         for (let i = 0; i < 5; i++) {
             const x = ((now / 1700 + i * 241) % (WIDTH * CELL + 180)) - 100;

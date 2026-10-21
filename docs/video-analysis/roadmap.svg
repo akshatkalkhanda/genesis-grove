@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1220" viewBox="0 0 1600 1220" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1370" viewBox="0 0 1600 1370" role="img">
 <title>Genesis Grove planning diagram</title>
-<desc>Six ordered milestones with separate UI and simulation work, each with a concrete completion gate. No features in this chart are claimed as implemented.</desc>
-<rect width="1600" height="1220" fill="#0d1720"/>
+<desc>Ordered UI and simulation roadmap, with the new Nature slice in 0.18.0. Further kingdom, war and scale milestones remain planned.</desc>
+<rect width="1600" height="1370" fill="#0d1720"/>
 <text x="54" y="52" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="700" fill="#a4c5b0">GENESIS GROVE / VIDEO-LED PLAN</text>
 <text x="54" y="117" font-family="Helvetica,Arial,sans-serif" font-size="45" font-weight="700" fill="#e8eee8">Build a world worth watching</text>
 <text x="54" y="157" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="400" fill="#b6c7d1">A clear map first. Connected simulation next. Larger worlds after measured proof.</text>
 <text x="278" y="206" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="700" fill="#9adbb9">PLAYER EXPERIENCE &amp; UI</text>
 <text x="918" y="206" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="700" fill="#8ecce2">SIMULATION &amp; ENGINEERING</text>
-<polyline points="218,245 218,1060" fill="none" stroke="#476170" stroke-width="3"/>
+<polyline points="218,245 218,1210" fill="none" stroke="#476170" stroke-width="3"/>
 <circle cx="218" cy="248" r="8" fill="#a7cf9e"/>
 <text x="54" y="260" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M0</text>
 <text x="54" y="288" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P0 / M</text>
@@ -21,66 +21,78 @@
 <text x="918" y="310" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Preserve saves and existing behavior.</text>
 <text x="278" y="351" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: &gt;=80% clear map in idle Observe; real pointer and keyboard checks.</text>
 <circle cx="218" cy="398" r="8" fill="#a7cf9e"/>
-<text x="54" y="410" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M1</text>
-<text x="54" y="438" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P1 / M</text>
+<text x="54" y="410" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">N0</text>
+<text x="54" y="438" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">0.18.0</text>
 <rect x="260" y="372" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="278" y="406" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Four kingdoms, clear setup</text>
-<text x="278" y="436" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Preview starts, seed, peoples and rules.</text>
-<text x="278" y="460" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Explain food, housing and labor shortages.</text>
+<text x="278" y="406" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Nature in the world</text>
+<text x="278" y="436" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Rain, storms, lightning and blizzards.</text>
+<text x="278" y="460" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Deep-ocean tsunami tool and clear rules.</text>
 <rect x="900" y="372" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="406" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Repeatable starts + recovery</text>
-<text x="918" y="436" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Four viable kingdoms on an original map.</text>
-<text x="918" y="460" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Named saves, autosave ring, import safety.</text>
-<text x="278" y="501" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: same seed/settings, same start; preview and recovery agree.</text>
+<text x="918" y="406" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Saved weather + coastal waves</text>
+<text x="918" y="436" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Soil, crop, health and structure effects.</text>
+<text x="918" y="460" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Optional automatic events; bounded state.</text>
+<text x="278" y="501" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">First slice shipped: native tools and deterministic save/resume checks.</text>
 <circle cx="218" cy="548" r="8" fill="#a7cf9e"/>
-<text x="54" y="560" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M2</text>
-<text x="54" y="588" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P1 / L</text>
+<text x="54" y="560" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M1</text>
+<text x="54" y="588" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P1 / M</text>
 <rect x="260" y="522" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="278" y="556" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Readable land wars</text>
-<text x="278" y="586" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Army target, order, supply and siege state.</text>
-<text x="278" y="610" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Explain diplomacy and ownership changes.</text>
+<text x="278" y="556" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Four kingdoms, clear setup</text>
+<text x="278" y="586" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Preview starts, seed, peoples and rules.</text>
+<text x="278" y="610" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Explain food, housing and labor shortages.</text>
 <rect x="900" y="522" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="556" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Campaigns and local conquest</text>
-<text x="918" y="586" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Reachable targets, defense and retreat.</text>
-<text x="918" y="610" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Capital loss uses explicit surrender rules.</text>
-<text x="278" y="651" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: terrain and supply affect outcomes; distant towns do not flip silently.</text>
+<text x="918" y="556" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Repeatable starts + recovery</text>
+<text x="918" y="586" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Four viable kingdoms on an original map.</text>
+<text x="918" y="610" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Named saves, autosave ring, import safety.</text>
+<text x="278" y="651" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: same seed/settings, same start; preview and recovery agree.</text>
 <circle cx="218" cy="698" r="8" fill="#a7cf9e"/>
-<text x="54" y="710" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M3</text>
-<text x="54" y="738" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P2 / L</text>
+<text x="54" y="710" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M2</text>
+<text x="54" y="738" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P1 / L</text>
 <rect x="260" y="672" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="278" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Sea journeys you can follow</text>
-<text x="278" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Ship crew, passengers, route and landing.</text>
-<text x="278" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Show why a mission waits or returns.</text>
+<text x="278" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Readable land wars</text>
+<text x="278" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Army target, order, supply and siege state.</text>
+<text x="278" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Explain diplomacy and ownership changes.</text>
 <rect x="900" y="672" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Real cross-sea army transport</text>
-<text x="918" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Water routes; embark, sail and disembark.</text>
-<text x="918" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Handle peace, dock loss and stranded units.</text>
-<text x="278" y="801" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: same named soldiers reach a foreign coast; mid-trip save is safe.</text>
+<text x="918" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Campaigns and local conquest</text>
+<text x="918" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Reachable targets, defense and retreat.</text>
+<text x="918" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Capital loss uses explicit surrender rules.</text>
+<text x="278" y="801" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: terrain and supply affect outcomes; distant towns do not flip silently.</text>
 <circle cx="218" cy="848" r="8" fill="#a7cf9e"/>
-<text x="54" y="860" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M4</text>
-<text x="54" y="888" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P2 / M</text>
+<text x="54" y="860" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M3</text>
+<text x="54" y="888" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P2 / L</text>
 <rect x="260" y="822" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="278" y="856" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Follow the world story</text>
-<text x="278" y="886" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">War summaries, important events and pins.</text>
-<text x="278" y="910" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Optional Follow and quiet presentation view.</text>
+<text x="278" y="856" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Sea journeys you can follow</text>
+<text x="278" y="886" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Ship crew, passengers, route and landing.</text>
+<text x="278" y="910" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Show why a mission waits or returns.</text>
 <rect x="900" y="822" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="856" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Bounded history and milestones</text>
-<text x="918" y="886" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Keep key events and useful summaries.</text>
-<text x="918" y="910" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Separate snapshots from current locations.</text>
-<text x="278" y="951" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: a player can explain a kingdom rise or fall from visible evidence.</text>
+<text x="918" y="856" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Real cross-sea army transport</text>
+<text x="918" y="886" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Water routes; embark, sail and disembark.</text>
+<text x="918" y="910" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Handle peace, dock loss and stranded units.</text>
+<text x="278" y="951" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: same named soldiers reach a foreign coast; mid-trip save is safe.</text>
 <circle cx="218" cy="998" r="8" fill="#a7cf9e"/>
-<text x="54" y="1010" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M5</text>
-<text x="54" y="1038" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P3 / L</text>
+<text x="54" y="1010" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M4</text>
+<text x="54" y="1038" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P2 / M</text>
 <rect x="260" y="972" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="278" y="1006" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Larger worlds that stay usable</text>
-<text x="278" y="1036" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Zoom-based detail and readable overlays.</text>
-<text x="278" y="1060" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Only offer sizes with measured performance.</text>
+<text x="278" y="1006" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Follow the world story</text>
+<text x="278" y="1036" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">War summaries, important events and pins.</text>
+<text x="278" y="1060" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Optional Follow and quiet presentation view.</text>
 <rect x="900" y="972" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="1006" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Dimension migration + scaling</text>
-<text x="918" y="1036" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Audit arrays, saves, paths and rendering.</text>
-<text x="918" y="1060" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Spatial queries, caches and both-platform QA.</text>
-<text x="278" y="1101" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: old saves load; larger-map input and frame budgets pass on named hardware.</text>
-<polyline points="54,1144 1540,1144" fill="none" stroke="#36515e" stroke-width="2"/>
-<text x="54" y="1178" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">Planning only | Baseline 0.17.0 | Visual review of the full 33:53 timeline; audio excluded.</text>
-<text x="54" y="1204" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#839ba9">M = medium, L = large effort; these are scope bands, not delivery dates. Later depth: traits, culture, religion, alliances.</text>
+<text x="918" y="1006" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Bounded history and milestones</text>
+<text x="918" y="1036" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Keep key events and useful summaries.</text>
+<text x="918" y="1060" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Separate snapshots from current locations.</text>
+<text x="278" y="1101" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: a player can explain a kingdom rise or fall from visible evidence.</text>
+<circle cx="218" cy="1148" r="8" fill="#a7cf9e"/>
+<text x="54" y="1160" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#d7e8c3">M5</text>
+<text x="54" y="1188" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P3 / L</text>
+<rect x="260" y="1122" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
+<text x="278" y="1156" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Larger worlds that stay usable</text>
+<text x="278" y="1186" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Zoom-based detail and readable overlays.</text>
+<text x="278" y="1210" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Only offer sizes with measured performance.</text>
+<rect x="900" y="1122" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
+<text x="918" y="1156" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Dimension migration + scaling</text>
+<text x="918" y="1186" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Audit arrays, saves, paths and rendering.</text>
+<text x="918" y="1210" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Spatial queries, caches and both-platform QA.</text>
+<text x="278" y="1251" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: old saves load; larger-map input and frame budgets pass on named hardware.</text>
+<polyline points="54,1294 1540,1294" fill="none" stroke="#36515e" stroke-width="2"/>
+<text x="54" y="1328" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">0.18.0: first UI + Nature slices implemented. M1 onward remains planned. Audio excluded from video review.</text>
+<text x="54" y="1354" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#839ba9">M = medium, L = large effort; these are scope bands, not delivery dates. Later depth: traits, culture, religion, alliances.</text>
 </svg>

@@ -379,7 +379,7 @@ test('hundred-kingdom challenge starts 100 founders and records survival milesto
     assert.equal(w.villages.length, 100);
     assert.equal(w.people.length, 300);
     assert.equal(w.year_length, 2);
-    assert.deepEqual(w.laws, { rebellions: false, diplomacy: true, expansion: true });
+    assert.deepEqual(w.laws, { natural_events: false, rebellions: false, diplomacy: true, expansion: true });
     for (let i = 0; i < 1600; i++) w.step(0.125);
     assert.equal(w.year, 101);
     assert.equal(w.milestone, 1);
@@ -393,7 +393,7 @@ test('world laws are validated and old saves inherit safe defaults', () => {
     const w = new World();
     const old = w.serialize();
     delete old.scenario; delete old.year_length; delete old.laws; delete old.milestone;
-    assert.deepEqual(World.deserialize(old).laws, { rebellions: false, diplomacy: false, expansion: false });
+    assert.deepEqual(World.deserialize(old).laws, { natural_events: false, rebellions: false, diplomacy: false, expansion: false });
     const bad = w.serialize(); bad.laws.rebellions = 'yes';
     assert.throws(() => World.deserialize(bad), /valid Genesis/);
 });

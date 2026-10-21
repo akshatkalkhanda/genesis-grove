@@ -2,7 +2,7 @@ export const DAMAGE_CAUSES = Object.freeze({
     starvation: 'Food shortage', infection: 'Infection', combat: 'Combat wound',
     fire: 'Burn injury', aging: 'Age-related decline', predation: 'Animal attack',
     meteor: 'Meteor impact', nuke: 'Nuclear blast', lightning: 'Lightning strike',
-    acid: 'Acid exposure', erase: 'Divine removal'
+    tsunami: 'Tsunami impact', cold: 'Blizzard exposure', acid: 'Acid exposure', erase: 'Divine removal'
 });
 
 export function apply_damage(world, unit, amount, cause) {
@@ -24,6 +24,7 @@ export function apply_damage(world, unit, amount, cause) {
 export function health_risks(world, unit, kingdom) {
     const risks = [];
     if (unit.infection > 0) risks.push('Infected');
+    if (world.weather?.some(e => e.kind === 'blizzard' && Math.hypot(e.x - unit.x, e.y - unit.y) <= e.radius)) risks.push('In a blizzard');
     if (world.fire[world.index(unit.x, unit.y)] > 0) risks.push('Burning');
     if (unit.age / world.year_length > (unit.species ? 50 : 85)) risks.push('Age-related decline');
     if (kingdom && kingdom.food < (unit.role === 'soldier' ? 1.7 : 0.9)) risks.push('Food shortage');

@@ -23,7 +23,10 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.17.0 prioritizes shelter, staffed farming and food reserves, adds civic services and medical care, and gives boats and aircraft real citizen crews. Adults travel to jobs, carry supplies home, rest and meet neighbors. Families, cultural traditions and ruler personalities affect the simulation. Older saves receive compatible defaults.
+Version 0.18.0 opens in Observe mode with a map-first layout, compact tool dock,
+contextual creator palette and concise citizen/kingdom inspectors. Add rain clouds,
+thunderstorms, lightning, droughts, blizzards and coastal tsunamis from Nature.
+Natural weather is optional under world rules; active events survive saving and loading.
 
 ## A living sandbox
 
@@ -54,10 +57,12 @@ Version 0.17.0 prioritizes shelter, staffed farming and food reserves, adds civi
 - Towns build clinics from eight residents and hospitals at later technology levels. Adult doctors gather finite medicinal herbs and treat nearby patients using medicine and shared food. Badly injured citizens stop work or training to seek care. Inspect a creature to see its condition, current health risks, recent damage causes, and treatment; kingdom profiles show doctors and medical supplies. Damage before this update cannot be reconstructed from older saves.
 - Towns prioritize enough shelters, staffed farms, wells and grain reserves. Farms scale with population; recruitment, births and optional building require food reserves. Schools give children learning experience, churches and temples support nearby rest, and markets speed supply shipments. Monuments remain available as towns advance. Kingdom profiles show shelter capacity, farm coverage and reserves.
 - Coastal boats, artillery, balloons and flying transports require named adult crews. Crew members board, travel with the machine, consume meals, age, and can be inspected on the map. Empty machines remain idle. Fishing boats carry their catch back to a dock before crediting shared food.
-- Turn on Inspect and click a person or animal for its portrait, stats, daily task, family links, social bonds, culture, kingdom, and equipment. Kingdom profiles show cultural tradition and ruler personality effects. Zoom close or Follow keeps the creature in view; scroll, the zoom slider, and the zoom buttons reach 2,400%. Large wheel events are capped and the buttons use gentle steps. Nearby labels show activity without overlapping. Close the card or press Esc to return to painting.
+- Turn on Inspect and click a person or animal for its portrait, stats, daily task, family links, social bonds, culture, kingdom, and equipment. Kingdom profiles show cultural tradition and ruler personality effects. Zoom close or Follow keeps the creature in view; scroll, the zoom slider, and the zoom buttons reach 2,400%. Large wheel events are capped and the buttons use gentle steps. Nearby labels show activity without overlapping. Close the card or press Esc to return to Observe.
 - Day/night lighting has a separate clock with smooth dawn and dusk and warm windows at night. Use the map clock to choose 10 minutes, 24 minutes, or 24 real hours per cycle at 1×, or preview any time of day. At high simulation speeds, a lighting cycle still takes at least three real minutes. Lighting pauses with the game and is saved with the world.
 - Rain, fire, lightning, meteors, nuclear blasts, plague, acid rain, blessings, and a life eraser.
-- Pause, 1×/2×/5×/20× time, zoom, pan, territory display, tile inspector, village focus, chronicle, and minimap.
+- Observe starts with no brush armed: click to inspect life or a kingdom, drag to pan, and press Escape to cancel a creator tool. Land, People, Animals, Plants, Nature and Events open a contextual palette. Citizen and kingdom profiles show a short summary with expandable details. Pause, speed, year/age and zoom remain visible.
+- Nature offers drifting rain clouds that restore soil and quench fires, thunderstorms with actual lightning, droughts that reduce fertility and farm growth, blizzards that harm crops and exposed life, and tsunamis. Automatic events are off by default and can be enabled in setup or Kingdoms. At most six events run at once.
+- Start a tsunami in a 5×5 deep-ocean area within 40 tiles of a reachable low coast. Its visible wave travels two tiles per simulation second, damages coastal boats, lowland homes, crop growth and exposed life, and washes out roads. Hills and mountains block it; flooding reaches at most three lowland tiles inland and leaves the original terrain behind. This is a bounded game model, not fluid simulation. Trade/settler voyages and emergency evacuation are not modeled as wave targets yet.
 - World → View history opens a filterable record of up to 200 events. Kingdom founding, rulers, discoveries, diplomacy, trade, and disasters record their locations. Select Visit location to focus the present-day map on that place. Existing world files without event coordinates still load.
 - One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
@@ -71,7 +76,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Use brush | Left click / drag |
 | Open main menu | Menu button |
 | Place people or animals; strike meteor or lightning | One application per click |
-| Pan | Right or middle drag, Alt-drag, WASD |
+| Pan | Left drag in Observe; right or middle drag, Alt-drag, WASD |
 | Zoom | Scroll, + / −, map slider, or map buttons |
 | Technology unlocks | Ages button on the map |
 | Follow a creature | Inspect its profile, then click Follow |
@@ -81,7 +86,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Manage kingdoms | Kingdoms button; inspect a kingdom, switch world laws, or set alliance, peace, and war |
 | Pause | Space |
 | Speed | 1 / 2 / 3 / 4 for 1× / 2× / 5× / 20× |
-| Inspect creature | I, then click a person or animal; Esc exits |
+| Observe / inspect | Default mode; I or Observe, then select a person, animal or claimed kingdom. Esc cancels painting |
 | Brush size | [ / ] |
 | Device save | Cmd+S / Ctrl+S |
 

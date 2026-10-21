@@ -1,3 +1,4 @@
+import { WEATHER, spawn_weather, advance_weather, valid_weather } from './weather.js';
 import { initialize_creature, creature_stats, develop_creature, TRAITS } from './creatures.js';
 import { find_path } from './pathfinding.js';
 import { kingdom_plan, diplomatic_choice } from './strategy.js';
@@ -126,10 +127,12 @@ export class World {
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
         this.year_length = this.scenario === 'hundred' ? 2 : 20;
-        this.laws = { rebellions: false, diplomacy: this.scenario === 'hundred', expansion: this.scenario === 'hundred' };
+        this.laws = { natural_events: false, rebellions: false, diplomacy: this.scenario === 'hundred', expansion: this.scenario === 'hundred' };
         this.milestone = 0;
         this.events = [];
         this.effects = [];
+        this.weather = [];
+        this.weather_clock = 0;
         this.revision = 1;
         this.navigation_revision = 1;
         this.lighting = { phase: 0.35, cycle_seconds: 600 };
@@ -605,6 +608,7 @@ export class World {
     apply(tool, x, y, radius = 4) {
         x = Math.floor(x); y = Math.floor(y);
         if (!this.inside(x, y)) return;
+        if (Object.hasOwn(WEATHER, tool)) return spawn_weather(this, tool, x, y, Math.max(6, radius));
         const terrain = { ocean: T.OCEAN, shallow: T.SHALLOW, sand: T.SAND, grass: T.GRASS, forest: T.FOREST, hill: T.HILL, mountain: T.MOUNTAIN, lava: T.LAVA, jungle: T.JUNGLE, savanna: T.SAVANNA, snow: T.SNOW, maple: T.MAPLE, mushroom: T.MUSHROOM, crystal: T.CRYSTAL, celestial: T.CELESTIAL, desert: T.DESERT };
         const ore_tool = ORES[tool];
         if (ore_tool) {
@@ -1258,6 +1262,7 @@ export class World {
         advance_defenses(this, dt, technology_level);
         advance_machines(this, dt, technology_level, RESEARCH_COSTS);
         if (this.tick % 240 === 0) this.schedule_trades();
+        advance_weather(this, dt);
         // Sample ecological growth; active fires are updated together to keep spread rate stable.
         for (let n = 0; n < 80; n++) {
             const i = Math.floor(this.random() * this.tiles.length), t = this.tiles[i];
@@ -1298,7 +1303,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1308,6 +1313,8 @@ export class World {
         const array = (a, limit) => Array.isArray(a) && a.length <= limit;
         if (!data || data.format !== 'genesis-grove' || data.version !== 1 || typeof data.name !== 'string' || !data.name.trim() || data.name.length > 40 || typeof data.seed !== 'string' || data.seed.length > 100) invalid();
         const size = WIDTH * HEIGHT;
+        if (!valid_weather(data, WIDTH, HEIGHT)) invalid();
+        if (data.laws?.natural_events !== undefined && typeof data.laws.natural_events !== 'boolean') invalid();
         if (!array(data.tiles, size) || data.tiles.length !== size || !data.tiles.every(t => integer(t, 0, T.DESERT))) invalid();
         if (data.ores !== undefined && (!array(data.ores, size) || data.ores.length !== size || !data.ores.every(n => integer(n, 0, 5)))) invalid();
         if (data.strata !== undefined && (!array(data.strata, size) || data.strata.length !== size
@@ -1444,6 +1451,8 @@ export class World {
         w.trades = structuredClone(data.trades || []);
         w.vehicles = structuredClone(data.vehicles || []);
         w.machines = structuredClone(data.machines || []);
+        w.weather = structuredClone(data.weather || []);
+        w.weather_clock = data.weather_clock ?? 0;
         w.scenario = data.scenario || 'sandbox';
         w.year_length = data.year_length || 20;
         w.lighting = structuredClone(data.lighting || { phase: 0.35, cycle_seconds: 600 });
@@ -1457,7 +1466,7 @@ export class World {
             kingdom.king_id ??= null;
             kingdom.machine_timer ||= 0;
         }
-        w.laws = { rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };
+        w.laws = { natural_events: data.laws?.natural_events ?? false, rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };
         w.milestone = data.milestone || 0;
         const legacy_jobs = new Map();
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; p.home_id ||= p.village_id; p.voyage_id ||= null; p.weapon_level ||= 0; p.armor_level ||= 0; p.job ||= JOBS[(legacy_jobs.get(p.village_id) || 0) % JOBS.length]; p.role ||= 'civilian'; legacy_jobs.set(p.village_id, (legacy_jobs.get(p.village_id) || 0) + 1); }

@@ -1,3 +1,4 @@
+import { WEATHER } from './weather.js';
 import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
 import { creature_stats } from './creatures.js';
@@ -91,8 +92,18 @@ const TOOLS = {
         ['erase', 'Remove life', '◇', '#c2aaa0', 'Make room for another beginning. Remove creatures and buildings.']
     ]
 };
+TOOLS.nature = [
+    ['raincloud', 'Rain cloud', '☂', '#9ecde0', 'A drifting rain cloud quenches fires and restores soil for 24 simulation seconds.'],
+    ['storm', 'Thunderstorm', 'ϟ', '#89afc4', 'A moving storm brings heavy rain and repeated lightning strikes.'],
+    ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike once: damages nearby life and can ignite vegetation.'],
+    ['tsunami', 'Tsunami', '≈', '#9edddc', 'Start in deep ocean near a coast. The wave damages boats, buildings and low coastal land; high ground blocks it.'],
+    ['drought', 'Drought', '☀', '#e2c26b', 'Dry the soil and damage crop growth for 30 simulation seconds.'],
+    ['blizzard', 'Blizzard', '❄', '#cfe8eb', 'A drifting snowstorm damages crops and exposed life. Nearby homes reduce cold damage.'],
+    ['fire', 'Wildfire', '♨', '#e3a16a', 'Ignite vegetation. Rain clouds and thunderstorms can extinguish fire.']
+];
 TOOLS.plants = TOOLS.terrain.filter(item => ['forest', 'jungle', 'maple', 'mushroom', 'celestial'].includes(item[0]));
 const CATALOG_INFO = {
+    nature: 'Nature · place a weather event; it develops while time runs',
     terrain: 'Shape the landscape · drag to paint',
     life: 'Civilizations · each click places three settlers on land',
     creatures: 'Wildlife & mythical beings · click land to place one',
@@ -102,10 +113,11 @@ const CATALOG_INFO = {
 const LIFE_TOOLS = new Set([...Object.keys(RACES), ...ANIMALS]);
 let world = new World({ preset: 'empty', inhabited: false });
 const renderer = new Renderer($('world'), $('minimap'));
-let category = 'terrain', tool = 'grass', previous_tool = 'grass', brush = 4, paused = false, speed = 1;
+let category = 'terrain', tool = 'inspect', previous_tool = 'inspect', brush = 4, paused = false, speed = 1;
 let focused_village_id = null;
 let inspected_unit = null;
 let followed_unit_id = null;
+let inspect_start = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
 let toast_timer, audio_context, audio_gain, sound_on = false;
 const storage_key = 'genesis-grove-world-v1';
@@ -114,8 +126,31 @@ function toast(message) {
     $('toast').textContent = message; $('toast').hidden = false;
     clearTimeout(toast_timer); toast_timer = setTimeout(() => { $('toast').hidden = true; }, 3300);
 }
+// Keep the map clear until the player explicitly chooses a creator tool.
+$('sandbox-dock').append(document.querySelector('.tabs'));
+document.querySelector('.tool-panel').append(document.querySelector('.tool-description'), document.querySelector('.brush-section'));
+$('toggle-controls').hidden = true;
+$('map-view-controls').append(document.querySelector('.zoom-controls'), $('lighting'));
+$('weather-summary').onclick = () => document.querySelector('[data-category="nature"]').click();
+$('observe').onclick = () => {
+    inspected_unit = null; followed_unit_id = null; focused_village_id = null;
+    renderer.selected_unit_id = null; renderer.selected_kingdom_id = null;
+    $('entity-card').hidden = true;
+    document.body.classList.remove('info-open', 'kingdom-inspecting');
+    select_tool('inspect');
+};
+function inspector_details(container, children, title, key) {
+    const details = document.createElement('details'); details.className = 'inspector-details';
+    details.dataset.detail = key;
+    const summary = document.createElement('summary'); summary.textContent = title;
+    details.append(summary, ...children); container.append(details);
+    return details;
+}
 function select_tool(id) {
-    tool = id; renderer.tool = id;
+    tool = id; renderer.tool = id; end_pointer();
+    $('observe').setAttribute('aria-pressed', String(id === 'inspect'));
+    document.body.classList.toggle('catalog-open', id !== 'inspect');
+    if (id === 'inspect') document.body.classList.add('controls-collapsed');
     document.body.classList.toggle('inspecting', id === 'inspect');
     if (id !== 'inspect') { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; }
     $('inspect').classList.toggle('active', id === 'inspect');
@@ -168,12 +203,15 @@ function show_tools() {
         } else button.append(icon);
         button.append(label); button.onclick = () => select_tool(id); $('tools').append(button);
     }
-    select_tool(TOOLS[category].some(t => t[0] === tool) ? tool : TOOLS[category][0][0]);
+    for (const button of $('tools').children) button.setAttribute('aria-pressed', String(button.dataset.tool === tool));
 }
 for (const tab of document.querySelectorAll('[data-category]')) tab.onclick = () => {
+    const already_open = category === tab.dataset.category && document.body.classList.contains('catalog-open');
     category = tab.dataset.category;
     for (const other of document.querySelectorAll('[data-category]')) other.setAttribute('aria-selected', String(other === tab));
     show_tools();
+    if (already_open) select_tool('inspect');
+    else select_tool(TOOLS[category].some(t => t[0] === tool) ? tool : TOOLS[category][0][0]);
 };
 $('guide-land').onclick = () => { document.querySelector('[data-category="terrain"]').click(); select_tool('grass'); };
 $('guide-people').onclick = () => { document.querySelector('[data-category="life"]').click(); select_tool('human'); };
@@ -211,7 +249,7 @@ $('zoom-in').onclick = () => { renderer.zoom_at(1.15); update_zoom(); };
 $('zoom-out').onclick = () => { renderer.zoom_at(1 / 1.15); update_zoom(); };
 $('zoom-reset').onclick = $('fit').onclick = () => { followed_unit_id = null; renderer.fit(); update_zoom(); };
 $('borders').onclick = () => { renderer.borders = !renderer.borders; $('borders').classList.toggle('active', renderer.borders); };
-$('inspect').onclick = () => select_tool(tool === 'inspect' ? previous_tool : 'inspect');
+$('inspect').onclick = () => $('observe').click();
 function research_status(kingdom) {
     const next_level = technology_level(kingdom) + 1, next = TECH_AGES[next_level];
     if (!next) return 'All fourteen ages discovered';
@@ -248,17 +286,18 @@ function local_point(event) {
 }
 function paint(p, continuous = false) {
     if (tool === 'inspect') return;
-    if (continuous && (['meteor', 'nuke', 'lightning'].includes(tool) || LIFE_TOOLS.has(tool))) return;
+    if (continuous && (['meteor', 'nuke', 'lightning', ...Object.keys(WEATHER)].includes(tool) || LIFE_TOOLS.has(tool))) return;
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) return;
     if (LIFE_TOOLS.has(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on walkable land.'); return; }
-    if (last_paint && !['meteor', 'nuke', 'lightning', 'rain', 'bless'].includes(tool) && !LIFE_TOOLS.has(tool)) {
+    if (last_paint && !['meteor', 'nuke', 'lightning', 'rain', 'bless', ...Object.keys(WEATHER)].includes(tool) && !LIFE_TOOLS.has(tool)) {
         const distance = Math.hypot(tile.x - last_paint.x, tile.y - last_paint.y);
         const steps = Math.min(100, Math.ceil(distance / Math.max(1, brush / 2)));
         for (let i = 1; i < steps; i++) world.apply(tool, last_paint.x + (tile.x - last_paint.x) * i / steps, last_paint.y + (tile.y - last_paint.y) * i / steps, brush);
     }
     const before_life = LIFE_TOOLS.has(tool) ? world.people.length + world.animals.length : 0;
-    world.apply(tool, tile.x, tile.y, brush); last_paint = tile;
+    const outcome = world.apply(tool, tile.x, tile.y, brush); last_paint = tile;
+    if (outcome?.message) toast(outcome.message);
     if (LIFE_TOOLS.has(tool)) {
         const placed = world.people.length + world.animals.length - before_life;
         toast(placed ? `${placed} ${RACES[tool] ? 'settlers' : 'creature'} placed. Choose Inspect to follow their story.` : 'No life placed. This world may have reached its population limit.');
@@ -270,7 +309,9 @@ canvas.oncontextmenu = event => event.preventDefault();
 canvas.onpointerdown = event => {
     if (![0, 1, 2].includes(event.button)) return;
     const p = local_point(event); last_pointer = p; renderer.pointer = p;
-    if (event.button === 0 && !event.altKey && tool === 'inspect') { inspect_click(p); return; }
+    if (event.button === 0 && !event.altKey && tool === 'inspect') {
+        inspect_start = p; canvas.setPointerCapture(event.pointerId); return;
+    }
     panning = event.button !== 0 || event.altKey;
     pointer_down = !panning; last_paint = null; paint_elapsed = 0;
     canvas.setPointerCapture(event.pointerId);
@@ -279,12 +320,15 @@ canvas.onpointerdown = event => {
 };
 canvas.onpointermove = event => {
     const p = local_point(event);
+    if (inspect_start && Math.hypot(p.x - inspect_start.x, p.y - inspect_start.y) > 4) { panning = true; inspect_start = null; followed_unit_id = null; }
     if (panning && last_pointer) { renderer.pan_x += p.x - last_pointer.x; renderer.pan_y += p.y - last_pointer.y; }
     last_pointer = p; renderer.pointer = p;
     if (tool === 'inspect') inspect(p);
 };
 function end_pointer(event) {
-    pointer_down = false; panning = false; last_paint = null; canvas.style.cursor = 'crosshair';
+    if (inspect_start && event?.type === 'pointerup' && !panning) inspect_click(local_point(event));
+    inspect_start = null;
+    pointer_down = false; panning = false; last_paint = null; canvas.style.cursor = tool === 'inspect' ? 'grab' : 'crosshair';
     if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 }
 canvas.onpointerup = canvas.onpointercancel = end_pointer;
@@ -355,8 +399,15 @@ function inspect_click(p) {
     renderer.selected_unit_id = found?.unit.id || null;
     followed_unit_id = null;
     const card = $('entity-card'); card.hidden = !found;
+    if (!found) {
+        const owner = world.territory_at(tile.x, tile.y);
+        if (owner != null) {
+            focused_village_id = owner;
+            document.body.classList.add('info-open', 'kingdom-inspecting'); update_selected_kingdom();
+        }
+    }
     if (found) {
-        document.body.classList.remove('info-open');
+        document.body.classList.remove('info-open', 'kingdom-inspecting');
         $('world-info').classList.remove('active');
     }
     if (found) {
@@ -372,6 +423,8 @@ function update_entity_card() {
     if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
     const attributes = creature_stats(unit, world.year_length);
     const card = $('entity-card');
+    const detail_focus = card.contains(document.activeElement) ? document.activeElement.closest('[data-detail]')?.dataset.detail : null;
+    const expanded = new Set([...card.querySelectorAll('details[open]')].map(d => d.dataset.detail));
     const scroll_top = card.scrollTop;
     const focused_action = card.contains(document.activeElement) ? document.activeElement.dataset.action : null;
     card.replaceChildren();
@@ -460,7 +513,6 @@ function update_entity_card() {
                 link.onclick = () => {
                     inspected_unit = { kind: 'person', id };
                     followed_unit_id = null; renderer.selected_unit_id = id;
-                    renderer.focus(living.x, living.y, Math.max(6, renderer.zoom));
                     card.scrollTop = 0; update_zoom(); update_entity_card();
                 };
             }
@@ -495,8 +547,14 @@ function update_entity_card() {
         update_entity_card();
     };
     actions.append(zoom, follow); card.append(actions);
+    const detail_rows = [...card.children].filter(e => e.classList.contains('entity-row') || e.classList.contains('family-links') || e.classList.contains('damage-history'));
+    const primary_labels = new Set(['Species', 'Health', 'Condition', 'Age', 'Kingdom', 'Role']);
+    const secondary = detail_rows.filter(e => !primary_labels.has(e.firstElementChild?.textContent));
+    const detail = inspector_details(card, secondary, 'Health, traits, equipment & family', 'citizen');
+    detail.open = expanded.has('citizen');
     card.scrollTop = scroll_top;
     follow.setAttribute('aria-pressed', String(followed_unit_id === unit.id));
+    if (detail_focus && !focused_action) card.querySelector(`[data-detail="${detail_focus}"] > summary`)?.focus({ preventScroll: true });
     if (focused_action) card.querySelector(`[data-action="${focused_action}"]`)?.focus({ preventScroll: true });
 }
 let history_filter = 'all';
@@ -593,10 +651,12 @@ $('diplomacy').onclick = () => {
     $('law-diplomacy').checked = world.laws.diplomacy;
     $('law-expansion').checked = world.laws.expansion;
     $('law-rebellions').checked = world.laws.rebellions;
+    $('law-natural').checked = world.laws.natural_events;
     $('diplomacy-dialog').showModal();
 };
 $('law-diplomacy').onchange = event => { world.laws.diplomacy = event.target.checked; toast(`Autonomous diplomacy ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('law-expansion').onchange = event => { world.laws.expansion = event.target.checked; toast(`Kingdom expansion ${event.target.checked ? 'enabled' : 'disabled'}.`); };
+$('law-natural').onchange = event => { world.laws.natural_events = event.target.checked; toast(`Natural events ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('law-rebellions').onchange = event => { world.laws.rebellions = event.target.checked; toast(`Rebellions ${event.target.checked ? 'enabled' : 'disabled'}.`); };
 $('source-kingdom').onchange = event => update_diplomacy(Number(event.currentTarget.value));
 $('target-kingdom').onchange = () => update_diplomacy();
@@ -617,6 +677,9 @@ function update_selected_kingdom() {
     const enemies = world.villages.filter(v => v.alive && world.relation_status(kingdom.id, v.id) === 'war');
     const allies = world.villages.filter(v => v.alive && world.relation_status(kingdom.id, v.id) === 'alliance');
     const armies = world.armies.filter(a => a.kingdom_id === kingdom.id && a.count >= 2);
+    const detail_focus = box.querySelector('details > summary') === document.activeElement;
+    const detail_open = box.querySelector('details')?.open || false;
+    const box_scroll = box.closest('.info-panel').scrollTop;
     box.replaceChildren();
     const heading = document.createElement('strong'); heading.textContent = kingdom.name;
     heading.prepend(kingdom_flag(kingdom));
@@ -670,7 +733,11 @@ function update_selected_kingdom() {
     const release = document.createElement('button'); release.textContent = `Release prisoners (${prisoners.length})`;
     release.disabled = !prisoners.length;
     release.onclick = () => { for (const person of prisoners) person.sentence = 0; advance_detention(world, 0); update_ui(); };
-    box.append(heading, ruler, culture, influence, status, stats, age, research, stores, metals, settlements, buildings, care, transport, fleet_detail, plan, march, diplomacy, manage, release);
+    box.append(heading, ruler, status, stats, age, stores, plan, march);
+    const detail = inspector_details(box, [culture, influence, research, metals, settlements, buildings, care, transport, fleet_detail, diplomacy, release], 'Economy, culture, fleet & care', 'kingdom');
+    detail.open = detail_open; box.append(manage);
+    if (detail_focus) detail.querySelector('summary').focus({ preventScroll: true });
+    box.closest('.info-panel').scrollTop = box_scroll;
 }
 function update_world_guidance(stats = world.stats()) {
     const progress = [stats.land > 0, stats.population > 0, world.time > 0.25];
@@ -702,6 +769,8 @@ function update_world_guidance(stats = world.stats()) {
     $('world-state-detail').textContent = detail;
 }
 function update_ui() {
+    $('weather-summary').textContent = world.weather.length ? `${world.weather.length} natural event${world.weather.length === 1 ? '' : 's'}` : '☁ Nature';
+    $('weather-summary').title = world.weather.length ? world.weather.map(e => `${WEATHER[e.kind].label}: ${Math.ceil(WEATHER[e.kind].duration - e.age)}s remaining`).join(' · ') : 'Rain, storms and coastal disasters';
     update_entity_card();
     const minutes = Math.floor(world.lighting.phase * 1440) % 1440;
     $('lighting').textContent = `${minutes < 360 || minutes > 1080 ? '☾' : '☀'} ${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -722,6 +791,7 @@ function update_ui() {
         return sum + level + fraction;
     }, 0) / living_kingdoms.length : 0;
     const age_level = Math.floor(average_technology);
+    $('time-summary').textContent = `Year ${world.year} · ${TECH_AGES[age_level].name}`;
     const age = TECH_AGES[age_level], next_age = TECH_AGES[age_level + 1];
     const progress = next_age ? average_technology - age_level : 1;
     $('age-label').textContent = age.name.toUpperCase();
@@ -755,6 +825,7 @@ function update_ui() {
         const count = document.createElement('span'); count.className = 'civ-pop'; count.textContent = `${pop} ♟`;
         button.append(dot, name, count); button.onclick = () => {
             focused_village_id = v.id; followed_unit_id = null; renderer.focus(v.x, v.y); update_zoom(); update_ui();
+            document.body.classList.add('kingdom-inspecting');
             $('selected-kingdom').scrollIntoView({ block: 'nearest' });
         };
         $('civilizations').append(button);
@@ -773,7 +844,7 @@ function replace_world(next) {
     $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
     renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
-    end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
+    end_pointer(); select_tool('inspect'); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
 const terrain_colors = ['#173e53', '#4e8f9b', '#d9c998', '#8cb873', '#537c59', '#89946b', '#a3aaa3', '#df8055', '#635f54', '#52b87b', '#d5bd65', '#c4e7e7', '#e98d7a', '#ab83cb', '#75d2d5', '#cba7ed', '#e4b567'];
 let preview_timer;
@@ -824,7 +895,9 @@ function show_start_home() {
 }
 $('menu').onclick = show_start_home;
 $('world-info').onclick = () => {
+    document.body.classList.remove('kingdom-inspecting');
     const open = !document.body.classList.contains('info-open');
+    if (open) { inspected_unit = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; }
     document.body.classList.toggle('info-open', open); $('world-info').classList.toggle('active', open);
 };
 $('close-world-info').onclick = () => { document.body.classList.remove('info-open'); $('world-info').classList.remove('active'); };
@@ -858,7 +931,7 @@ $('new-form').onsubmit = event => {
     const name = String(data.get('name')).trim() || 'An Unwritten World';
     const seed = String(data.get('seed')).trim();
     const next = new World({ name, seed, preset: $('preset').value, inhabited: data.has('inhabited'), scenario: $('scenario').value });
-    next.laws = { diplomacy: data.has('diplomacy'), expansion: data.has('expansion'), rebellions: data.has('rebellions') };
+    next.laws = { natural_events: data.has('natural_events'), diplomacy: data.has('diplomacy'), expansion: data.has('expansion'), rebellions: data.has('rebellions') };
     replace_world(next);
     $('new-dialog').close(); show_start_ready(); toast('Your world is ready. Start time whenever you like.');
 };
@@ -909,8 +982,8 @@ window.addEventListener('keydown', event => {
     if (event.metaKey || event.ctrlKey) return;
     if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) set_pause(!paused); }
     if (['1', '2', '3', '4'].includes(event.key)) { set_speed({ 1: 1, 2: 2, 3: 5, 4: 20 }[event.key]); set_pause(false); }
-    if (event.key.toLowerCase() === 'i') select_tool(tool === 'inspect' ? previous_tool : 'inspect');
-    if (event.key === 'Escape') select_tool(previous_tool);
+    if (event.key.toLowerCase() === 'i') $('observe').click();
+    if (event.key === 'Escape') $('observe').click();
     if (event.key === '+' || event.key === '=') renderer.zoom_at(1.2);
     if (event.key === '-') renderer.zoom_at(1 / 1.2);
     if (['[', ']'].includes(event.key)) { $('brush').value = Math.max(1, Math.min(12, brush + (event.key === ']' ? 1 : -1))); $('brush').oninput(); }
@@ -979,6 +1052,6 @@ function frame(now) {
     if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }
     requestAnimationFrame(frame);
 }
-show_tools(); update_ui(); show_start_home(); requestAnimationFrame(frame);
+show_tools(); select_tool('inspect'); update_ui(); show_start_home(); requestAnimationFrame(frame);
 // A narrow, read-only diagnostic hook for the desktop smoke test.
 window.genesis = Object.freeze({ snapshot: () => world.serialize(), stats: () => world.stats(), camera: () => ({ width: renderer.width, height: renderer.height, base: renderer.base, zoom: renderer.zoom, origin: renderer.origin }) });

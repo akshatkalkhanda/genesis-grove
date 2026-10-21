@@ -7,6 +7,15 @@ Give the map most of the screen, reveal detail when requested, and make the
 simulation's decisions visible. Improve this experience before adding more ages,
 species, or decorative panels.
 
+## Progress after the plan
+
+Version 0.18.0 implements the first M0 slice: Observe default, compact map tools,
+contextual editing and summary-first citizen/kingdom inspection. The owner's
+follow-up also adds the first [Nature system](../nature.md): rain clouds, storms,
+lightning, drought, blizzards and deep-ocean coastal waves. The feature comparison
+below records the original 0.17.0 baseline. M1 and subsequent milestones remain
+planned; richer layers, army/ship inspectors and presentation mode are not complete.
+
 ## Read this first
 
 - [Visual roadmap](roadmap.svg): implementation order and completion gates.

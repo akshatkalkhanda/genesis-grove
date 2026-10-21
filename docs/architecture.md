@@ -20,6 +20,8 @@ The simulation and procedural renderer use web standards without runtime library
 - `src/defenses.js`: tower fire, castle protection, wounded-soldier capture, prison feeding, timed release, and peace release.
 - `src/machines.js`: bounded fleets of water boats, ground artillery, survey balloons, courier aircraft, and larger flying transports.
 - `src/machine_art.js`: original vessel, aircraft, cannon, and fortification sprites.
+- `src/weather.js` and `src/weather_art.js`: bounded saved rain/storm/drought/blizzard/tsunami events, optional natural scheduling, coastal reach checks, actual crop/soil/health/structure effects and original visual effects.
+- `src/sandbox.css`: map-first Observe layout, contextual tool palette and compact dock; summary-first inspectors preserve expanded detail state.
 - `src/daylight.js`: a presentation clock independent of calendar years, smooth lighting, and a minimum three-minute cycle at high speed.
 - `src/renderer.js`: cached pixel terrain, creatures, town industries, lighting, effects, zoom, and labels.
 - `src/app.js`: menu, map preview, input, fixed simulation steps, inspection and camera following, lighting controls, and manual save/export/import.

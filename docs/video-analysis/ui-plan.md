@@ -1,7 +1,8 @@
 # UI plan: a clear view of a living world
 
 Companion to the [implementation path](README.md). This is a design specification,
-not a claim that the proposed UI has been implemented.
+the full target. Version 0.18.0 implements the first slice described at the end;
+layer selection, dedicated army/ship inspectors and presentation view remain planned.
 
 ## The reference's useful pattern
 
@@ -36,7 +37,7 @@ watching layout the default and reveal editing details only when needed.
 | Save/load | Menu → Worlds; compact save-state indicator and recovery entry. |
 | Presentation view | Hide creator tools and noncritical HUD; preserve a way to pause and exit. |
 
-See the [two-state layout concept](ui-layout.svg). Sample names, counts, and events
+See the [three-state layout concept](ui-layout.svg). Sample names, counts, and events
 in that diagram are illustrative, not values extracted from a running save.
 
 ## Interaction states
