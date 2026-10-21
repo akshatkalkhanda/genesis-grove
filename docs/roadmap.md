@@ -1,5 +1,16 @@
 # Gameplay priorities
 
+## Current planning path, 21 October 2026
+
+The [four-kingdom mechanics and UI plan](video-analysis/README.md) updates the order
+below for the next workstream: map-first UI, repeatable four-kingdom setup and save
+recovery, explainable land warfare, naval invasions, long-run observation, then
+larger maps. See the [visual roadmap](video-analysis/roadmap.svg) and
+[UI requirements](video-analysis/ui-plan.md). These are planned changes, not shipped
+features. Environmental and deeper character systems remain later options.
+
+## Earlier feature priorities
+
 The current release implements the first three priorities: supply-aware kingdom
 strategy, obstacle-aware land routes, and individual names, traits, experience,
 and parent records. Close inspection, working industries, and stable day/night

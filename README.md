@@ -105,6 +105,9 @@ See [architecture and simulation notes](docs/architecture.md) for implementation
 
 See the ordered [gameplay roadmap](docs/roadmap.md) for naval warfare, environmental events, richer maps, and save recovery.
 
+See the [four-kingdom mechanics and UI plan](docs/video-analysis/README.md) for the
+21 October video review, a clearer map-first interface, and the implementation chart.
+
 See the [video comparison](docs/video-comparison.md) for the reference features and current gaps.
 
 See [validation results](docs/validation.md) for the checks performed on the first build.
