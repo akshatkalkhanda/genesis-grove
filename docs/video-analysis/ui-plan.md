@@ -2,8 +2,9 @@
 
 Companion to the [implementation path](README.md). This is a design specification,
 covering the full target. Version 0.18.0 introduced the first slice; 0.19.0 adds
-map layers, saved-world management and presentation view. Dedicated army/ship
-inspectors remain part of later military and transport work.
+map layers, saved-world management and presentation view. Version 0.20.0 adds
+compact army inspection and focus/follow. Ship inspectors and persistent army-order
+controls remain part of later military and transport work.
 
 ## The reference's useful pattern
 

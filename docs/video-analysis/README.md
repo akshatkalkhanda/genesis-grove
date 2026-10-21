@@ -22,6 +22,10 @@ Version 0.19.0 adds named saves, bounded automatic recovery and protection befor
 world replacement. Map layers and a quiet presentation view extend M0 for the general
 sandbox. There is no new kingdom-count requirement or dedicated scenario.
 
+Version 0.20.0 adds the first M2 slice: compact army inspection, live member tasks,
+equipment, target/siege summaries and focus/follow. Persistent orders, dedicated
+army supply and local conquest remain later changes.
+
 ## Read this first
 
 - [Visual roadmap](roadmap.svg): implementation order and completion gates.

@@ -12,7 +12,6 @@ app.whenReady().then(async () => {
     await fs.mkdir(artifacts, { recursive: true });
     const win = new BrowserWindow({ width: 1366, height: 768, show: false,
         webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
-    win.showInactive();
     const errors = [], checks = [];
     win.webContents.on('console-message', details => {
         if (details.level === 'error') errors.push(details.message);

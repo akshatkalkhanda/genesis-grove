@@ -23,7 +23,8 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.19.0 adds named world saves, automatic recovery, pre-replacement snapshots,
+Version 0.20.0 adds a compact Army Inspector with selection, live member/equipment
+summaries and focus/follow. Version 0.19.0 added named world saves, automatic recovery, pre-replacement snapshots,
 map layers and a quiet presentation view. The map-first Observe UI and natural events
 from 0.18.0 remain. The reference video's four kingdoms are an example; this update
 continues the general sandbox without a dedicated four-kingdom scenario.

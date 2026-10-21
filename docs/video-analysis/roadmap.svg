@@ -49,10 +49,10 @@
 <text x="54" y="738" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#9db1bd">P1 / L</text>
 <rect x="260" y="672" width="600" height="102" rx="10" fill="#172832" stroke="#36515e"/>
 <text x="278" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#9adbb9">Readable land wars</text>
-<text x="278" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Army target, order, supply and siege state.</text>
-<text x="278" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Explain diplomacy and ownership changes.</text>
+<text x="278" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Army Inspector: members, gear and target.</text>
+<text x="278" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Next: orders, supply logic and local conquest.</text>
 <rect x="900" y="672" width="630" height="102" rx="10" fill="#172832" stroke="#36515e"/>
-<text x="918" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Campaigns and local conquest</text>
+<text x="918" y="706" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="700" fill="#8ecce2">Next: campaigns and local conquest</text>
 <text x="918" y="736" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Reachable targets, defense and retreat.</text>
 <text x="918" y="760" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Capital loss uses explicit surrender rules.</text>
 <text x="278" y="801" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: terrain and supply affect outcomes; distant towns do not flip silently.</text>
@@ -93,6 +93,6 @@
 <text x="918" y="1210" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Spatial queries, caches and both-platform QA.</text>
 <text x="278" y="1251" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: old saves load; larger-map input and frame budgets pass on named hardware.</text>
 <polyline points="54,1294 1540,1294" fill="none" stroke="#36515e" stroke-width="2"/>
-<text x="54" y="1328" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">0.19.0: general saves, layers and presentation added. Four kingdoms are only the video example. Audio excluded from video review.</text>
+<text x="54" y="1328" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">0.20.0 adds Army Inspector; saved orders and conquest changes remain next. Four kingdoms are only an example. Audio excluded.</text>
 <text x="54" y="1354" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#839ba9">M = medium, L = large effort; these are scope bands, not delivery dates. Later depth: traits, culture, religion, alliances.</text>
 </svg>
