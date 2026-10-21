@@ -47,6 +47,11 @@ app.whenReady().then(async () => {
         win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         await delay(80);
     };
+    const await_paused_fixture = async (save, label) => {
+        await wait_for(`!document.querySelector('#load-dialog').open && genesis.snapshot().name===${JSON.stringify(save.name)}`, label);
+        if (await js(`document.querySelector('#pause').getAttribute('aria-label')==='Pause time'`)) await click('#pause');
+        assert.equal(await js(`document.querySelector('#pause').getAttribute('aria-label')`), 'Resume time');
+    };
     const clear_canvas_point = () => js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),s=6*c.base*c.zoom;for(let y=5;y<123;y+=3)for(let x=5;x<187;x+=3){const px=Math.round(r.x+c.origin.x+(x+.5)*s),py=Math.round(r.y+c.origin.y+(y+.5)*s);if(document.elementFromPoint(px,py)?.id==='world')return{x:px,y:py,index:y*192+x};}return null})()`);
     const visible_tile = predicate => js(`(()=>{const w=genesis.snapshot(),c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),s=6*c.base*c.zoom;for(let y=4;y<124;y++)for(let x=4;x<188;x++){if(!(${predicate}))continue;const px=Math.round(r.x+c.origin.x+(x+.5)*s),py=Math.round(r.y+c.origin.y+(y+.5)*s);if(document.elementFromPoint(px,py)?.id==='world')return{x:px,y:py,index:y*192+x,world_x:x,world_y:y};}return null})()`);
     try {
@@ -530,7 +535,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'developed-wildlands.json'), JSON.stringify(living_towns));
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(living_towns))}],'living-towns.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
-        await delay(150); await click('#pause');
+        await await_paused_fixture(living_towns, 'living towns import');
         assert.ok(await js('(()=>{const types=new Set(genesis.snapshot().villages.flatMap(v=>v.buildings||[]).map(b=>b.type));return ["farm","windmill","armory","camp"].every(type=>types.has(type))})()'));
         assert.ok(await js('genesis.snapshot().people.some(p=>p.health>100&&p.xp>0)'));
         await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
@@ -559,7 +564,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'medical-showcase.json'), JSON.stringify(medical_world));
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(medical_world))}],'medical-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
-        await delay(150); await click('#pause');
+        await await_paused_fixture(medical_world, 'medical showcase import');
         if (!await js('document.querySelector("#inspect").classList.contains("active")')) await click('#inspect');
         const patient_point = await js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),p=genesis.snapshot().people.find(p=>p.id===${patient.id});return{x:Math.round(r.x+c.origin.x+p.x*6*c.base*c.zoom),y:Math.round(r.y+c.origin.y+p.y*6*c.base*c.zoom)}})()`);
         win.webContents.sendInputEvent({ type: 'mouseDown', ...patient_point, button: 'left', clickCount: 1 });
@@ -597,7 +602,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'modern-showcase.json'), JSON.stringify(modern_world));
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(modern_world))}],'modern-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
-        await delay(150); await click('#pause');
+        await await_paused_fixture(modern_world, 'modern showcase import');
         assert.ok(await js('genesis.snapshot().roads.some(grade=>grade===3)'));
         assert.ok(await js('genesis.snapshot().vehicles.some(vehicle=>vehicle.kind==="truck")'));
         assert.ok(await js('genesis.snapshot().villages.some(v=>v.buildings.some(b=>b.type==="monument"))'));
@@ -616,7 +621,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'cosmic-showcase.json'), JSON.stringify(cosmic_world));
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(cosmic_world))}],'cosmic-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
-        await delay(150); await click('#pause'); await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
+        await await_paused_fixture(cosmic_world, 'cosmic showcase import'); await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
         await js(`document.querySelector('#zoom-slider').value='60';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
         assert.ok(await js('genesis.snapshot().vehicles.some(vehicle=>vehicle.kind==="starbarge")'));
         assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Cosmic Dust Age")'));
@@ -655,7 +660,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'fortress-showcase.json'), JSON.stringify(fortress_world));
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(fortress_world))}],'fortress-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
-        await delay(150); await click('#pause'); await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
+        await await_paused_fixture(fortress_world, 'fortress showcase import'); await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
         await js(`document.querySelector('#zoom-slider').value='55';document.querySelector('#zoom-slider').dispatchEvent(new Event('input'))`);
         assert.equal(await js('new Set(genesis.snapshot().machines.map(machine=>machine.kind)).size'),5);
         assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Coastal boat")'));
@@ -679,6 +684,7 @@ app.whenReady().then(async () => {
             win.webContents.sendInputEvent({ type: 'mouseDown', x: vessel_point.x, y: vessel_point.y, button: 'left', clickCount: 1 });
             win.webContents.sendInputEvent({ type: 'mouseUp', x: vessel_point.x, y: vessel_point.y, button: 'left', clickCount: 1 });
             await delay(100);
+            assert.equal(await js(`document.querySelector('#entity-card').hidden`), false);
             assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('#${vessel_point.id}')`));
             assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('${kind === 'boat' ? 'Sailor' : 'Pilot'}')`));
             await js(`document.querySelector('[data-action="zoom-creature"]').click()`);

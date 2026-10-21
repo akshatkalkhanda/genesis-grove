@@ -77,6 +77,10 @@ body.info-open .info-panel { display: flex; }
 .entity-row { font-size: 13px; line-height: 1.5; }
 .entity-activity { font-size: 13px; }
 .entity-actions button { font-size: 13px; }
+.army-identity { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.army-identity .kingdom-flag { flex-shrink: 0; }
+.army-explanation { color: #afc0a8; font-size: 13px; line-height: 1.5; margin: 10px 0; }
+.entity-heading button { min-width: 36px; min-height: 36px; }
 .inspector-details { border-top: 1px solid #486044; margin-top: 10px; padding-top: 10px; }
 .inspector-details summary { color: #c7dda9; cursor: pointer; min-height: 36px; line-height: 1.5; }
 .inspector-details[open] > :not(summary) { margin-top: 8px; }

@@ -16,6 +16,7 @@
     "dist:mac": "electron-builder --mac zip --publish never",
     "dist:win": "electron-builder --win nsis portable --publish never",
     "smoke": "electron scripts/smoke.cjs",
+    "smoke:army": "electron scripts/smoke-army.cjs",
     "icon": "electron scripts/icon.cjs",
     "dist:win:zip": "electron-builder --win zip --x64 --config.win.signAndEditExecutable=false --publish never"
   },

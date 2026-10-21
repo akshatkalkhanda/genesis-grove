@@ -1,4 +1,5 @@
 import { MAP_LAYERS, layer_summary } from './map_layers.js';
+import { army_summary, rebuild_armies } from './army_inspector.js';
 import { create_save_ui } from './save_ui.js';
 import { WEATHER } from './weather.js';
 import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
@@ -163,8 +164,8 @@ function select_tool(id) {
     $('world-tooltip').hidden = true;
     if (id === 'inspect') {
         $('selected-icon').textContent = '⌕'; $('selected-name').textContent = 'Inspect world';
-        $('selected-description').textContent = 'Move over land for tile details. Click a person or animal for its own profile.';
-        $('selected-action').textContent = 'CLICK A CREATURE OR HOVER OVER LAND';
+        $('selected-description').textContent = 'Click a person, animal or army banner for its profile. Armies layer reveals home garrisons.';
+        $('selected-action').textContent = 'CLICK A CREATURE OR ARMY BANNER';
     } else {
         previous_tool = id;
         const item = Object.values(TOOLS).flat().find(t => t[0] === id);
@@ -371,6 +372,15 @@ $('minimap').onclick = event => {
 };
 function inspect(p) {
     if (inspected_unit) { $('world-tooltip').hidden = true; return; }
+    const army = renderer.army_at(world, p);
+    if (army) {
+        const box = $('world-tooltip');
+        box.textContent = `${world.villages.find(v => v.id === army.kingdom_id)?.name || 'Kingdom'} · ${army.count} soldiers · click banner to inspect`;
+        box.hidden = false;
+        box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`;
+        box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
+        return;
+    }
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) { $('world-tooltip').hidden = true; return; }
     const box = $('world-tooltip'); box.replaceChildren();
@@ -418,35 +428,105 @@ function inspect(p) {
 }
 function inspect_click(p) {
     const tile = renderer.world_point(p.x, p.y);
-    const found = world.unit_near(tile.x, tile.y);
-    inspected_unit = found ? { kind: found.kind, id: found.unit.id } : null;
+    const army = renderer.army_at(world, p);
+    const found = army ? null : world.unit_near(tile.x, tile.y);
+    inspected_unit = army ? { kind: 'army', id: army.home_id, kingdom_id: army.kingdom_id }
+        : found ? { kind: found.kind, id: found.unit.id } : null;
     renderer.selected_unit_id = found?.unit.id || null;
     followed_unit_id = null;
-    const card = $('entity-card'); card.hidden = !found;
-    if (!found) {
+    const card = $('entity-card'); card.hidden = !inspected_unit;
+    if (!inspected_unit) {
         const owner = world.territory_at(tile.x, tile.y);
         if (owner != null) {
             focused_village_id = owner;
             document.body.classList.add('info-open', 'kingdom-inspecting'); update_selected_kingdom();
         }
     }
-    if (found) {
+    if (inspected_unit) {
         document.body.classList.remove('info-open', 'kingdom-inspecting');
         $('world-info').classList.remove('active');
     }
-    if (found) {
+    if (inspected_unit) {
         update_entity_card();
         card.style.left = `${Math.max(8, Math.min(p.x + 16, canvas.clientWidth - card.offsetWidth - 8))}px`;
         card.style.top = `${Math.max(8, Math.min(p.y + 16, canvas.clientHeight - card.offsetHeight - 8))}px`;
         $('world-tooltip').hidden = true;
     }
 }
+function update_army_card() {
+    const summary = army_summary(world, inspected_unit);
+    const card = $('entity-card');
+    if (!summary) {
+        inspected_unit = null; followed_unit_id = null; card.hidden = true;
+        toast('This garrison has dispersed or changed kingdom.'); return;
+    }
+    const { army, kingdom, home, target, members, activity, weapons, armor, strength } = summary;
+    const expanded = card.querySelector('[data-detail="army"]')?.open;
+    const scroll_top = card.scrollTop;
+    const active = card.contains(document.activeElement) ? document.activeElement : null;
+    const focused_action = active?.dataset.action;
+    const focused_summary = active?.tagName === 'SUMMARY';
+    card.replaceChildren(); card.setAttribute('aria-label', 'Selected army details');
+    const heading = document.createElement('div'); heading.className = 'entity-heading';
+    const name = document.createElement('strong'); name.textContent = 'Home garrison';
+    const close = document.createElement('button'); close.dataset.action = 'close-army';
+    close.textContent = '×'; close.setAttribute('aria-label', 'Close army details');
+    close.onclick = () => { inspected_unit = null; followed_unit_id = null; card.hidden = true; };
+    heading.append(name, close); card.append(heading);
+    const identity = document.createElement('div'); identity.className = 'army-identity';
+    const kingdom_name = document.createElement('strong'); kingdom_name.textContent = kingdom.name;
+    identity.append(kingdom_flag(kingdom), kingdom_name); card.append(identity);
+    const state = document.createElement('div'); state.className = 'entity-activity';
+    state.textContent = `${followed_unit_id === army.home_id ? '◉ Following · ' : ''}${activity.map(([task, count]) => `${count} ${task.toLowerCase()}`).join(' · ')}`;
+    card.append(state);
+    const line = (label, value) => {
+        const row = document.createElement('div'); row.className = 'entity-row';
+        const key = document.createElement('span'); key.textContent = label;
+        const val = document.createElement('b'); val.textContent = value;
+        row.append(key, val); card.append(row); return row;
+    };
+    line('Home', home?.name || 'Former settlement');
+    line('Members', `${members.length} active soldiers`);
+    line('Target', target?.name || (army.target_id ? 'Changed · awaiting new plan' : 'None · guarding or training'));
+    line('Shared food', `${Math.floor(kingdom.food)} in kingdom stores`);
+    const explanation = document.createElement('p'); explanation.className = 'army-explanation';
+    explanation.textContent = target
+        ? 'Automatically targets the nearest enemy town on the same landmass. Soldiers can regroup, fight or retreat individually.'
+        : army.target_id ? 'The former target is no longer an enemy town. A new target is chosen when time runs.'
+            : 'No reachable enemy town chosen. Garrisons guard home or train at a camp during peace.';
+    card.append(explanation);
+    const actions = document.createElement('div'); actions.className = 'entity-actions';
+    const focus = document.createElement('button'); focus.dataset.action = 'focus-army'; focus.textContent = 'Focus';
+    focus.onclick = () => { renderer.focus(army.x, army.y, 4); update_zoom(); };
+    const follow = document.createElement('button'); follow.dataset.action = 'follow-army';
+    follow.textContent = followed_unit_id === army.home_id ? 'Stop following' : 'Follow';
+    follow.setAttribute('aria-pressed', String(followed_unit_id === army.home_id));
+    follow.onclick = () => {
+        followed_unit_id = followed_unit_id === army.home_id ? null : army.home_id;
+        if (followed_unit_id) { renderer.focus(army.x, army.y, 4); update_zoom(); }
+        update_army_card();
+    };
+    actions.append(focus, follow); card.append(actions);
+    const equipment = [line('Strength (sum)', String(strength)),
+        line('Weapons', weapons.map(([level, count]) => `${count} ${TECH_AGES[level].weapon}`).join(' · ')),
+        line('Armor', armor.map(([level, count]) => `${count} ${level ? TECH_AGES[level].name : 'no'} armor`).join(' · '))];
+    if (target) equipment.push(line('Target siege', `${target.siege || 0} / ${target.kingdom_id ? 8 : 14} pressure`));
+    const note = document.createElement('p'); note.className = 'army-explanation';
+    note.textContent = 'Strength sums living members’ strength; it is not a battle prediction. Food is shared by the kingdom; armies carry no separate supply stock. Siege pressure belongs to the target town and can involve several garrisons. Dashed lines show a destination, not a guaranteed route.';
+    equipment.push(note);
+    const detail = inspector_details(card, equipment, 'Equipment & how this works', 'army');
+    detail.open = Boolean(expanded); card.scrollTop = scroll_top;
+    if (focused_action) card.querySelector(`[data-action="${focused_action}"]`)?.focus({ preventScroll: true });
+    if (focused_summary) detail.querySelector('summary').focus({ preventScroll: true });
+}
 function update_entity_card() {
     if (!inspected_unit) return;
+    if (inspected_unit.kind === 'army') { update_army_card(); return; }
     const unit = (inspected_unit.kind === 'person' ? world.people : world.animals).find(u => u.id === inspected_unit.id);
     if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
     const attributes = creature_stats(unit, world.year_length);
     const card = $('entity-card');
+    card.setAttribute('aria-label', 'Selected creature details');
     const detail_focus = card.contains(document.activeElement) ? document.activeElement.closest('[data-detail]')?.dataset.detail : null;
     const expanded = new Set([...card.querySelectorAll('details[open]')].map(d => d.dataset.detail));
     const scroll_top = card.scrollTop;
@@ -869,6 +949,7 @@ function replace_world(next) {
     $('creation-guide').dataset.completed = 'false';
     $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
+    rebuild_armies(world);
     renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); select_tool('inspect'); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
 }
@@ -1031,9 +1112,14 @@ function frame(now) {
         if (pointer_down && last_pointer) { paint_elapsed += dt; if (paint_elapsed > 0.085) { paint(last_pointer, true); paint_elapsed = 0; } }
     }
     if (followed_unit_id) {
-        const unit = world.people.find(p => p.id === followed_unit_id) || world.animals.find(a => a.id === followed_unit_id);
+        const unit = inspected_unit?.kind === 'army'
+            ? world.armies.find(army => army.home_id === inspected_unit.id
+                && army.kingdom_id === inspected_unit.kingdom_id)
+            : world.people.find(p => p.id === followed_unit_id) || world.animals.find(a => a.id === followed_unit_id);
         if (unit) renderer.center_on(unit.x, unit.y); else followed_unit_id = null;
     }
+    renderer.selected_army = inspected_unit?.kind === 'army'
+        ? { home_id: inspected_unit.id, kingdom_id: inspected_unit.kingdom_id } : null;
     renderer.render(world, now);
     ui_elapsed += dt;
     if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }

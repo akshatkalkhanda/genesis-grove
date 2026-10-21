@@ -142,6 +142,12 @@ No four-kingdom setup is included; the existing general sandbox remains the targ
 
 ### M2 — Make land wars explainable · P1 · L
 
+The compact [Army Inspector](../army-inspector.md) now exposes existing home
+garrisons, live member activity/equipment, shared kingdom food and target siege
+pressure. Badge selection, focus/follow and paused-save marker reconstruction are
+implemented. Stable saved regiment identities, issued orders and dedicated supply
+mechanics remain proposals below; this inspector does not introduce them.
+
 - Give armies stable identities and states: assemble, defend, march, attack, retreat.
 - Evaluate reachable targets, threat, food and equipment instead of only distance.
 - Show targets, supply condition, siege progress, and a short reason for each order.

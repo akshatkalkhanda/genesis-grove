@@ -66,6 +66,7 @@ continues the general sandbox without a dedicated four-kingdom scenario.
 - World → View history opens a filterable record of up to 200 events. Kingdom founding, rulers, discoveries, diplomacy, trade, and disasters record their locations. Select Visit location to focus the present-day map on that place. Existing world files without event coordinates still load.
 - Twelve named device saves with explicit create/update choices; recovery keeps up to three copies per world and six overall. Autosave runs every visible real minute by default, including paused editing; choose 30 seconds, five minutes or Off under Worlds. A recovery snapshot protects the current world before New, Load or Import. The older single device save migrates once and is retained. JSON export/import remains available; malformed imports or failed protection leave the active world unchanged.
 - Layers show terrain, political borders, formed armies/targets, actual trade and settler routes, or remaining ore deposits. View/F8 opens a quiet presentation view; Pause and Exit remain available. Escape exits without arming a brush.
+- In Observe, click an army's small numbered banner to inspect its home garrison. Armies layer also reveals idle garrisons. The compact profile shows active soldiers, their current activities, shared kingdom food and the current enemy-town target; expand equipment for weapons, armor, summed strength and target siege pressure. Focus or Follow tracks the garrison's center. See [army inspection](docs/army-inspector.md) for what these summaries mean.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
 This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers and trade goods between landmasses. Coastal boats support shore defense; armies still do not launch naval invasions. Aircraft deliver food rather than passengers. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no troop formations, multigenerational genealogy, configurable genetic traits, branching research trees, multiplayer, or campaign yet. Social bonds are bounded records, and cultural identity is a small set of fixed traditions rather than an evolving language or religion system. Cosmic ages are fantasy technologies on the same map; star-system travel and controllable spacecraft are future work. Named manual saves update only when you choose that destination. Recovery copies rotate within their limits; export worlds you want to keep outside device storage.
@@ -81,6 +82,7 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Zoom | Scroll, + / −, map slider, or map buttons |
 | Technology unlocks | Ages button on the map |
 | Follow a creature | Inspect its profile, then click Follow |
+| Inspect / follow an army | Observe → click numbered army banner; use Armies layer for idle garrisons, then Focus or Follow |
 | Day/night settings | Click the clock on the map |
 | Fit world | Percentage button or minimap arrow |
 | Visit and inspect kingdom | Click kingdom in sidebar |
@@ -101,6 +103,7 @@ Dialogs pause the simulation while open. Time does not advance in a hidden brows
 npm test             # deterministic simulation and save validation
 npm run lint         # JavaScript syntax checks
 npm run smoke        # actual Electron UI, native pointer input, screenshot and export checks
+npm run smoke:army   # army badge, inspector, follow, compact layouts and save/load native checks
 npm run build        # unpacked desktop app for the host platform
 npm run dist:mac     # macOS ZIP
 npm run dist:win     # Windows installer and portable executable; build on Windows

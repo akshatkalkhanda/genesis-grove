@@ -1,4 +1,5 @@
 import { draw_map_layer } from './map_layers.js';
+import { army_visible, army_badge_hit } from './army_inspector.js';
 import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
@@ -43,6 +44,12 @@ export class Renderer {
     }
     get scale() { return this.base * this.zoom; }
     get origin() { return { x: (this.width - WIDTH * CELL * this.scale) / 2 + this.pan_x, y: (this.height - HEIGHT * CELL * this.scale) / 2 + this.pan_y }; }
+    army_at(world, point) {
+        return [...world.armies].reverse().find(army =>
+            world.villages.some(kingdom => kingdom.id === army.kingdom_id && kingdom.alive)
+            && army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)
+            && army_badge_hit(army, point, this.origin, this.scale));
+    }
     world_point(x, y) {
         const o = this.origin;
         return { x: (x - o.x) / this.scale / CELL, y: (y - o.y) / this.scale / CELL };
@@ -323,7 +330,7 @@ export class Renderer {
             if (unit.task) { c.font = '9px -apple-system, Segoe UI, sans-serif'; c.fillStyle = '#b8c8b1'; c.fillText(unit.task, x, y + 15); }
         }
         for (const army of world.armies || []) {
-            if (army.count < 1 || (!army.target_id && army.kingdom_id !== this.selected_kingdom_id && this.layer !== 'armies')) continue;
+            if (!army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)) continue;
             const kingdom = kingdoms.get(army.kingdom_id);
             if (!kingdom?.alive) continue;
             const x = o.x + army.x * CELL * s, y = o.y + army.y * CELL * s;
@@ -333,6 +340,10 @@ export class Renderer {
                 c.beginPath(); c.moveTo(x, y); c.lineTo(o.x + army.target_x * CELL * s, o.y + army.target_y * CELL * s); c.stroke(); c.setLineDash([]);
             }
             c.fillStyle = '#11221ce8'; c.fillRect(x - 12, y - 27, 27, 18);
+            if (this.selected_army?.home_id === army.home_id && this.selected_army?.kingdom_id === army.kingdom_id) {
+                c.strokeStyle = '#f2e4a3'; c.lineWidth = 2;
+                c.strokeRect(x - 14, y - 29, 31, 22);
+            }
             c.fillStyle = '#dedfc4'; c.fillRect(x - 8, y - 24, 2, 15);
             draw_flag(c, x - 6, y - 24, kingdom, 12, 8);
             c.fillStyle = '#eff4df'; c.font = 'bold 9px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
