@@ -107,3 +107,31 @@ body.kingdom-inspecting .info-panel > :not(.drawer-heading):not(#selected-kingdo
     #time-summary { margin-right: auto; }
     .topbar { gap: 4px; }
 }
+#save-status { position: absolute; left: 12px; top: 54px; max-width: 270px; padding: 4px 8px; font-size: 12px; color: #c1d5b4; background: #14271fe6; border-radius: 5px; pointer-events: none; }
+#save-status.save-error, #save-error { color: #efc09a; }
+#load-dialog { width: 720px; }
+#load-dialog h3 { margin: 22px 0 12px; font-size: 16px; }
+.world-save-list { display: grid; gap: 10px; }
+.world-save { border: 1px solid #4c6348; border-radius: 8px; padding: 12px; background: #213428; }
+.world-save > strong { font-size: 15px; overflow-wrap: anywhere; }
+.world-save p { margin: 6px 0 10px; font-size: 13px; }
+.save-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.save-row-actions button { padding: 6px 10px; }
+#save-dialog label, #load-dialog label, #load-dialog > p { font-size: 13px; }
+#save-error:empty { display: none; }
+#map-layers { position: relative; display: inline-block; }
+#map-layers summary { display: flex; align-items: center; min-height: 36px; padding: 6px 10px; font-size: 13px; border: 1px solid #60764f; border-radius: 6px; background: #21392ce8; cursor: pointer; list-style: none; }
+#map-layers summary::-webkit-details-marker { display: none; }
+.layer-options { position: absolute; right: 0; top: 44px; width: 180px; padding: 8px; border: 1px solid #60764f; border-radius: 8px; background: #172c22; box-shadow: 0 8px 24px #06110d88; }
+.layer-options label { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 13px; cursor: pointer; }
+.layer-options input { accent-color: #c9de9f; }
+#layer-legend { position: absolute; left: 12px; top: 86px; max-width: min(460px, calc(100vw - 32px)); background: #152a21ed; border: 1px solid #4f6a4f; border-radius: 6px; padding: 8px 10px; font-size: 13px; color: #d5e5c5; pointer-events: none; }
+#presentation { padding-inline: 10px; }
+body.presentation .topbar, body.presentation #sandbox-dock, body.presentation .tool-panel,
+body.presentation .info-panel, body.presentation .entity-card, body.presentation #map-view-controls,
+body.presentation .map-top, body.presentation #save-status, body.presentation #layer-legend,
+body.presentation .paused-banner, body.presentation #sound { display: none !important; }
+body.presentation #viewport { inset: 0; }
+body.presentation footer { left: 12px; right: auto; bottom: 12px; width: auto; height: auto; gap: 8px; border: 1px solid #4d6748; border-radius: 8px; padding: 5px; }
+body.presentation .time-controls > :not(#pause) { display: none; }
+body.presentation #exit-presentation { font-size: 13px; padding: 6px 10px; }

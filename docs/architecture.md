@@ -20,11 +20,13 @@ The simulation and procedural renderer use web standards without runtime library
 - `src/defenses.js`: tower fire, castle protection, wounded-soldier capture, prison feeding, timed release, and peace release.
 - `src/machines.js`: bounded fleets of water boats, ground artillery, survey balloons, courier aircraft, and larger flying transports.
 - `src/machine_art.js`: original vessel, aircraft, cannon, and fortification sprites.
+- `src/save_store.js` and `src/save_ui.js`: atomic IndexedDB named saves, bounded recovery, legacy migration, visible-time autosave and pre-replacement protection.
+- `src/map_layers.js`: actual remaining-deposit, army and trade/settler overlays; presentation mode changes the HUD without changing simulation rules.
 - `src/weather.js` and `src/weather_art.js`: bounded saved rain/storm/drought/blizzard/tsunami events, optional natural scheduling, coastal reach checks, actual crop/soil/health/structure effects and original visual effects.
 - `src/sandbox.css`: map-first Observe layout, contextual tool palette and compact dock; summary-first inspectors preserve expanded detail state.
 - `src/daylight.js`: a presentation clock independent of calendar years, smooth lighting, and a minimum three-minute cycle at high speed.
 - `src/renderer.js`: cached pixel terrain, creatures, town industries, lighting, effects, zoom, and labels.
-- `src/app.js`: menu, map preview, input, fixed simulation steps, inspection and camera following, lighting controls, and manual save/export/import.
+- `src/app.js`: menu, map preview, input, fixed simulation steps, inspection and camera following, lighting controls, and named saves, automatic recovery, export/import and presentation mode.
 - `src/layout.css`: a collapsible creator sidebar, compact bottom catalog, and map sized to the remaining space; compact windows preserve zoom and save/load actions.
 - `src/desktop.cjs`: Electron window and native application menu.
 - `scripts/smoke.cjs`: isolated Electron UI checks using native pointer input, imports, and screenshots in ignored `artifacts/`.

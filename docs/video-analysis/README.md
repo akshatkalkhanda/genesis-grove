@@ -1,8 +1,10 @@
-# Four kingdoms: mechanics and UI plan
+# Living sandbox: mechanics and UI plan
 
 Planning document · 21 October 2026 · baseline: Genesis Grove 0.17.0, commit `a86e98a`.
 
 The goal is a living world that is enjoyable to watch and easy to understand.
+The four kingdoms in the video are an example, not a required game mode. The owner
+has explicitly excluded a dedicated four-kingdom setup from the implementation.
 Give the map most of the screen, reveal detail when requested, and make the
 simulation's decisions visible. Improve this experience before adding more ages,
 species, or decorative panels.
@@ -13,8 +15,12 @@ Version 0.18.0 implements the first M0 slice: Observe default, compact map tools
 contextual editing and summary-first citizen/kingdom inspection. The owner's
 follow-up also adds the first [Nature system](../nature.md): rain clouds, storms,
 lightning, drought, blizzards and deep-ocean coastal waves. The feature comparison
-below records the original 0.17.0 baseline. M1 and subsequent milestones remain
-planned; richer layers, army/ship inspectors and presentation mode are not complete.
+below records the original 0.17.0 baseline. That release left the remaining UI
+and save work for subsequent slices.
+
+Version 0.19.0 adds named saves, bounded automatic recovery and protection before
+world replacement. Map layers and a quiet presentation view extend M0 for the general
+sandbox. There is no new kingdom-count requirement or dedicated scenario.
 
 ## Read this first
 
@@ -77,16 +83,17 @@ without issuing routine orders to every citizen.
 
 ## What already exists and what needs work
 
-Source inspection confirms these capabilities; no fresh gameplay test was run for
-this documentation update. The inspected local simulation, app, and renderer files
-match the public baseline commit.
+The table records the original 0.17.0 inspection baseline, before the UI, nature
+and recovery implementation. That planning pass used source inspection rather
+than a fresh gameplay test. The progress notes below and versioned release notes
+describe the completed changes and their desktop checks.
 
-| Area | Current implementation | Required addition or improvement | Priority |
+| Area | 0.17.0 baseline implementation | Required addition or improvement | Priority |
 | --- | --- | --- | --- |
 | Main UI | Large header, collapsible creator sidebar, two-row tool catalog, information drawer. | Map-first Observe default; compact dock; contextual editing controls. | P0 |
 | Inspection | Citizen portrait, traits, health risks, family, equipment, Follow; kingdom details in diplomacy dialog. | Unified non-modal inspector with short summaries, tabs, clickable identities, and clear selection. | P0 |
 | Map readability | Territory tint, flags, labels, minimap, zoom and pan. | Zoom-based label density, named overlay modes, army/route/siege explanations. | P0 |
-| Scenario setup | Sandbox, 100 kingdoms; four-continent landscape; usual sandbox tries to seed three kingdoms. | Dedicated four-kingdom scenario with editable starts, seed, rules, and validated spawn sites. | P1 |
+| Scenario setup | Sandbox, 100 kingdoms; four-continent landscape; usual sandbox tries to seed three kingdoms. | Preserve general seeded setup and editable rules; no dedicated four-kingdom scenario. | Existing |
 | World building | Seeded biomes, terrain brushes, finite ores; fixed 192 × 128 map. | Original scenario geography with lakes, channels, mountain passes, and viable starts; larger dimensions later. | P1/P3 |
 | Economy | Jobs, finite resources, farms, reserves, housing, medicine, research, visible daily routines. | Surface bottlenecks and explain labor, food, equipment, and recruitment decisions. | P1 |
 | Traits and culture | Five base personality traits, inherited aptitudes, bounded relationships, four fixed traditions, ruler effects. | Inspectable modifier breakdown; configurable trait sets later. | P1/P3 |
@@ -116,21 +123,22 @@ window in idle Observe mode. A new player can pause, paint land, place a people,
 inspect a citizen, and return to Observe without instruction from the developer.
 Escape and clicking controls never apply a map brush. See the UI acceptance list.
 
-### M1 — Deliver a repeatable four-kingdom sandbox · P1 · M
+### M1 — Keep and recover any sandbox world · P1 · M
 
-- Add a Four Kingdoms scenario independently of the Four Continents landscape.
-- Use an original map at the existing size first. Offer balanced and asymmetric
-  starting conditions, four banners, chosen peoples, seed, and law toggles.
-- Validate usable land, local food/wood/ore access and distances; show unmet
-  requirements rather than silently starting fewer than four kingdoms.
-- Preview actual spawn positions and geographic access. Default to a paused start.
-- Add named world slots, bounded autosave recovery, and a pre-replacement snapshot.
-- Explain town economy and current strategy through the inspector.
+- Provide up to twelve named saves with explicit create/update destinations.
+- Preserve the old single device save through one-time migration without deleting it.
+- Keep up to three recovery copies per world, six total; never rotate manual saves.
+- Autosave by visible real time, independent of simulation speed, including paused
+  editing. Allow Off, 30 seconds, one minute or five minutes.
+- Protect the current world before New, Load or Import; reject malformed imports
+  before changing anything. Leave the current world in place if protection fails.
+- Use atomic storage changes so a quota failure cannot replace the old good copy.
+- Show the last save outcome, named worlds, dated recovery reasons and file export.
 
-**Done when:** the same seed/settings produce the same starting state; four viable
-kingdoms are visible; preview matches play; restoring a snapshot preserves state;
-an invalid import cannot replace the active world. Balanced starts mean comparable
-opportunity, not a guaranteed draw or survival time.
+**Done when:** named worlds remain independent, update is explicit, old saves remain
+readable, automatic recovery and pre-replacement copies load correctly, failed saves
+preserve earlier copies, and invalid imports leave the active world unchanged.
+No four-kingdom setup is included; the existing general sandbox remains the target.
 
 ### M2 — Make land wars explainable · P1 · L
 
@@ -190,7 +198,7 @@ measure simulation-step cost separately. No larger-map performance is claimed ye
 ### Later options — Add depth selectively · P3
 
 Configurable inherited traits; deeper family trees; evolving culture/religion;
-multi-kingdom alliances; environmental events; equipment provenance and wear.
+multi-kingdom alliances; further environmental events; equipment provenance and wear.
 The reference shows interfaces for several of these. Select one at a time after
 M0–M4, with a visible effect and a bounded saved-state design. Further cosmic ages,
 off-world travel and extra species do not address this video's main UI lesson.
@@ -200,7 +208,7 @@ off-world travel and extra species do not address this video's main UI lesson.
 | Work | Main code touchpoints | Required proof before completion |
 | --- | --- | --- |
 | M0 UI | `index.html`, `src/app.js`, `src/layout.css`, `src/ui.css`, `src/renderer.js` | Native pointer/keyboard smoke checks, screenshots at 1366×768 and 1024×768; no brush action through controls. |
-| M1 setup/recovery | `World` constructor/generation/serialization in `src/simulation.js`, setup/save UI in `src/app.js` | Deterministic starts, spawn rejection, save migration and recovery/import failure cases. |
+| M1 saves/recovery | `src/save_store.js`, `src/save_ui.js`, existing save validation in `src/simulation.js` | Independent slots, legacy migration, atomic failures, timed autosave, pre-replacement protection and invalid import cases. |
 | M2 war | `src/strategy.js`, `plan_armies`, `resolve_sieges`, `conquer_site`, `src/defenses.js` | Reachability, retreat/supply effects, partial conquest, treaty transitions, save/resume. |
 | M3 sea travel | `src/pathfinding.js`, voyages in `src/simulation.js`, `src/machines.js`, `src/crews.js`, renderer | Passenger conservation, water-only routes, invalid landing, crew/dock loss, peace and mid-trip restore. |
 | M4 story | `World.log`, serialization, history/follow UI and renderer | Bounded history, preserved key events, valid links, camera return; snapshot claims match stored data. |
@@ -211,5 +219,5 @@ checks plus real desktop UI checks for behavior changes. Publish completed sourc
 updates according to project instructions. Make Mac/Windows packages only for an
 actual desktop release, and distinguish a successful build from Windows playtesting.
 
-**Scope of this update:** documentation and original diagrams only. It does not
-implement the proposed UI or simulation, change saves, or create a new release.
+**Original planning pass:** documentation and original diagrams only. Later
+implementation is tracked in the progress notes above and the versioned releases.

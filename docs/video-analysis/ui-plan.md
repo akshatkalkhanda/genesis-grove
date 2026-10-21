@@ -1,8 +1,9 @@
 # UI plan: a clear view of a living world
 
 Companion to the [implementation path](README.md). This is a design specification,
-the full target. Version 0.18.0 implements the first slice described at the end;
-layer selection, dedicated army/ship inspectors and presentation view remain planned.
+covering the full target. Version 0.18.0 introduced the first slice; 0.19.0 adds
+map layers, saved-world management and presentation view. Dedicated army/ship
+inspectors remain part of later military and transport work.
 
 ## The reference's useful pattern
 

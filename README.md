@@ -23,16 +23,16 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.18.0 opens in Observe mode with a map-first layout, compact tool dock,
-contextual creator palette and concise citizen/kingdom inspectors. Add rain clouds,
-thunderstorms, lightning, droughts, blizzards and coastal tsunamis from Nature.
-Natural weather is optional under world rules; active events survive saving and loading.
+Version 0.19.0 adds named world saves, automatic recovery, pre-replacement snapshots,
+map layers and a quiet presentation view. The map-first Observe UI and natural events
+from 0.18.0 remain. The reference video's four kingdoms are an example; this update
+continues the general sandbox without a dedicated four-kingdom scenario.
 
 ## A living sandbox
 
 - Sixteen terrain brushes, including desert, savanna, jungle, snowfields, maple groves, mushroom glades, crystal wilds, and luminous Starbloom. New generated maps contain biome regions with distinct pixel vegetation and colors.
 - Seeded islands, a great continent, four separated continents, or Prismatic Wildlands, plus empty ocean for building from scratch. Inhabited Wildlands starts eight different peoples, with wildlife placed in matching biomes.
-- A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused. The bottom tray separates Land, People, Animals, Plants, and Events, with illustrated life choices and placement instructions. Active tool details, brush size, ages, zoom, lighting, and a collapsible getting-started guide live in the left creator sidebar. The map fits beside that sidebar and above the bottom catalog; collapse the sidebar for more map space. Completed getting-started steps fold away automatically. World information opens in a drawer.
+- A main menu offers Create, Continue, and Load. The world setup preview matches the chosen seed; Regenerate makes another map. New worlds begin paused in Observe mode. The compact dock opens Land, People, Animals, Plants, Nature and Events only when selected. Contextual tools include illustrated choices and placement instructions; closing them gives the space back to the map. World information opens in a drawer.
 - Eleven playable peoples: humans, elves, dwarves, orcs, foxfolk, harefolk, catfolk, frogfolk, wolfkin, hyenafolk, and beetlefolk. Habitat bonuses improve food gathering; foxfolk move faster, harefolk reproduce faster, and beetlefolk mine more ore and resist damage.
 - Each kingdom has its own banner color and finite claims around its towns, leaving distant wilderness unclaimed. Captured towns change the border. Creatures have different pixel silhouettes and selection icons.
 - Hills and mountains contain copper, tin, iron, and coal deposits. Use matching Powers brushes to place deposits for a kingdom; miners gather finite ore from nearby veins. Iron Age miners can prospect up to three deeper seams per rocky tile; the save records depletion.
@@ -64,10 +64,11 @@ Natural weather is optional under world rules; active events survive saving and 
 - Nature offers drifting rain clouds that restore soil and quench fires, thunderstorms with actual lightning, droughts that reduce fertility and farm growth, blizzards that harm crops and exposed life, and tsunamis. Automatic events are off by default and can be enabled in setup or Kingdoms. At most six events run at once.
 - Start a tsunami in a 5×5 deep-ocean area within 40 tiles of a reachable low coast. Its visible wave travels two tiles per simulation second, damages coastal boats, lowland homes, crop growth and exposed life, and washes out roads. Hills and mountains block it; flooding reaches at most three lowland tiles inland and leaves the original terrain behind. This is a bounded game model, not fluid simulation. Trade/settler voyages and emergency evacuation are not modeled as wave targets yet.
 - World → View history opens a filterable record of up to 200 events. Kingdom founding, rulers, discoveries, diplomacy, trade, and disasters record their locations. Select Visit location to focus the present-day map on that place. Existing world files without event coordinates still load.
-- One manual device save slot; JSON export/import for portable worlds. Import validates terrain, entities, references, and size before replacing the current world.
+- Twelve named device saves with explicit create/update choices; recovery keeps up to three copies per world and six overall. Autosave runs every visible real minute by default, including paused editing; choose 30 seconds, five minutes or Off under Worlds. A recovery snapshot protects the current world before New, Load or Import. The older single device save migrates once and is retained. JSON export/import remains available; malformed imports or failed protection leave the active world unchanged.
+- Layers show terrain, political borders, formed armies/targets, actual trade and settler routes, or remaining ore deposits. View/F8 opens a quiet presentation view; Pause and Exit remain available. Escape exits without arming a brush.
 - Optional synthesized ambient music and power sounds. No audio or image downloads.
 
-This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers and trade goods between landmasses. Coastal boats support shore defense; armies still do not launch naval invasions. Aircraft deliver food rather than passengers. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no troop formations, multigenerational genealogy, configurable genetic traits, branching research trees, multiplayer, or campaign yet. Social bonds are bounded records, and cultural identity is a small set of fixed traditions rather than an evolving language or religion system. Cosmic ages are fantasy technologies on the same map; star-system travel and controllable spacecraft are future work. A device save is overwritten when you press Save again; export worlds you want to keep separately. There is no automatic save.
+This is an expanding playable sandbox. The 100-kingdom challenge is an original scenario inspired by a WorldBox video, not a recreation of its workshop map. Ships carry settlers and trade goods between landmasses. Coastal boats support shore defense; armies still do not launch naval invasions. Aircraft deliver food rather than passengers. The map stays 192 × 128 tiles, and the economy, diplomacy, sieges, and technology are simpler than WorldBox. Seasons remain visual time markers. There are no troop formations, multigenerational genealogy, configurable genetic traits, branching research trees, multiplayer, or campaign yet. Social bonds are bounded records, and cultural identity is a small set of fixed traditions rather than an evolving language or religion system. Cosmic ages are fantasy technologies on the same map; star-system travel and controllable spacecraft are future work. Named manual saves update only when you choose that destination. Recovery copies rotate within their limits; export worlds you want to keep outside device storage.
 
 ## Controls
 
@@ -88,9 +89,11 @@ This is an expanding playable sandbox. The 100-kingdom challenge is an original 
 | Speed | 1 / 2 / 3 / 4 for 1× / 2× / 5× / 20× |
 | Observe / inspect | Default mode; I or Observe, then select a person, animal or claimed kingdom. Esc cancels painting |
 | Brush size | [ / ] |
-| Device save | Cmd+S / Ctrl+S |
+| Save / worlds | Save or Cmd+S / Ctrl+S opens named save; Worlds opens saved and recovery copies |
+| Map layers | Layers menu on the map |
+| Quiet view | View button / F8; Exit or Esc returns |
 
-Dialogs pause the simulation while open. Time does not advance in a hidden browser tab. Destructive powers and new-world creation have no undo; save or export first.
+Dialogs pause the simulation while open. Time does not advance in a hidden browser tab. Destructive powers have no undo; save or export first. New worlds, loads and imports keep a pre-replacement recovery copy when a world is active.
 
 ## Build and check
 
@@ -106,11 +109,13 @@ npm run dist:win:zip # cross-build an unsigned Windows x64 ZIP on macOS
 
 `make setup`, `make dev`, `make test`, `make lint`, and `make build` wrap these commands. `npm run lint` checks syntax only; no formatter or type checker is configured. The CI workflow builds macOS and Windows packages on their respective runners, manually or on a version tag. It does not publish releases. Builds are unsigned by default; signing/notarization requires your own credentials. Windows execution must be tested on Windows before claiming that release is verified.
 
+See [named saves, recovery and map views](docs/world-saves.md) for the current device library and observation controls.
+
 See [architecture and simulation notes](docs/architecture.md) for implementation boundaries.
 
 See the ordered [gameplay roadmap](docs/roadmap.md) for naval warfare, environmental events, richer maps, and save recovery.
 
-See the [four-kingdom mechanics and UI plan](docs/video-analysis/README.md) for the
+See the [sandbox mechanics and UI plan](docs/video-analysis/README.md) for the
 21 October video review, a clearer map-first interface, and the implementation chart.
 
 See the [video comparison](docs/video-comparison.md) for the reference features and current gaps.

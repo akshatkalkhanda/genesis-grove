@@ -1,3 +1,4 @@
+import { draw_map_layer } from './map_layers.js';
 import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
@@ -26,6 +27,7 @@ export class Renderer {
         this.territory_ctx = this.territory.getContext('2d');
         this.territory_last = -Infinity;
         this.zoom = 1; this.pan_x = 0; this.pan_y = 0;
+        this.layer = 'political';
         this.borders = true; this.pointer = null; this.brush = 4; this.tool = 'grass'; this.selected_kingdom_id = null;
         this.last_revision = -1; this.last_cache = 0;
         this.resize();
@@ -289,6 +291,7 @@ export class Renderer {
                 for (const house of village.houses) c.fillRect(house.x * CELL - 2, house.y * CELL - 5, 2, 2);
             }
         }
+        draw_map_layer(c, world, this.layer, CELL);
         if (this.pointer) {
             const p = this.world_point(this.pointer.x, this.pointer.y);
             if (world.inside(p.x, p.y)) {
@@ -320,12 +323,12 @@ export class Renderer {
             if (unit.task) { c.font = '9px -apple-system, Segoe UI, sans-serif'; c.fillStyle = '#b8c8b1'; c.fillText(unit.task, x, y + 15); }
         }
         for (const army of world.armies || []) {
-            if (army.count < 2 || (!army.target_id && army.kingdom_id !== this.selected_kingdom_id)) continue;
+            if (army.count < 1 || (!army.target_id && army.kingdom_id !== this.selected_kingdom_id && this.layer !== 'armies')) continue;
             const kingdom = kingdoms.get(army.kingdom_id);
             if (!kingdom?.alive) continue;
             const x = o.x + army.x * CELL * s, y = o.y + army.y * CELL * s;
             if (x < -30 || x > this.width + 30 || y < -30 || y > this.height + 30) continue;
-            if (army.target_id && (this.zoom > 1.4 || army.kingdom_id === this.selected_kingdom_id)) {
+            if (army.target_id && (this.zoom > 1.4 || army.kingdom_id === this.selected_kingdom_id || this.layer === 'armies')) {
                 c.strokeStyle = `${kingdom.color}77`; c.lineWidth = 1.5; c.setLineDash([4, 4]);
                 c.beginPath(); c.moveTo(x, y); c.lineTo(o.x + army.target_x * CELL * s, o.y + army.target_y * CELL * s); c.stroke(); c.setLineDash([]);
             }

@@ -2,20 +2,21 @@
 
 ## Current planning path, 21 October 2026
 
-The [four-kingdom mechanics and UI plan](video-analysis/README.md) updates the order
-below for the next workstream: map-first UI, repeatable four-kingdom setup and save
+The [sandbox mechanics and UI plan](video-analysis/README.md) updates the order
+below for the current workstream: map-first UI, named saves and automatic
 recovery, explainable land warfare, naval invasions, long-run observation, then
 larger maps. See the [visual roadmap](video-analysis/roadmap.svg) and
-[UI requirements](video-analysis/ui-plan.md). These are planned changes, not shipped
-features. Environmental and deeper character systems remain later options.
+[UI requirements](video-analysis/ui-plan.md). The sections below distinguish completed slices from planned work. Further hazards and deeper character systems remain later options.
 
 ## Completed first slice, 0.18.0
 
 The first M0 slice now provides Observe default, a compact dock, contextual tools,
 concise inspectors and native input checks. A Nature slice adds moving rain and
 storms, lightning, drought, blizzards and deep-ocean coastal tsunamis, with optional
-automatic events and saved state. Layer selection, full army/ship inspectors and
-presentation mode remain future UI work. Next: M1 four-kingdom setup and save recovery.
+automatic events and saved state. Version 0.19.0 adds named saves/recovery, map
+layers and presentation view. Full army/ship inspectors remain future work.
+The four kingdoms are only the video example; no dedicated setup is planned.
+Next: explainable land warfare and more detailed army/ship inspection.
 See [nature mechanics](nature.md) for current effects and later hazards.
 
 ## Earlier feature priorities
@@ -28,10 +29,11 @@ lighting support those systems. Version 0.12 adds fourteen ages through Cosmic D
 Continue in this order:
 
 4. Naval warfare: extend coastal cannon boats into ship combat, transport armies, and land on enemy coasts. Existing aircraft carry food; troop transport remains future work.
-5. Environmental events: droughts, blizzards, floods, and volcanic activity.
+5. Further environmental events: inland floods and volcanic activity. Droughts,
+   blizzards and bounded coastal tsunami flooding shipped in 0.18.0.
 6. Richer maps: rivers, lakes, coherent mountain ranges, and larger maps with
    performance limits and clearer biome transitions.
-7. Save recovery: autosave, multiple world slots, and recovery snapshots.
+7. Save recovery: delivered in 0.19.0; extend as larger maps and longer histories require.
 
 Later character work can add relationships, family trees, and inherited traits.
 Current parent records and personality traits are intentionally simpler.

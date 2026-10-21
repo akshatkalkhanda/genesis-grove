@@ -47,8 +47,9 @@ durations in its tooltip and opens the Nature tools.
 
 ## Build order from here
 
-The map-focused UI and this nature slice come first. Continue with four-kingdom
-setup, world slots and recovery snapshots. Later nature work can add flood depth
+The map-focused UI and this nature slice come first. Version 0.19.0 adds general world slots and recovery snapshots; the four kingdoms
+remain a reference example rather than a game-mode requirement. Continue with
+clearer land warfare and transport. Later nature work can add flood depth
 and drainage, coastal evacuation and warning behavior, tornadoes, volcanic eruptions,
 earthquakes, and climate/season effects. Add one hazard at a time with visible
 causes, bounded saved state and terrain-specific behavior. None of these later

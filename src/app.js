@@ -1,3 +1,5 @@
+import { MAP_LAYERS, layer_summary } from './map_layers.js';
+import { create_save_ui } from './save_ui.js';
 import { WEATHER } from './weather.js';
 import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
@@ -120,7 +122,11 @@ let followed_unit_id = null;
 let inspect_start = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
 let toast_timer, audio_context, audio_gain, sound_on = false;
-const storage_key = 'genesis-grove-world-v1';
+const saves = create_save_ui({
+    get_world: () => world, is_started: () => world_started, replace: replace_world,
+    after_load: () => { if (!$('start-screen').hidden) show_start_ready(); },
+    pause: set_pause, is_paused: () => paused, notify: toast
+});
 let world_started = false;
 function toast(message) {
     $('toast').textContent = message; $('toast').hidden = false;
@@ -250,6 +256,24 @@ $('zoom-out').onclick = () => { renderer.zoom_at(1 / 1.15); update_zoom(); };
 $('zoom-reset').onclick = $('fit').onclick = () => { followed_unit_id = null; renderer.fit(); update_zoom(); };
 $('borders').onclick = () => { renderer.borders = !renderer.borders; $('borders').classList.toggle('active', renderer.borders); };
 $('inspect').onclick = () => $('observe').click();
+for (const option of document.querySelectorAll('[name="map-layer"]')) option.onchange = () => {
+    renderer.layer = option.value; renderer.borders = option.value !== 'terrain' && option.value !== 'resources';
+    $('borders').classList.toggle('active', renderer.borders);
+    $('map-layers').open = false;
+    $('map-layers').querySelector('summary').textContent = MAP_LAYERS[option.value];
+    $('map-layers').querySelector('summary').focus();
+    update_ui();
+};
+function set_presentation(active) {
+    document.body.classList.toggle('presentation', active);
+    $('presentation').setAttribute('aria-pressed', String(active));
+    $('exit-presentation').hidden = !active;
+    $('map-layers').open = false;
+    if (active) { select_tool('inspect'); $('exit-presentation').focus(); }
+    else $('presentation').focus();
+}
+$('presentation').onclick = () => set_presentation(true);
+$('exit-presentation').onclick = () => set_presentation(false);
 function research_status(kingdom) {
     const next_level = technology_level(kingdom) + 1, next = TECH_AGES[next_level];
     if (!next) return 'All fourteen ages discovered';
@@ -769,6 +793,8 @@ function update_world_guidance(stats = world.stats()) {
     $('world-state-detail').textContent = detail;
 }
 function update_ui() {
+    $('layer-legend').hidden = renderer.layer === 'political';
+    $('layer-legend').textContent = layer_summary(world, renderer.layer);
     $('weather-summary').textContent = world.weather.length ? `${world.weather.length} natural event${world.weather.length === 1 ? '' : 's'}` : '☁ Nature';
     $('weather-summary').title = world.weather.length ? world.weather.map(e => `${WEATHER[e.kind].label}: ${Math.ceil(WEATHER[e.kind].duration - e.age)}s remaining`).join(' · ') : 'Rain, storms and coastal disasters';
     update_entity_card();
@@ -881,14 +907,13 @@ function show_start_ready() {
     $('start-screen').hidden = false;
 }
 function close_start() { $('start-screen').hidden = true; set_pause(false); }
-function show_start_home() {
+async function show_start_home() {
     set_pause(true);
     document.body.classList.remove('info-open'); $('world-info').classList.remove('active');
     $('start-home').hidden = false; $('start-ready').hidden = true;
     $('menu-resume').hidden = !world_started;
-    let saved = false;
-    try { saved = Boolean(localStorage.getItem(storage_key)); } catch { /* Storage may be unavailable. */ }
-    $('menu-continue').disabled = !saved;
+    $('menu-continue').disabled = true;
+    saves.has_saved().then(saved => { $('menu-continue').disabled = !saved; });
     $('start-message').textContent = 'Choose a landscape, set the rules, and begin your world.';
     $('start-detail').textContent = 'Build it from empty ocean or choose a generated map.';
     $('start-screen').hidden = false;
@@ -905,10 +930,7 @@ $('menu-create').onclick = $('menu-edit').onclick = $('new-world').onclick = ope
 $('menu-resume').onclick = close_start;
 $('menu-start').onclick = close_start;
 $('menu-paint').onclick = () => { $('start-screen').hidden = true; set_pause(true); };
-$('menu-continue').onclick = () => {
-    try { replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world)); show_start_ready(); }
-    catch { toast('That save could not be loaded. Your current world is safe.'); }
-};
+$('menu-continue').onclick = () => saves.continue();
 $('menu-load').onclick = () => $('load').click();
 $('regenerate-seed').onclick = () => { $('new-form').elements.seed.value = fresh_seed(); refresh_preview(); };
 $('new-form').elements.seed.oninput = schedule_preview;
@@ -926,55 +948,14 @@ $('scenario').onchange = () => {
 };
 $('help').onclick = () => $('help-dialog').showModal();
 for (const button of document.querySelectorAll('[data-close]')) button.onclick = () => button.closest('dialog').close();
-$('new-form').onsubmit = event => {
+$('new-form').onsubmit = async event => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const name = String(data.get('name')).trim() || 'An Unwritten World';
     const seed = String(data.get('seed')).trim();
     const next = new World({ name, seed, preset: $('preset').value, inhabited: data.has('inhabited'), scenario: $('scenario').value });
     next.laws = { natural_events: data.has('natural_events'), diplomacy: data.has('diplomacy'), expansion: data.has('expansion'), rebellions: data.has('rebellions') };
-    replace_world(next);
+    if (!await saves.transition(next, { reason: 'before-new' })) return;
     $('new-dialog').close(); show_start_ready(); toast('Your world is ready. Start time whenever you like.');
-};
-$('save').onclick = () => {
-    try {
-        localStorage.setItem(storage_key, JSON.stringify({ saved_at: new Date().toISOString(), world: world.serialize() }));
-        toast('World saved on this device.');
-    } catch { toast('Device storage is unavailable. Use Load → Export to save a file.'); }
-};
-$('load').onclick = () => {
-    try {
-        const saved = JSON.parse(localStorage.getItem(storage_key) || 'null');
-        if (saved) {
-            const checked = World.deserialize(saved.world);
-            $('saved-world').textContent = `${checked.name} · Year ${checked.year} · ${checked.people.length} people · saved ${new Date(saved.saved_at).toLocaleString()}`;
-        } else $('saved-world').textContent = 'No device save yet. You can import a world file below.';
-        $('restore').disabled = !saved;
-    } catch { $('saved-world').textContent = 'The device save could not be read. Import a world file instead.'; $('restore').disabled = true; }
-    $('load-dialog').showModal();
-};
-$('restore').onclick = () => {
-    try {
-        replace_world(World.deserialize(JSON.parse(localStorage.getItem(storage_key)).world));
-        $('load-dialog').close(); if (!$('start-screen').hidden) show_start_ready();
-        toast('Welcome back to your world.');
-    }
-    catch { toast('That save could not be loaded. Your current world is safe.'); }
-};
-$('export').onclick = () => {
-    const blob = new Blob([JSON.stringify(world.serialize())], { type: 'application/json' });
-    const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url;
-    a.download = `${world.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'world'}-year-${world.year}.json`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); toast('World file exported. Keep it for your next adventure.');
-};
-$('import').onchange = async event => {
-    const file = event.target.files[0]; if (!file) return;
-    try {
-        if (file.size > 8_000_000) throw new Error('World files must be smaller than 8 MB.');
-        const next = World.deserialize(JSON.parse(await file.text()));
-        replace_world(next); $('load-dialog').close(); if (!$('start-screen').hidden) show_start_ready();
-        toast('Your world has arrived.');
-    } catch (error) { toast(error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message); }
-    event.target.value = '';
 };
 window.addEventListener('keydown', event => {
     if (!$('start-screen').hidden || document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
@@ -983,7 +964,12 @@ window.addEventListener('keydown', event => {
     if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) set_pause(!paused); }
     if (['1', '2', '3', '4'].includes(event.key)) { set_speed({ 1: 1, 2: 2, 3: 5, 4: 20 }[event.key]); set_pause(false); }
     if (event.key.toLowerCase() === 'i') $('observe').click();
-    if (event.key === 'Escape') $('observe').click();
+    if (event.key === 'F8') { event.preventDefault(); set_presentation(!document.body.classList.contains('presentation')); return; }
+    if (event.key === 'Escape') {
+        if (document.body.classList.contains('presentation')) set_presentation(false);
+        else if ($('map-layers').open) $('map-layers').open = false;
+        else $('observe').click();
+    }
     if (event.key === '+' || event.key === '=') renderer.zoom_at(1.2);
     if (event.key === '-') renderer.zoom_at(1 / 1.2);
     if (['[', ']'].includes(event.key)) { $('brush').value = Math.max(1, Math.min(12, brush + (event.key === ']' ? 1 : -1))); $('brush').oninput(); }
@@ -1033,6 +1019,7 @@ let last_frame = performance.now(), accumulator = 0, ui_elapsed = 0;
 function frame(now) {
     const dt = Math.min((now - last_frame) / 1000, 0.1); last_frame = now;
     const dialog_open = Boolean(document.querySelector('dialog[open]'));
+    saves.frame(now, world_started && !document.hidden && !dialog_open && $('start-screen').hidden);
     if (!document.hidden && !dialog_open && $('start-screen').hidden) {
         if (!paused) {
             advance_daylight(world.lighting, dt, speed);
