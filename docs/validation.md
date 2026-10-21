@@ -1,4 +1,71 @@
-# Version 0.13.0 validation — 19 October 2026
+# Version 0.17.0 validation — 21 October 2026
+
+- Food shortage was traced to farms yielding only 18 food per 30 simulation
+  seconds, a three-field limit, and military/optional spending that did not wait
+  for basic needs. Fields now scale with population and require adult farmers;
+  basic shelter and food reserves precede discretionary development.
+- The civic and crew suite passed 98 tests, including finite harvest accounting,
+  granary conservation, field staffing, on-site schooling, wells, sanctuary rest,
+  empty-machine inactivity, adult boarding, sailor cleanup over water, and crew
+  save validation.
+- The rebuilt v0.17.0 Mac package passed all 46 desktop checks with no renderer
+  errors, including native boat/sailor and balloon/pilot inspection, visible crew,
+  civic districts and basic-needs status. Packaged HTML and all 27 source JS/CSS
+  modules matched the authoritative checkout byte for byte. Crew close-up images
+  were visually reviewed. The staged `artifacts/fortress-showcase.json` includes
+  the civic district and five crewed machine types for immediate import.
+- Mac gameplay validation was performed locally. Windows interactive gameplay
+  remains untested; packaging and CI results are verified separately on GitHub.
+- A fresh 120-year `emerald-17` run retained all three kingdoms with 489 living
+  citizens and ample food. All six boats/artillery pieces had valid adult crew,
+  aboard positions matched their machines, and a save round trip passed. Fishing
+  deliveries were recorded. This single seeded run is a regression check, not
+  proof that every terrain or disaster scenario remains self-sufficient.
+
+## Earlier local version 0.16.0
+
+- 90 simulation tests passed, including actual births, adult parent selection, saved
+  relationships and work routines, child labor/recruitment exclusion, finite timber
+  cargo, harvesting the assigned forest tile, and construction timber reserves.
+- Medical checks cover clinic/hospital construction, distinct staff assignments,
+  doctor travel and finite herb collection, food and medicine consumption,
+  infection treatment, return to training, island isolation, famine recovery,
+  continued elder decline, no revival of dead citizens, bounded damage history,
+  legacy saves, and malformed medical metadata.
+- The medical 120-year default seed `emerald-17` ended with all three kingdoms
+  alive and 311 citizens. Starving citizens resumed gathering instead of becoming
+  stuck awaiting foodless treatment; the 18 recovering residents at the endpoint
+  were elders. Two kingdoms still had low food reserves, so this is a regression
+  and routing diagnostic rather than evidence of universally balanced food supply.
+  Natural `color-world` development still produced farm, windmill, armory, and
+  training camp by year 16.
+- 44 checks passed against the rebuilt packaged Mac app after the sidebar and medical
+  update, with no renderer errors. New checks cover docking, sidebar collapse
+  resizing, completed-guide folding, and compact-window zoom/save/load access.
+  Packaged HTML, app code, and the layout stylesheet match the source byte for byte. Checks
+  include culture profiles, navigating living family/social links, save/import,
+  existing industries, cosmic equipment, fortifications, and aircraft.
+- The medical showcase imports a soldier injured through actual combat damage
+  accounting and verifies live treatment, the visible health inspector, and the
+  kingdom medical summary. Selecting a creature closes the overlapping world
+  panel. `artifacts/medical-care.png` was visually reviewed; the accompanying
+  `medical-showcase.json` is a staged care demonstration, not a natural world.
+- The Documents copy had retained the older HTML page. It is now synchronized with
+  the current source and the packaged entry point and core modules are compared
+  byte for byte with the publishing checkout.
+- Wildlands seed `color-world`, with expansion enabled, naturally constructs a
+  farm, windmill, armory, and camp by year 18. Correcting forest worksite harvesting
+  and bounding spare gear resolves the timber starvation found during validation.
+- A 120-year fresh default-world run ended with all three kingdoms alive, 353
+  citizens (67 under 18), 3,357 units delivered by citizens, and 421 vehicle
+  deliveries. All five routine phases appeared, and save round trips preserved
+  people, villages, and vehicles. This is one seeded run, not a broad balance benchmark.
+- The final Mac application was rebuilt locally. Windows v0.16.0 has not been run
+  or packaged during this check. No public v0.16.0 release has been published.
+
+## Earlier release evidence
+
+### Version 0.13.0 validation — 19 October 2026
 
 This update adds fourteen ages through Cosmic Dust, visible ranged and energy weapons, working roads and farm transport, monuments and advanced industries, varied tree artwork, angels and demons, kingdom flags and ruler succession, and easier zoom controls.
 

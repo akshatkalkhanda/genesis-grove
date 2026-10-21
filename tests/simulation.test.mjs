@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T, WIDTH, HEIGHT, TECH_AGES, RACES, ANIMALS, technology_level } from '../src/simulation.js';
+import { creature_stats } from '../src/creatures.js';
 const blank = () => new World({ preset: 'empty', inhabited: false });
 test('generated wildlands contain colorful biomes and preserve them through saves', () => {
     const world = new World({ seed: 'color-world', preset: 'wildlands' });
@@ -139,8 +140,10 @@ test('advanced weapons inflict more damage in the same fight', () => {
 test('barracks train soldiers who consume supplies and leave civilians out of combat', () => {
     const world = blank(); world.apply('grass', 45, 45, 18);
     const kingdom = world.found_village(40, 45);
-    for (let i = 0; i < 9; i++) { world.add_person(40, 45, kingdom.id); world.people.at(-1).age = 10; }
+    for (let i = 0; i < 9; i++) { world.add_person(40, 45, kingdom.id); world.people.at(-1).age = 20 * world.year_length; }
     kingdom.food = 60; kingdom.wood = 40; kingdom.expansion_timer = 11; kingdom.training_timer = 7.9;
+    kingdom.houses.push({ x: 43, y: 45 });
+    kingdom.buildings.push({ type: 'farm', x: 44, y: 45, growth: 0, harvests: 0, stock: 0 });
     world.step(0.125);
     assert.equal(kingdom.barracks, 1);
     assert.equal(world.stats().soldiers, 1);
@@ -271,7 +274,7 @@ test('fire spreads to vegetation and burns out', () => {
 test('blessing heals and eraser removes life without changing terrain', () => {
     const w = blank(); w.apply('grass', 40, 40, 10); w.apply('human', 40, 40, 1);
     w.people[0].health = 20; w.apply('bless', 40, 40, 5);
-    assert.equal(w.people[0].health, 100);
+    assert.equal(w.people[0].health, creature_stats(w.people[0], w.year_length).max_health);
     w.apply('erase', 40, 40, 8);
     assert.equal(w.people.length, 0); assert.equal(w.tile(40, 40), T.GRASS);
 });
@@ -308,17 +311,23 @@ test('race strengths change resources, housing, and population growth', () => {
         w.apply('grass', x, 50, 10);
         w.apply(race, x, 50, 1);
         const village = w.villages.at(-1);
+        village.culture.value = 'knowledge';
         const ground = race === 'elf' || (race === 'human' && x === 60) ? T.FOREST : race === 'dwarf' ? T.HILL : T.GRASS;
         w.set_tile(x, 50, ground);
         for (const person of w.people.filter(p => p.village_id === village.id)) {
             person.x = x; person.y = 50; person.dx = 0; person.dy = 0;
             person.decision = 5; person.gather = 3;
+            person.trait = 'careful';
         }
     }
     const [elf, human, dwarf, orc] = w.villages;
     w.step(0.125);
-    assert.equal(elf.wood - 15, 7);
-    assert.equal(human.wood - 15, 4);
+    const elf_logger = w.people.find(p => p.village_id === elf.id && p.job === 'lumberjack');
+    const human_logger = w.people.find(p => p.village_id === human.id && p.job === 'lumberjack');
+    assert.equal(elf.wood, 15, 'timber stays with its worker until delivery');
+    assert.equal(human.wood, 15);
+    assert.equal(elf_logger.daily_life.cargo.wood, 3);
+    assert.equal(human_logger.daily_life.cargo.wood, 2);
     assert.ok(elf.food > human.food);
     w.set_tile(60, 50, T.HILL);
     for (const person of w.people.filter(p => p.village_id === human.id || p.village_id === dwarf.id)) person.gather = 3;
@@ -326,6 +335,9 @@ test('race strengths change resources, housing, and population growth', () => {
     w.step(0.125);
     assert.ok(dwarf.food - dwarf_food > human.food - human_food);
     elf.wood = human.wood = dwarf.wood = 5;
+    for (const town of [elf, human, dwarf]) {
+        town.buildings.push({ type: 'farm', x: town.x + 4, y: town.y + 4, growth: 0, harvests: 0, stock: 0 });
+    }
     elf.expansion_timer = human.expansion_timer = dwarf.expansion_timer = 11;
     w.step(0.125);
     assert.equal(dwarf.wood, 1);
@@ -407,7 +419,7 @@ test('settlers cross water by ship and establish another town for their kingdom'
     w.apply('grass', 25, 35, 13); w.apply('grass', 110, 75, 13);
     for (let i = 0; i < 3; i++) w.apply('human', 25, 35, 1);
     const kingdom = w.villages[0];
-    for (const person of w.people) person.age = 10;
+    for (const person of w.people) person.age = 20 * w.year_length;
     assert.equal(w.launch_colony(kingdom.id, 110, 75), true);
     assert.equal(w.voyages[0].kind, 'ship');
     assert.equal(w.people.filter(p => p.voyage_id === w.voyages[0].id).length, 3);

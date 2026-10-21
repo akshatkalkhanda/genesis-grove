@@ -1,11 +1,12 @@
 import { creature_stats } from './creatures.js';
+import { apply_damage } from './health.js';
 
 export function defense_hit(world, attacker_id, target, damage) {
     if (target.health <= 0 || target.prisoner_of) return;
     const defender = world.villages.find(v => v.id === target.village_id);
     const sheltered = defender?.buildings?.some(b => b.type === 'castle'
         && Math.hypot(b.x - target.x, b.y - target.y) < 9);
-    target.health -= damage * (sheltered ? 0.65 : 1);
+    apply_damage(world, target, damage * (sheltered ? 0.65 : 1), 'combat');
     const captor = world.villages.find(v => v.id === attacker_id && v.alive);
     const prison = captor?.buildings?.find(b => b.type === 'prison');
     if (!prison || target.role !== 'soldier' || target.voyage_id
@@ -36,7 +37,7 @@ export function advance_detention(world, dt) {
         if (captor.food >= dt * 0.05) {
             captor.food -= dt * 0.05;
             person.health = Math.min(creature_stats(person, world.year_length).max_health, person.health + dt * 0.3);
-        } else person.health -= dt * 0.2;
+        } else apply_damage(world, person, dt * 0.2, 'starvation');
     }
 }
 

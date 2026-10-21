@@ -1,0 +1,204 @@
+/* Dock the editing controls beside an unobstructed map and a compact catalog. */
+:root {
+    --creator-width: 232px;
+    --catalog-height: 176px;
+}
+.creator-sidebar {
+    position: fixed;
+    z-index: 26;
+    top: 80px;
+    bottom: 62px;
+    left: 12px;
+    width: var(--creator-width);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 14px;
+    overflow: auto;
+    border: 1px solid #50664f;
+    border-radius: 12px;
+    background: #14271ff5;
+    box-shadow: 0 8px 24px #06110d66;
+    scrollbar-width: thin;
+    scrollbar-color: #617958 #15271e;
+}
+.creator-sidebar > * { flex-shrink: 0; }
+.creator-heading { display: flex; align-items: center; justify-content: space-between; }
+.creator-heading .eyebrow { font-size: 8px; letter-spacing: 1.4px; }
+#toggle-controls { width: 26px; height: 26px; padding: 0; font-size: 20px; line-height: 1; }
+.creator-sidebar .map-label {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    background: #20372a;
+    border: 1px solid #41573e;
+    border-radius: 8px;
+    box-shadow: none;
+}
+.creator-sidebar .map-label b { font-size: 10px; letter-spacing: 1.4px; }
+.creator-sidebar .map-label small { font-size: 10px; margin-left: 0; }
+.creator-sidebar .map-label .live-dot { margin-right: 7px; }
+.creator-sidebar .age-track { margin-top: 12px; }
+.creator-sidebar .age-stages { gap: 3px; font-size: 7px; }
+.creator-sidebar .tool-description {
+    position: static;
+    display: block;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+.creator-sidebar .active-tool-heading { gap: 10px; }
+.creator-sidebar .active-tool-heading > span { width: 36px; height: 36px; font-size: 21px; }
+.creator-sidebar .active-tool-heading h2 { font-size: 14px; }
+.creator-sidebar .tool-description p { display: block; font-size: 11px; line-height: 1.6; margin: 10px 0; }
+.creator-sidebar .tool-description > strong { font-size: 7px; letter-spacing: 1px; line-height: 1.6; color: #bdd79f; }
+.creator-sidebar .brush-section,
+.creator-sidebar .view-settings {
+    position: static;
+    width: auto;
+    margin: 0;
+    padding: 14px 0 0;
+    border: 0;
+    border-top: 1px solid #3b5141;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+}
+.creator-sidebar .brush-section .row { font-size: 11px; }
+.creator-sidebar .brush-section input { width: 100%; margin: 14px 0 0; }
+.creator-sidebar .brush-preview { display: none; }
+.view-settings h2 { margin: 0; font-size: 11px; font-weight: 600; }
+.creator-sidebar .lighting-clock {
+    position: static;
+    padding: 6px 8px;
+    border: 1px solid #486047;
+    border-radius: 6px;
+    font-size: 10px;
+}
+.creator-sidebar .map-bottom { position: static; display: block; margin-top: 12px; }
+.creator-sidebar .map-hint { display: none; }
+.creator-sidebar .zoom-controls {
+    display: grid;
+    grid-template-columns: 27px minmax(0,1fr) 43px 27px;
+    gap: 0;
+    width: 100%;
+    padding: 3px;
+    border: 1px solid #40593f;
+    border-radius: 7px;
+    background: #1b3025;
+    box-shadow: none;
+}
+.creator-sidebar .zoom-controls button { min-width: 0; width: auto; height: 28px; padding: 0; font-size: 11px; }
+.creator-sidebar #zoom-slider { width: 100%; min-width: 0; margin: 0; }
+.creator-sidebar .quick-start {
+    position: static;
+    display: block;
+    width: auto;
+    margin: 0;
+    padding: 12px 0 0;
+    border: 0;
+    border-top: 1px solid #3b5141;
+    background: none;
+    box-shadow: none;
+}
+.quick-start summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; color: #bed0b5; font-size: 11px; }
+.quick-start summary::-webkit-details-marker { display: none; }
+.quick-start summary::before { content: '▸'; color: #a7c780; }
+.quick-start[open] summary::before { content: '▾'; }
+.quick-start summary #guide-progress { margin-left: auto; color: #94b17f; font-size: 10px; }
+.creator-sidebar .quick-start > button { width: 100%; margin-top: 7px; padding: 8px; }
+.creator-sidebar .quick-start > button b { font-size: 10px; }
+.creator-sidebar .quick-start > button small { display: block; font-size: 8px; line-height: 1.5; }
+body.inspecting .creator-sidebar .quick-start { display: block; }
+.creator-shortcuts { margin: auto 0 0; padding-top: 8px; color: #829b85; font-size: 9px; line-height: 2; }
+.creator-shortcuts span { padding: 0 4px; }
+.creator-shortcuts kbd { padding: 2px 4px; font-size: 8px; border: 1px solid #405540; border-radius: 3px; }
+
+main { inset: 0; height: 100vh; }
+#viewport {
+    position: fixed;
+    top: 80px;
+    right: 12px;
+    bottom: calc(var(--catalog-height) + 74px);
+    left: calc(var(--creator-width) + 24px);
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid #3e5e58;
+    border-radius: 12px;
+}
+.map-top { top: 12px; left: 12px; right: 12px; justify-content: flex-end; }
+.paused-banner { top: 14px; left: 12px; right: auto; transform: none; font-size: 8px; padding: 8px; }
+#toast { bottom: 16px; max-width: calc(100% - 32px); }
+.entity-card { top: 58px !important; right: 12px; width: 286px; max-height: calc(100% - 74px); }
+.tool-panel {
+    left: calc(var(--creator-width) + 24px);
+    right: 12px;
+    bottom: 62px;
+    width: auto;
+    height: var(--catalog-height);
+    transform: none;
+    grid-template-rows: 36px 18px minmax(0,1fr);
+    padding: 8px 10px;
+    border: 1px solid #50664f;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #172b21f7;
+    box-shadow: 0 5px 20px #06110d55;
+}
+.tool-panel .tabs { height: 36px; padding: 0 0 5px; gap: 6px; }
+.tool-panel .tabs button { flex: 1; min-width: 0; min-height: 30px; padding: 4px 8px; font-size: 10px; }
+.tool-panel .tabs button span { font-size: 12px; }
+.tool-panel .catalog-summary { font-size: 9px; line-height: 18px; }
+.tool-panel .tools { grid-template-rows: repeat(2,46px); grid-auto-columns: 70px; margin: 3px 0 0; padding: 3px 3px 5px; gap: 5px; }
+.tool-panel .tool { width: 70px; height: 46px; padding: 3px; font-size: 8px; border-width: 1px; }
+.tool-panel .tool .glyph { font-size: 18px; }
+.tool-panel .catalog-portrait { width: 34px; height: 25px; }
+body.controls-collapsed #viewport,
+body.controls-collapsed .tool-panel { left: 12px; }
+body.controls-collapsed .creator-sidebar { bottom: auto; width: 36px; height: 36px; padding: 4px; overflow: hidden; }
+body.controls-collapsed .creator-sidebar > :not(.creator-heading),
+body.controls-collapsed .creator-heading > span { display: none; }
+body.controls-collapsed .creator-heading { justify-content: center; }
+body.controls-collapsed .paused-banner { left: 48px; }
+
+@media (max-width: 1150px) {
+    .brand { min-width: 40px; }
+    .brand span { display: none; }
+    .world-title { display: none; }
+    .topbar nav .quiet-action { display: inline-flex; align-items: center; }
+}
+@media (max-width: 950px) {
+    :root { --creator-width: 208px; }
+    .creator-sidebar { padding: 12px; gap: 14px; }
+    .tool-panel .tabs button { font-size: 9px; padding: 4px; }
+    .creator-heading .eyebrow { font-size: 7px; }
+    .topbar { height: 58px; }
+}
+@media (max-height: 680px) {
+    :root { --catalog-height: 144px; }
+    .tool-panel .tools { grid-template-rows: 68px; grid-auto-columns: 70px; }
+    .tool-panel .tool { height: 62px; }
+    .tool-panel .catalog-portrait { width: 43px; height: 32px; }
+    .creator-sidebar .tool-description p { font-size: 10px; }
+}
+@media (max-width: 720px) {
+    :root { --creator-width: 180px; --catalog-height: 160px; }
+    .creator-sidebar { left: 6px; top: 76px; bottom: 56px; padding: 10px; gap: 12px; }
+    #viewport { top: 76px; left: calc(var(--creator-width) + 16px); right: 6px; bottom: calc(var(--catalog-height) + 66px); }
+    .tool-panel { left: calc(var(--creator-width) + 16px); right: 6px; bottom: 56px; }
+    .tool-panel .tools { grid-template-rows: repeat(2,42px); grid-auto-columns: 60px; }
+    .tool-panel .tool { width: 60px; height: 42px; }
+    .tool-panel .tabs button span { display: none; }
+    .map-actions { display: flex; gap: 4px; }
+    .map-actions button { font-size: 8px; padding: 5px; }
+    .entity-card { right: 6px; width: min(260px,calc(100% - 12px)); }
+    .paused-banner { top: 48px; }
+    .topbar nav #new-world { display: none; }
+}

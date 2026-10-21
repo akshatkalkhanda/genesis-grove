@@ -268,3 +268,13 @@ button.history-event:hover{background:#304832;border-color:#a0be7d}.event-disast
 .history-list{max-height:45vh;overflow-y:auto;padding-right:6px;margin:12px 0 20px}.history-empty{padding:30px;text-align:center;color:#a0b399}
 @media(max-width:720px){.tool-panel{height:196px;grid-template-rows:43px 20px 1fr}.tool-panel .tabs button{flex:1;min-width:0}.catalog-summary{font-size:8px}.entity-card{top:145px!important;right:8px;width:270px;max-height:calc(100vh - 400px)}.tool-panel .tool-description{width:205px}.lighting-clock,#toast{bottom:258px}}
 @media(max-height:680px){.tool-panel{height:154px}.entity-card{top:78px!important;max-height:calc(100vh - 265px)}.lighting-clock,#toast{bottom:212px}.tool-panel .tool-description{padding:8px 10px}.catalog-summary{font-size:8px}}
+
+/* Citizens keep navigable family records and show carried supplies. */
+.family-links{display:grid;gap:5px;margin:10px 0;padding:9px;border:1px solid #4e6947;border-radius:8px;background:#1c3026}
+.family-links button,.family-links span{display:block;text-align:left;font-size:10px;line-height:1.4;padding:6px 8px;overflow-wrap:anywhere}
+.family-links span{color:#9bac97}
+.kingdom-culture{padding-top:7px;color:#d6e8b6}
+.culture-effects{color:#afc79d;font-size:10px;line-height:1.5}
+
+.damage-history{padding:9px;margin:8px 0;border:1px solid #4e6947;border-radius:7px;color:#bfd2af;font-size:10px}
+.damage-history summary{cursor:pointer}.damage-history p{font-size:10px;line-height:1.5;margin:8px 0}.medical-summary{color:#b2dfbf;line-height:1.6}

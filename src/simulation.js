@@ -8,6 +8,13 @@ import { MYTHIC, advance_mythic } from './mythic.js';
 import { choose_ruler } from './heraldry.js';
 import { advance_detention, advance_defenses } from './defenses.js';
 import { MACHINES, MAX_MACHINES, advance_machines } from './machines.js';
+import { advance_daily_life, collect_daily_goods, valid_daily_life } from './daily_life.js';
+import { initialize_society_person, initialize_culture, advance_society, select_parents,
+    initialize_child, society_modifiers, validate_society_person, validate_culture } from './society.js';
+import { apply_damage, valid_health_history } from './health.js';
+import { prepare_medicine, medical_intent, advance_medicine, valid_medicine } from './medicine.js';
+import { MAX_BUILDINGS, advance_civic, farm_target, food_reserve } from './civic.js';
+import { prepare_crews, crew_intent } from './crews.js';
 export const WIDTH = 192;
 export const HEIGHT = 128;
 export const T = Object.freeze({ OCEAN: 0, SHALLOW: 1, SAND: 2, GRASS: 3, FOREST: 4, HILL: 5, MOUNTAIN: 6, LAVA: 7, ASH: 8, JUNGLE: 9, SAVANNA: 10, SNOW: 11, MAPLE: 12, MUSHROOM: 13, CRYSTAL: 14, CELESTIAL: 15, DESERT: 16 });
@@ -337,6 +344,7 @@ export class World {
         village.buildings = [];
         village.build_timer = 0;
         village.road_timer = 0; village.road_cursor = 0; village.vehicle_timer = 0;
+        initialize_culture(village);
         village.king_id = null;
         village.machine_timer = 0;
         this.add_house(village);
@@ -413,7 +421,9 @@ export class World {
         if (!kingdom || !this.walkable(x, y) || this.voyages.length >= MAX_VOYAGES || this.colonies.length >= MAX_COLONIES || kingdom.food < 10 || kingdom.wood < 6) return false;
         const sites = [...this.villages.filter(v => v.alive), ...this.colonies];
         if (sites.some(site => Math.hypot(site.x - x, site.y - y) < 7)) return false;
-        const crew = this.people.filter(p => p.village_id === kingdom_id && !p.voyage_id && p.role !== 'soldier' && p.age > 5).slice(0, 3);
+        const crew = this.people.filter(p => p.village_id === kingdom_id && !p.voyage_id && !p.prisoner_of
+            && !p.medical_role && !p.recovering && p.health > 0 && p.role !== 'soldier'
+            && p.age / this.year_length >= 18 && !this.machines.some(m => m.crew_id === p.id)).slice(0, 3);
         if (crew.length < 3) return false;
         const source = this.settlements_of(kingdom_id).find(site => crew.some(p => p.home_id === site.id)) || kingdom;
         const masses = labels || this.landmasses();
@@ -456,7 +466,8 @@ export class World {
         const distance = Math.hypot(sender.x - recipient.x, sender.y - recipient.y);
         const kind = masses[this.index(sender.x, sender.y)] === masses[this.index(recipient.x, recipient.y)] ? 'caravan' : 'ship';
         this.change_resource(sender, good, -amount);
-        this.trades.push({ id: this.next_id++, from_id: sender.id, to_id: recipient.id, good, amount, progress: 0, duration: Math.max(6, distance / (kind === 'ship' ? 3 : 5)), kind });
+        const market = [sender, recipient].some(v => v.buildings?.some(b => b.type === 'market'));
+        this.trades.push({ id: this.next_id++, from_id: sender.id, to_id: recipient.id, good, amount, progress: 0, duration: Math.max(6, distance / (kind === 'ship' ? 3 : 5) * (market ? 0.8 : 1)), kind });
         this.log(`${sender.name} sends ${amount} ${good} to ${recipient.name} by ${kind}.`, 'village', sender);
         return true;
     }
@@ -566,9 +577,10 @@ export class World {
         const counts = Object.fromEntries(JOBS.map(job => [job, 0]));
         for (const person of this.people) if (person.village_id === village_id && person.role !== 'soldier') counts[person.job]++;
         const job = JOBS.reduce((least, candidate) => counts[candidate] < counts[least] ? candidate : least);
-        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job, role: 'civilian', health: 100, age: 0, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
+        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job, role: 'civilian', health: 100, age: 20 * this.year_length, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
         initialize_creature(this.people.at(-1));
         const kingdom = this.villages.find(v => v.id === village_id);
+        initialize_society_person(this.people.at(-1), kingdom);
         if (kingdom && !kingdom.king_id) kingdom.king_id = this.people.at(-1).id;
         return true;
     }
@@ -648,7 +660,7 @@ export class World {
         for (const list of [this.people, this.animals]) for (const unit of list) {
             if (unit.voyage_id) continue;
             if (Math.hypot(unit.x - x, unit.y - y) > r) continue;
-            unit.health -= damage;
+            apply_damage(this, unit, damage, tool);
             if (tool === 'bless') unit.health = creature_stats(unit, this.year_length).max_health;
             if (tool === 'plague') unit.infection = 1;
             if (tool === 'bless') unit.infection = 0;
@@ -665,7 +677,11 @@ export class World {
         this.clean_up();
     }
     clean_up() {
-        for (const person of this.people) if (person.health <= 0 || !this.walkable(person.x, person.y)) {
+        const aboard = new Set(this.machines.filter(m => m.health > 0 && m.crew_aboard
+            && (MACHINES[m.kind].domain === 'air' || (MACHINES[m.kind].domain === 'water'
+                ? this.tile(m.x, m.y) <= T.SHALLOW : this.walkable(m.x, m.y))))
+            .map(m => m.crew_id));
+        for (const person of this.people) if (person.health <= 0 || (!aboard.has(person.id) && !this.walkable(person.x, person.y))) {
             const kingdom = this.villages.find(v => v.id === person.village_id);
             if (kingdom) {
                 kingdom.deaths = (kingdom.deaths || 0) + 1;
@@ -677,8 +693,11 @@ export class World {
                 }
             }
         }
-        this.people = this.people.filter(p => p.health > 0 && this.walkable(p.x, p.y));
+        this.people = this.people.filter(p => p.health > 0 && (aboard.has(p.id) || this.walkable(p.x, p.y)));
         const survivors = new Set(this.people.map(p => p.id));
+        for (const machine of this.machines) if (!survivors.has(machine.crew_id)) {
+            machine.crew_id = null; machine.crew_aboard = false;
+        }
         this.voyages = this.voyages.filter(voyage => {
             if (voyage.crew_ids.every(id => survivors.has(id))) return true;
             for (const person of this.people) if (person.voyage_id === voyage.id) person.voyage_id = null;
@@ -755,7 +774,8 @@ export class World {
     plan_armies(war_targets) {
         const groups = new Map();
         for (const person of this.people) {
-            if (person.role !== 'soldier' || person.voyage_id || person.prisoner_of || person.health <= 0) continue;
+            if (person.role !== 'soldier' || person.voyage_id || person.prisoner_of
+                || this.machines.some(m => m.crew_id === person.id) || person.recovering || person.health <= 0) continue;
             const key = person.home_id || person.village_id;
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(person);
@@ -786,13 +806,37 @@ export class World {
     }
     advance_history() {
         if (this.tick % 80 === 0) for (const kingdom of this.villages.filter(v => v.alive)) {
-            const civilians = this.people.filter(p => p.village_id === kingdom.id && p.role !== 'soldier' && !p.prisoner_of && p.health > 0);
+            const civilians = this.people.filter(p => p.village_id === kingdom.id
+                && p.role !== 'soldier' && !p.prisoner_of && !p.voyage_id
+                && !this.machines.some(m => m.crew_id === p.id) && !p.medical_role && !p.recovering && p.health > 0 && p.age / this.year_length >= 18);
             if (civilians.length >= JOBS.length) {
                 const counts = Object.fromEntries(JOBS.map(job => [job, civilians.filter(p => p.job === job).length]));
                 for (const job of JOBS.filter(job => !counts[job])) {
                     const surplus = JOBS.reduce((most, candidate) => counts[candidate] > counts[most] ? candidate : most);
                     const recruit = civilians.find(p => p.job === surplus);
-                    if (recruit && counts[surplus] > 1) { recruit.job = job; counts[surplus]--; counts[job]++; delete recruit.work_target; }
+                    if (recruit && counts[surplus] > 1) {
+                        recruit.job = job; counts[surplus]--; counts[job]++;
+                        delete recruit.work_target;
+                        if (recruit.daily_life) {
+                            recruit.daily_life.phase = 'return';
+                            recruit.daily_life.site = null;
+                            recruit.daily_life.timer = 0;
+                        }
+                    }
+                }
+                if (kingdom.food < food_reserve(civilians.length)) {
+                    const target = Math.max(1, Math.ceil(civilians.length * 0.4));
+                    while (counts.farmer < target) {
+                        const surplus = ['smith', 'miner', 'builder', 'lumberjack']
+                            .filter(job => counts[job] > 1).sort((a, b) => counts[b] - counts[a])[0];
+                        const recruit = civilians.find(p => p.job === surplus);
+                        if (!recruit) break;
+                        recruit.job = 'farmer'; counts[surplus]--; counts.farmer++;
+                        if (recruit.daily_life) {
+                            recruit.daily_life.phase = 'return'; recruit.daily_life.site = null;
+                            recruit.daily_life.timer = 0;
+                        }
+                    }
                 }
             }
             kingdom.plan = kingdom_plan(kingdom, this.people.filter(p => p.village_id === kingdom.id),
@@ -808,7 +852,8 @@ export class World {
                     const current = this.relation_status(first.id, second.id);
                     const next = diplomatic_choice(first, second,
                         this.people.filter(p => p.village_id === first.id),
-                        this.people.filter(p => p.village_id === second.id), current);
+                        this.people.filter(p => p.village_id === second.id), current,
+                        society_modifiers(first, this.people.find(p => p.id === first.king_id)).war_bias);
                     if (next) this.set_relation(first.id, second.id, next);
                 }
             }
@@ -870,6 +915,7 @@ export class World {
         this.time += dt;
         this.tick++;
         advance_detention(this, dt);
+        advance_society(this, dt);
         this.advance_history();
         this.advance_voyages(dt);
         this.advance_trades(dt);
@@ -884,6 +930,8 @@ export class World {
         }
         const army_orders = this.plan_armies(war_targets);
         const homes = new Map([...this.villages, ...this.colonies].map(site => [site.id, site]));
+        prepare_crews(this);
+        prepare_medicine(this);
         for (const p of this.people) {
             if (p.health <= 0) continue;
             develop_creature(p, dt, this.year_length);
@@ -899,11 +947,7 @@ export class World {
                 let a = this.random() * Math.PI * 2;
                 if (home && Math.hypot(p.x - home.x, p.y - home.y) > 9 + Math.sqrt(home.houses.length)) a = Math.atan2(home.y - p.y, home.x - p.x);
                 p.dx = Math.cos(a); p.dy = Math.sin(a); p.decision = 0.5 + this.random() * 3;
-                if (p.role !== 'soldier') {
-                    const target = this.work_target(p, home, v);
-                    if (target) p.work_target = target;
-                    else delete p.work_target;
-                }
+                if (p.role !== 'soldier') delete p.work_target;
             }
             const order = p.role === 'soldier' ? army_orders.get(p.home_id || p.village_id) : null;
             let holding_position = false;
@@ -912,7 +956,14 @@ export class World {
                     : { x: order.target_x, y: order.target_y, route: true } : null;
             if (p.role !== 'soldier') march_target = p.work_target || null;
             p.task = march_target?.task || (order?.target_id ? 'Marching' : p.role === 'soldier' ? 'Guarding' : 'Exploring');
-            if (enemies && p.role === 'soldier') {
+            const crew = crew_intent(this, p);
+            const care = crew || (v && home ? medical_intent(this, p, v, home, dt) : null);
+            if (care) { march_target = care.target; holding_position = care.holding; }
+            else if (p.role !== 'soldier' && v && home) {
+                const routine = advance_daily_life(this, p, home, v, dt, attributes.max_health);
+                march_target = routine.target; holding_position = routine.holding;
+            }
+            if (enemies && p.role === 'soldier' && !care) {
                 const range = p.weapon_level >= 5 ? 7 + (p.weapon_level - 5) * 1.5 : 1.5;
                 let foe = null, nearest = Math.max(100, range * range + 1);
                 for (const other of this.people) {
@@ -931,7 +982,7 @@ export class World {
                         const interval = p.weapon_level === 6 ? 2 : p.weapon_level === 5 ? 1.5 : 0.8;
                         holding_position = ranged;
                         if (!ranged || p.attack_timer <= 0) {
-                            foe.health -= (ranged ? interval : dt) * (['orc', 'wolfkin', 'hyenafolk'].includes(p.race) ? 18 : 14) * weapon / armor * (['orc', 'beetlefolk'].includes(foe.race) ? 0.75 : 1) * attributes.strength / 10;
+                            apply_damage(this, foe, (ranged ? interval : dt) * (['orc', 'wolfkin', 'hyenafolk'].includes(p.race) ? 18 : 14) * weapon / armor * (['orc', 'beetlefolk'].includes(foe.race) ? 0.75 : 1) * attributes.strength / 10, 'combat');
                             if (ranged) {
                                 p.attack_timer = interval;
                                 this.effects.push({ type: p.weapon_level >= 9 ? 'beam' : p.weapon_level === 5 ? 'bolt' : 'shot',
@@ -946,14 +997,14 @@ export class World {
                 }
             }
             const camp = v?.buildings?.find(building => building.type === 'camp');
-            if (p.role === 'soldier' && !enemies && camp && v.food > 10) {
+            if (p.role === 'soldier' && !care && !enemies && camp && v.food > 10) {
                 march_target = { x: camp.x, y: camp.y, route: true };
                 p.task = 'Training';
                 if (Math.hypot(p.x - camp.x, p.y - camp.y) < 6) {
                     develop_creature(p, 0, this.year_length, dt / this.year_length * 8);
                 }
             }
-            if (p.role === 'soldier' && enemies && home
+            if (p.role === 'soldier' && !care && enemies && home
                 && p.health < attributes.max_health * (p.trait === 'careful' ? 0.5 : 0.3)) {
                 march_target = { x: home.x, y: home.y, route: true }; p.task = 'Retreating';
             }
@@ -963,9 +1014,10 @@ export class World {
                 else this.move(p, dt, (p.role === 'soldier' ? 1.55 : 1.3) * (p.race === 'foxfolk' ? 1.15 : 1));
             }
             const i = this.index(p.x, p.y);
-            if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); p.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
-            if (this.fire[i] > 0) p.health -= dt * 38;
-            if (p.age / this.year_length > 85) p.health -= dt / this.year_length * 30;
+            if (p.infection > 0) { p.infection = Math.max(0, p.infection - dt * 0.025); apply_damage(this, p, dt * 3, 'infection'); if (this.random() < dt * 0.08) { const nearby = this.people.find(q => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < 2); if (nearby) nearby.infection = 1; } }
+            if (this.fire[i] > 0) apply_damage(this, p, dt * 38, 'fire');
+            if (p.age / this.year_length > 85) apply_damage(this, p, dt / this.year_length * 30, 'aging');
+            if (p.health <= 0) continue;
             if (v && p.gather >= 3) {
                 p.gather = 0;
                 const terrain = this.tiles[i];
@@ -979,11 +1031,17 @@ export class World {
                 else if (p.job === 'farmer') food *= 1.6;
                 food *= 1 + Math.max(0, attributes.intelligence - 10) * 0.015;
                 develop_creature(p, 0, this.year_length, p.trait === 'industrious' ? 0.3 : 0.2);
-                v.food += food;
-                if ([T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(terrain) && p.role !== 'soldier') v.wood += (p.race === 'elf' ? 2 : 1) + (p.job === 'lumberjack' ? 1 : 0);
+                const timber_site = p.daily_life?.phase === 'work' && p.daily_life.site?.kind === 'forest'
+                    ? p.daily_life.site : p;
+                const wood = [T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(this.tile(timber_site.x, timber_site.y)) && p.role !== 'soldier'
+                    ? (p.race === 'elf' ? 2 : 1) + (p.job === 'lumberjack' ? 1 : 0) : 0;
+                const production = society_modifiers(v, this.people.find(person => person.id === v.king_id)).production;
+                const goods = crew || p.medical_role || p.recovering ? { food: 0, wood: 0 } : p.role === 'soldier' ? { food, wood: 0 }
+                    : collect_daily_goods(this, p, v, food * production, wood * production);
+                v.food += goods.food; v.wood += goods.wood;
                 const meal = p.role === 'soldier' ? 1.7 : 0.9;
-                if (v.food < meal) p.health -= 6;
-                else { v.food -= meal; p.health = Math.min(creature_stats(p, this.year_length).max_health, p.health + 1); }
+                if (v.food < meal) apply_damage(this, p, 6, 'starvation');
+                else { v.food -= meal; p.health = Math.min(creature_stats(p, this.year_length).max_health, p.health + society_modifiers(v, null).healing); }
             }
         }
         const hunters = this.animals.filter(animal => PREDATORS.has(animal.species) && animal.health > 0);
@@ -1007,14 +1065,14 @@ export class World {
                     const a = Math.atan2(prey.y - animal.y, prey.x - animal.x);
                     animal.dx = Math.cos(a); animal.dy = Math.sin(a);
                     if (nearest < 1) {
-                        prey.health -= dt * 35 * attributes.strength / 10;
+                        apply_damage(this, prey, dt * 35 * attributes.strength / 10, 'predation');
                         animal.health = Math.min(attributes.max_health, animal.health + dt * 5);
                         develop_creature(animal, 0, this.year_length, dt * 0.3);
                         if (prey.health <= 0) { animal.kills++; develop_creature(animal, 0, this.year_length, 6); }
                     }
-                } else if (animal.species === 'wolf' || animal.species === 'hyena') animal.health -= dt * 0.1;
+                } else if (animal.species === 'wolf' || animal.species === 'hyena') apply_damage(this, animal, dt * 0.1, 'starvation');
             } else if (GRAZERS.has(animal.species) && this.walkable(animal.x, animal.y)) animal.health = Math.min(attributes.max_health, animal.health + dt);
-            if (animal.infection > 0) { animal.infection = Math.max(0, animal.infection - dt * 0.025); animal.health -= dt * 3; if (this.random() < dt * 0.08) { const nearby = this.animals.find(q => q !== animal && Math.hypot(q.x - animal.x, q.y - animal.y) < 2); if (nearby) nearby.infection = 1; } }
+            if (animal.infection > 0) { animal.infection = Math.max(0, animal.infection - dt * 0.025); apply_damage(this, animal, dt * 3, 'infection'); if (this.random() < dt * 0.08) { const nearby = this.animals.find(q => q !== animal && Math.hypot(q.x - animal.x, q.y - animal.y) < 2); if (nearby) nearby.infection = 1; } }
             if (!PREDATORS.has(animal.species)) {
                 const threat = hunters.find(other => Math.hypot(other.x - animal.x, other.y - animal.y) < 4);
                 if (threat) {
@@ -1029,16 +1087,17 @@ export class World {
             const speed = { turtle: 0.3, buffalo: 0.55, beetle: 0.45, rabbit: 1.5,
                 frog: 1.05, lizard: 1.1, butterfly: 1.25, moth: 1.15 }[animal.species];
             this.move(animal, dt, speed ?? (PREDATORS.has(animal.species) ? 1.7 : 0.7));
-            if (this.fire[this.index(animal.x, animal.y)] > 0) animal.health -= dt * 45;
-            if (animal.age / this.year_length > 50) animal.health -= dt / this.year_length * 30;
+            if (this.fire[this.index(animal.x, animal.y)] > 0) apply_damage(this, animal, dt * 45, 'fire');
+            if (animal.age / this.year_length > 50) apply_damage(this, animal, dt / this.year_length * 30, 'aging');
         }
+        advance_medicine(this, dt);
         const home_populations = new Map(), kingdom_populations = new Map(), workers = new Map(), soldier_counts = new Map();
         for (const person of this.people) {
             if (person.prisoner_of || person.health <= 0) continue;
             kingdom_populations.set(person.village_id, (kingdom_populations.get(person.village_id) || 0) + 1);
             if (!person.voyage_id) home_populations.set(person.home_id, (home_populations.get(person.home_id) || 0) + 1);
             if (person.role === 'soldier') soldier_counts.set(person.village_id, (soldier_counts.get(person.village_id) || 0) + 1);
-            else {
+            else if (!person.voyage_id && !this._crew_assignments?.has(person.id) && !person.medical_role && !person.recovering && person.age / this.year_length >= 18) {
                 const jobs = workers.get(person.village_id) || { farmer: 0, lumberjack: 0, miner: 0, smith: 0, builder: 0 };
                 jobs[person.job] = (jobs[person.job] || 0) + 1;
                 jobs.intelligence = (jobs.intelligence || 0) + creature_stats(person, this.year_length).intelligence;
@@ -1050,11 +1109,20 @@ export class World {
             v.age += dt; v.birth_timer += dt; v.expansion_timer += dt;
             v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0;
             v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer = (v.mine_timer || 0) + dt; v.forge_timer = (v.forge_timer || 0) + dt;
+            const social = society_modifiers(v, this.people.find(person => person.id === v.king_id));
             const before_technology = technology_level(v);
             const sites = this.settlements_of(v.id);
             const pop = kingdom_populations.get(v.id) || 0;
             const jobs = workers.get(v.id) || {};
+            const house_cost = (v.race === 'dwarf' ? 4 : 5) - (jobs.builder > 0 ? 1 : 0);
+            for (const site of sites) {
+                const local_pop = home_populations.get(site.id) || 0;
+                if (site.houses.length * 5 < local_pop && site.expansion_timer > 2 && v.wood >= house_cost) {
+                    if (this.add_house(site)) { v.wood -= house_cost; site.expansion_timer = 0; }
+                }
+            }
             advance_buildings(this, v, dt, pop, before_technology);
+            advance_civic(this, v, this.people.filter(p => p.village_id === v.id && p.health > 0), dt);
             advance_roads(this, v, dt, before_technology);
             if (v.buildings.some(building => building.type === 'armory')) v.forge_timer += dt * 0.75;
             if (v.buildings.some(building => building.type === 'workshop')) v.forge_timer += dt;
@@ -1096,7 +1164,7 @@ export class World {
             const research_rate = dt / this.year_length * (0.35 + Math.min(pop, 30) * 0.035 + Math.min(v.houses.length, 10) * 0.04)
                 * (1 + Math.max(0, (jobs.intelligence || 0) / Math.max(1, pop) - 10) * 0.015)
                 * (v.buildings.some(b => b.type === 'university') ? 1.5 : 1)
-                * (v.buildings.some(b => b.type === 'monument') ? 1.15 : 1);
+                * (v.buildings.some(b => b.type === 'monument') ? 1.15 : 1) * social.research;
             if (next_threshold && v.tech_points < next_threshold) v.tech_points = Math.min(next_threshold, v.tech_points + research_rate);
             const has_materials = cost && Object.entries(cost).every(([ore, amount]) => v.ore[ore] >= amount);
             const known_technology = !has_materials && next_threshold && v.tech_points >= next_threshold
@@ -1111,53 +1179,73 @@ export class World {
             v.forge_level = after_technology > 0 && jobs.smith > 0 ? 1 : 0;
             if (after_technology > before_technology) this.log(`${v.name} enters the ${TECH_AGES[after_technology].name}. Their forges can now craft ${TECH_AGES[after_technology].weapon.toLowerCase()}s.`, 'village', v);
             if (after_technology > 0 && jobs.smith > 0 && v.forge_timer >= 10) {
+                // Keep timber for eligible industry during peace; spare gear is bounded.
+                const construction_costs = v.houses.length >= 2 ? Object.entries(BUILDINGS)
+                    .filter(([type, building]) => pop >= building.population && after_technology >= building.age
+                        && !v.buildings.some(existing => existing.type === type))
+                    .map(([, building]) => building.wood + 10) : [];
+                const timber_reserve = !war_targets.has(v.id) && construction_costs.length
+                    ? Math.min(...construction_costs) : 0;
                 v.forge_timer = 0;
                 const level = after_technology;
                 const recipes = EQUIPMENT_RECIPES;
                 const recipe = recipes[level];
                 const reserve = research_cost[level + 1] || {};
-                if (recipe && Object.entries(recipe).every(([ore, amount]) => v.ore[ore] - amount >= (reserve[ore] || 0)) && v.wood >= 1) {
-                    for (const [ore, amount] of Object.entries(recipe)) v.ore[ore] -= amount;
+                const available_adults = this.people.filter(p => p.village_id === v.id && p.health > 0
+                    && !p.prisoner_of && !p.voyage_id && p.age / this.year_length >= 18);
+                const unequipped = available_adults.find(p => p.role === 'soldier' && (p.weapon_level || 0) < level)
+                    || available_adults.find(p => (p.weapon_level || 0) < level);
+                const unarmored = available_adults.find(p => (p.armor_level || 0) < level);
+                const spare_limit = Math.max(2, Math.ceil(available_adults.length / 10));
+                const craft_weapon = recipe && (unequipped || v.weapons < spare_limit)
+                    && Object.entries(recipe).every(([ore, amount]) => v.ore[ore] - amount >= (reserve[ore] || 0));
+                const craft_armor = level >= 2 && unarmored && v.ore.iron > (reserve.iron || 0);
+                if ((craft_weapon || craft_armor) && v.wood >= timber_reserve + 1) {
                     v.wood--;
-                    const unequipped = this.people.find(p => p.village_id === v.id && p.role === 'soldier' && (p.weapon_level || 0) < level)
-                        || this.people.find(p => p.village_id === v.id && (p.weapon_level || 0) < level);
-                    if (unequipped) unequipped.weapon_level = level;
-                    else v.weapons++;
-                    const unarmored = this.people.find(p => p.village_id === v.id && (p.armor_level || 0) < level);
+                    if (craft_weapon) {
+                        for (const [ore, amount] of Object.entries(recipe)) v.ore[ore] -= amount;
+                        if (unequipped) unequipped.weapon_level = level;
+                        else v.weapons++;
+                    }
                     if (level >= 2 && v.ore.iron > (reserve.iron || 0) && unarmored) { v.ore.iron--; unarmored.armor_level = level; }
                 }
             }
-            const house_cost = (v.race === 'dwarf' ? 4 : 5) - (jobs.builder > 0 ? 1 : 0);
             for (const site of sites) {
                 if (site !== v) { site.age += dt; site.expansion_timer += dt; }
                 const local_pop = home_populations.get(site.id) || 0;
-                if (site.expansion_timer > 10 && v.wood >= house_cost && site.houses.length < Math.ceil(local_pop / 3) + 1) {
+                if (site.expansion_timer > 10 && v.food >= food_reserve(pop)
+                    && v.buildings.filter(b => b.type === 'farm').length >= farm_target(pop)
+                    && v.wood >= house_cost && site.houses.length < Math.ceil(local_pop / 3) + 1) {
                     site.expansion_timer = 0;
                     if (this.add_house(site)) v.wood -= house_cost;
                 }
             }
             const birth_delay = v.race === 'orc' || v.race === 'harefolk' ? 8 : v.race === 'hyenafolk' ? 10 : 12;
-            if (v.birth_timer > birth_delay && pop >= 2 && v.food > 8 && pop < sites.reduce((sum, site) => sum + site.houses.length * 5, 0) && this.people.length < this.max_people) {
-                const site = sites[Math.floor(this.random() * sites.length)];
-                const p = this.land_near(site.x, site.y, 4);
-                if (p && this.add_person(p.x, p.y, v.id, v.race)) {
+            if (v.birth_timer > birth_delay && pop >= 2 && v.food > food_reserve(pop) + 5 && pop < sites.reduce((sum, site) => sum + site.houses.length * 5, 0) && this.people.length < this.max_people) {
+                v.birth_timer = 0;
+                const site = sites.find(candidate => select_parents(this, v.id, candidate.id));
+                const parents = site ? select_parents(this, v.id, site.id) : null;
+                const p = parents && this.land_near(site.x, site.y, 4);
+                if (p && parents && this.add_person(p.x, p.y, v.id, v.race)) {
                     const child = this.people.at(-1);
                     child.home_id = site.id;
-                    child.parents = this.people.filter(parent => parent.id !== child.id
-                        && parent.village_id === v.id && parent.age > 5).slice(0, 2)
-                        .map(parent => ({ id: parent.id, name: parent.name }));
-                    v.food -= 5; v.birth_timer = 0;
+                    child.age = 0;
+                    initialize_child(child, parents, v, () => this.random(), this.year);
+                    v.food -= 5;
                 }
             }
-            v.training_timer = (v.training_timer || 0) + dt;
-            if (!v.barracks && pop >= 8 && v.houses.length >= 2 && v.wood >= 12) {
+            v.training_timer = (v.training_timer || 0) + dt * social.training;
+            const basics_ready = v.food >= food_reserve(pop)
+                && v.buildings.filter(b => b.type === 'farm').length >= farm_target(pop)
+                && sites.every(site => site.houses.length * 5 >= (home_populations.get(site.id) || 0));
+            if (!v.barracks && basics_ready && pop >= 8 && v.houses.length >= 2 && v.wood >= 12) {
                 v.wood -= 12; v.barracks = 1;
                 this.log(`${v.name} builds a barracks and begins training defenders.`, 'village', v);
             }
             const at_war = war_targets.has(v.id);
             const target_soldiers = at_war ? Math.max(2, Math.floor(pop / 3)) : Math.max(1, Math.floor(pop / 8));
-            if (v.barracks && v.training_timer >= 8 && (soldier_counts.get(v.id) || 0) < target_soldiers && v.food >= 8 && v.wood >= 1) {
-                const recruit = this.people.find(p => p.village_id === v.id && p.role !== 'soldier' && !p.voyage_id && p.age > 5 && (after_technology === 0 || p.weapon_level > 0 || v.weapons > 0));
+            if (v.barracks && basics_ready && v.training_timer >= 8 && (soldier_counts.get(v.id) || 0) < target_soldiers && v.food >= 8 && v.wood >= 1) {
+                const recruit = this.people.find(p => p.village_id === v.id && p.role !== 'soldier' && !p.voyage_id && !p.prisoner_of && !this._crew_assignments?.has(p.id) && !p.medical_role && !p.recovering && p.age / this.year_length >= 18 && (after_technology === 0 || p.weapon_level > 0 || v.weapons > 0));
                 if (recruit) {
                     if (after_technology > 0 && !recruit.weapon_level && v.weapons > 0) { v.weapons--; recruit.weapon_level = after_technology; }
                     recruit.role = 'soldier'; v.food -= 3; v.wood--; v.training_timer = 0;
@@ -1243,10 +1331,11 @@ export class World {
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
             if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
-            if (v.buildings !== undefined && (!array(v.buildings, 24) || v.buildings.some(b =>
+            if (v.buildings !== undefined && (!array(v.buildings, MAX_BUILDINGS) || v.buildings.some(b =>
                 !point(b) || !BUILDINGS[b.type] || !num(b.growth, 0, 1)
                 || !integer(b.harvests, 0, 1e6) || (b.stock !== undefined && !num(b.stock, 0, 120))))) invalid();
-            if (v.buildings?.some(b => (b.integrity !== undefined && !num(b.integrity, 0.001, 300))
+            if (v.buildings?.some(b => (b.treatments !== undefined && !integer(b.treatments, 0, 1e6))
+                || (b.integrity !== undefined && !num(b.integrity, 0.001, 300))
                 || (b.defense_timer !== undefined && !num(b.defense_timer, 0, 3)))) invalid();
             if (v.build_timer !== undefined && !num(v.build_timer, 0, 60)) invalid();
             if (v.king_id !== undefined && v.king_id !== null && !integer(v.king_id, 1, data.next_id - 1)) invalid();
@@ -1272,6 +1361,9 @@ export class World {
                 || !num(machine.decision, -0.25, 3) || !num(machine.cooldown, 0, 5)
                 || !integer(machine.cargo, 0, 12) || !integer(machine.delivered, 0, 1e6)
                 || (machine.fishing_timer !== undefined && !num(machine.fishing_timer, 0, 20))
+                || (machine.crew_id !== undefined && machine.crew_id !== null && !integer(machine.crew_id, 1, data.next_id - 1))
+                || (machine.crew_aboard !== undefined && typeof machine.crew_aboard !== 'boolean')
+                || (machine.boarding !== undefined && !point(machine.boarding))
                 || (machine.recipient_id !== null && !villages.has(machine.recipient_id))) invalid();
             id(machine.id);
         }
@@ -1297,19 +1389,24 @@ export class World {
             id(trade.id);
         }
         for (const u of [...data.people, ...data.animals]) {
+            if (!valid_health_history(u, data.time)) invalid();
             if (!point(u) || !num(u.age) || !num(u.health, -1000, creature_stats(u, data.year_length || 20).max_health)
                 || !num(u.dx, -1, 1) || !num(u.dy, -1, 1) || !num(u.decision, -0.25, 10)) invalid();
             if ((u.xp !== undefined && !num(u.xp, 0, 1e6))
                 || (u.kills !== undefined && !integer(u.kills, 0, 1e6))
                 || (u.name !== undefined && (typeof u.name !== 'string' || !u.name.trim() || u.name.length > 40))
                 || (u.trait !== undefined && !TRAITS.includes(u.trait))
+                || (u.heritage_trait !== undefined && !TRAITS.includes(u.heritage_trait))
                 || (u.task !== undefined && (typeof u.task !== 'string' || u.task.length > 60))) invalid();
             if (u.parents !== undefined && (!array(u.parents, 2) || u.parents.some(parent =>
                 !integer(parent.id, 1, data.next_id - 1) || parent.id === u.id
                 || typeof parent.name !== 'string' || parent.name.length > 40))) invalid();
             id(u.id);
         }
+        for (const kingdom of data.villages) if (!validate_culture(kingdom)) invalid();
         for (const p of data.people) {
+            if (!valid_medicine(p, point)) invalid();
+            if (!validate_society_person(p, data.next_id) || !valid_daily_life(p.daily_life, WIDTH, HEIGHT)) invalid();
             if ((p.prisoner_of !== undefined && p.prisoner_of !== null && !villages.has(p.prisoner_of))
                 || (p.sentence !== undefined && !num(p.sentence, 0, (data.year_length || 20) * 10))) invalid();
             if (p.attack_timer !== undefined && !num(p.attack_timer, 0, 2)) invalid();
@@ -1320,6 +1417,16 @@ export class World {
             if ((p.job !== undefined && !JOBS.includes(p.job)) || (p.role !== undefined && !['civilian','soldier'].includes(p.role))) invalid();
             if (p.home_id !== undefined && p.home_id !== p.village_id && colonies.get(p.home_id) !== p.village_id) invalid();
             if (p.voyage_id !== undefined && p.voyage_id !== null && (!voyages.has(p.voyage_id) || !voyages.get(p.voyage_id).crew_ids.includes(p.id))) invalid();
+        }
+        const assigned_crew = new Set();
+        for (const machine of data.machines || []) {
+            if (machine.crew_aboard && !machine.crew_id) invalid();
+            if (machine.crew_id == null) continue;
+            const sailor = data.people.find(p => p.id === machine.crew_id);
+            if (!sailor || sailor.village_id !== machine.kingdom_id || sailor.voyage_id || sailor.prisoner_of
+                || sailor.age / (data.year_length || 20) < 18 || assigned_crew.has(sailor.id)
+                || (!machine.crew_aboard && !machine.boarding)) invalid();
+            assigned_crew.add(sailor.id);
         }
         for (const voyage of voyages.values()) if (!voyage.crew_ids.every(crew_id => data.people.some(p => p.id === crew_id && p.village_id === voyage.kingdom_id && p.voyage_id === voyage.id))) invalid();
         for (const a of data.animals) if (!ANIMALS.includes(a.species) || (a.infection !== undefined && !num(a.infection, 0, 1))) invalid();
@@ -1363,6 +1470,8 @@ export class World {
             if (w.tiles[i] < T.HILL || noise((i % WIDTH) / 3, Math.floor(i / WIDTH) / 3, hash_string(w.seed) + 33) < 0.74) continue;
             w.ores[i] = 1 + Math.floor(noise((i % WIDTH) / 7, Math.floor(i / WIDTH) / 7, hash_string(w.seed) + 977) * 4);
         }
+        for (const kingdom of w.villages) initialize_culture(kingdom);
+        for (const person of w.people) initialize_society_person(person, w.villages.find(v => v.id === person.village_id));
         return w;
     }
 }

@@ -8,8 +8,7 @@ savanna, desert, jungle, mushroom, crystal, and magical regions. The map in the
 video is a handcrafted community map. Version 0.10.0 adds original procedural
 biomes, eleven peoples, eighteen wildlife species, and a portrait inspection card.
 Prismatic Wildlands starts eight peoples, with habitat preferences affecting food.
-It does not reproduce the community map or WorldBox artwork. Genetics, families,
-languages, subspecies, and the full reference game's roster are not implemented.
+It does not reproduce the community map or WorldBox artwork. The current build now includes small family records, inherited traits, bounded relationships, fixed cultural traditions, and ruler personalities. It still lacks multigenerational genealogy, configurable genetics, languages, subspecies, and the full reference game's roster.
 
 ## Earlier challenge reference
 

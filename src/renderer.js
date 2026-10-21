@@ -4,6 +4,10 @@ import { night_opacity } from './daylight.js';
 import { draw_tree, draw_weapon, draw_vehicle, draw_landmark } from './world_art.js';
 import { draw_flag } from './heraldry.js';
 import { draw_machine, draw_fortification } from './machine_art.js';
+import { draw_daily_activity } from './daily_life_art.js';
+import { draw_medical_building, draw_medical_person } from './medical_art.js';
+import { CIVIC_TYPES } from './civic.js';
+import { draw_civic_building } from './civic_art.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
@@ -243,9 +247,11 @@ export class Renderer {
             draw_machine(c, machine, kingdom, now, technology_level(kingdom));
         }
         for (const animal of world.animals) this.animal(c, animal, now);
+        const aboard = new Set(world.machines.filter(m => m.crew_aboard).map(m => m.crew_id));
         for (const p of world.people) {
-            if (p.voyage_id) continue;
+            if (p.voyage_id || aboard.has(p.id)) continue;
             this.person(c, p, kingdoms.get(p.village_id), now);
+            if (this.zoom >= 3) draw_daily_activity(c, p, now);
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
             draw_machine(c, machine, kingdoms.get(machine.kingdom_id), now);
@@ -431,7 +437,10 @@ export class Renderer {
         const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
         const skin = { orc: '#8fbc6c', dwarf: '#d69b75', foxfolk: '#d88953', harefolk: '#e7d6be', catfolk: '#d5b078', frogfolk: '#78c991', wolfkin: '#aab9c4', hyenafolk: '#b99566', beetlefolk: '#68aaa1' }[person.race] || '#f0c9a0';
         c.fillStyle = '#172a2266'; c.fillRect(x - 3, y + 3, 7, 2);
-        const stride = Math.round(Math.sin(now / 140 + person.id));
+        const stationary = person.medical_role || person.recovering
+            ? ['Receiving treatment', 'Waiting for treatment', 'Recovering at home', 'Tending patients', 'Awaiting medicinal herbs'].includes(person.task) || person.medical_work?.timer > 0
+            : person.role !== 'soldier' && ['work', 'rest', 'social'].includes(person.daily_life?.phase);
+        const stride = stationary ? 0 : Math.round(Math.sin(now / 140 + person.id));
         c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1 + stride, 2, 4); c.fillRect(x + 1, y + 1 - stride, 2, 4);
         c.fillStyle = kingdom?.color || '#e4dfb2'; c.fillRect(x - 3, y - 4, 6, 6);
         c.fillStyle = '#213129'; c.fillRect(x - 3, y, 6, 1);
@@ -457,7 +466,7 @@ export class Renderer {
         }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
-        draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
+        if (person.role === 'soldier' || !stationary) draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
             level >= 6 && person.attack_timer > (level === 6 ? 1.8 : 0.6));
         if (level < 5 && (level >= 2 || person.role === 'soldier')) {
             c.fillStyle = metal; c.fillRect(x - face * 5 - 2, y - 4, 4, 6);
@@ -467,6 +476,7 @@ export class Renderer {
             c.fillStyle = '#4d6356'; c.fillRect(x - 4, y - 10, 8, 3);
             c.fillStyle = '#a8bcb0'; c.fillRect(x - 2, y - 10, 3, 1);
         }
+        draw_medical_person(c, person);
         if (kingdom?.king_id === person.id) {
             c.fillStyle = '#f0ca65'; c.fillRect(x - 4, y - 13, 8, 3);
             c.fillRect(x - 4, y - 16, 2, 4); c.fillRect(x - 1, y - 15, 2, 3); c.fillRect(x + 2, y - 16, 2, 4);
@@ -526,7 +536,11 @@ export class Renderer {
     }
     building(c, building, color, now, kingdom = null) {
         const x = building.x * CELL, y = building.y * CELL;
-        if (['castle', 'watchtower', 'prison', 'dock', 'aerodrome'].includes(building.type)) {
+        if (CIVIC_TYPES.has(building.type)) {
+            draw_civic_building(c, building, color);
+        } else if (['clinic', 'hospital'].includes(building.type)) {
+            draw_medical_building(c, building, color);
+        } else if (['castle', 'watchtower', 'prison', 'dock', 'aerodrome'].includes(building.type)) {
             draw_fortification(c, building, kingdom || { color });
         } else if (building.type === 'farm') {
             c.fillStyle = '#60482f'; c.fillRect(x - 10, y - 5, 21, 14);

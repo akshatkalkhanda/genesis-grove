@@ -16,7 +16,8 @@ function building(type, x, y) {
 }
 function machine(world, kingdom, kind, x = kingdom.x, y = kingdom.y) {
     const unit = { id: world.next_id++, kingdom_id: kingdom.id, kind, x, y, dx: 1, dy: 0,
-        health: MACHINES[kind].health, decision: 0, cooldown: 0, cargo: 0, recipient_id: null, delivered: 0 };
+        health: MACHINES[kind].health, decision: 0, cooldown: 0, cargo: 0, recipient_id: null, delivered: 0,
+        crew_id: world.people.find(p => p.village_id === kingdom.id).id, crew_aboard: true };
     world.machines.push(unit); return unit;
 }
 
@@ -25,10 +26,13 @@ test('a dock launches a boat that remains on water and fishes at a bounded rate'
     for (let y = 30; y < 70; y++) for (let x = 42; x < 90; x++) world.set_tile(x, y, T.OCEAN);
     home.buildings = [building('dock', 41, 50)]; home.machine_timer = 20;
     const before = home.food;
-    for (let step = 0; step < 200; step++) advance_machines(world, 0.125, technology_level, RESEARCH_COSTS);
+    for (let step = 0; step < 200; step++) {
+        advance_machines(world, 0.125, technology_level, RESEARCH_COSTS);
+        if (world.machines[0]) { world.machines[0].crew_id = world.people[0].id; world.machines[0].crew_aboard = true; }
+    }
     assert.equal(world.machines.length, 1); assert.equal(world.machines[0].kind, 'boat');
     assert.ok(world.tile(world.machines[0].x, world.machines[0].y) <= T.SHALLOW);
-    assert.equal(home.food, before + 6);
+    assert.equal(home.food + world.machines[0].cargo, before + 6);
     assert.deepEqual(World.deserialize(world.serialize()).machines, world.machines);
 });
 

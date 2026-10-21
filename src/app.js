@@ -6,8 +6,12 @@ import { advance_daylight } from './daylight.js';
 import { VEHICLES } from './infrastructure.js';
 import { draw_flag } from './heraldry.js';
 import { MACHINES } from './machines.js';
+import { CIVIC_DESCRIPTIONS, farm_target, food_reserve } from './civic.js';
 import { advance_detention } from './defenses.js';
 import { draw_tree } from './world_art.js';
+import { ruler_personality, society_modifiers } from './society.js';
+import { DAMAGE_CAUSES, health_risks } from './health.js';
+import { MEDICAL_BUILDINGS } from './medicine.js';
 const $ = id => document.getElementById(id);
 function kingdom_flag(kingdom) {
     const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
@@ -174,6 +178,14 @@ for (const tab of document.querySelectorAll('[data-category]')) tab.onclick = ()
 $('guide-land').onclick = () => { document.querySelector('[data-category="terrain"]').click(); select_tool('grass'); };
 $('guide-people').onclick = () => { document.querySelector('[data-category="life"]').click(); select_tool('human'); };
 $('guide-time').onclick = () => set_pause(false);
+$('toggle-controls').onclick = () => {
+    const collapsed = document.body.classList.toggle('controls-collapsed');
+    const button = $('toggle-controls');
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('aria-label', collapsed ? 'Show creator controls' : 'Collapse creator controls');
+    button.title = collapsed ? 'Show creator controls' : 'Collapse creator controls';
+    button.textContent = collapsed ? '›' : '‹';
+};
 $('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
 function set_pause(value) {
     paused = value; $('pause').textContent = paused ? '▶ Resume' : 'Ⅱ Pause'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
@@ -307,7 +319,11 @@ function inspect(p) {
     const vehicle = world.vehicles.find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 2);
     if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard · ${vehicle.deliveries} deliveries`);
     const machine = world.machines.find(m => Math.hypot(m.x - tile.x, m.y - tile.y) < 3);
-    if (machine) add(`${MACHINES[machine.kind].label} · ${Math.ceil(machine.health)} health · ${machine.cargo} food aboard`);
+    if (machine) {
+        add(`${MACHINES[machine.kind].label} · ${Math.ceil(machine.health)} health · ${machine.cargo} food aboard`);
+        const crew = world.people.find(p => p.id === machine.crew_id && p.health > 0);
+        add(crew ? `Crew: ${crew.name} · ${machine.crew_aboard ? 'Aboard · click to inspect' : 'Boarding vehicle'}` : 'Awaiting crew · not operating');
+    }
     const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
     const claimed_by = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
     add(claimed_by ? `${claimed_by.name} territory` : 'Unclaimed land');
@@ -323,7 +339,11 @@ function inspect(p) {
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
     for (const kingdom of world.villages.filter(v => v.alive)) {
         const building = kingdom.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
-        if (building) add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crop ${Math.floor(building.growth * 100)}% · ${building.harvests} harvests` : ` · ${Math.ceil(building.integrity ?? 100)} integrity`}`);
+        if (building && MEDICAL_BUILDINGS.has(building.type)) add(`${BUILDINGS[building.type].label} · ${(building.stock || 0).toFixed(1)} medicine · ${building.treatments || 0} completed treatments`);
+        else if (building) {
+            add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crop ${Math.floor(building.growth * 100)}% · ${building.harvests} harvests` : building.type === 'granary' ? ` · ${(building.stock || 0).toFixed(1)} grain stored` : ` · ${Math.ceil(building.integrity ?? 100)} integrity`}`);
+            if (CIVIC_DESCRIPTIONS[building.type]) add(CIVIC_DESCRIPTIONS[building.type]);
+        }
     }
     add('Click a person or animal to inspect it');
     box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
@@ -335,6 +355,10 @@ function inspect_click(p) {
     renderer.selected_unit_id = found?.unit.id || null;
     followed_unit_id = null;
     const card = $('entity-card'); card.hidden = !found;
+    if (found) {
+        document.body.classList.remove('info-open');
+        $('world-info').classList.remove('active');
+    }
     if (found) {
         update_entity_card();
         card.style.left = `${Math.max(8, Math.min(p.x + 16, canvas.clientWidth - card.offsetWidth - 8))}px`;
@@ -372,6 +396,23 @@ function update_entity_card() {
     const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
     line('Species', `${inspected_unit.kind === 'person' ? RACES[unit.race]?.label || 'Human' : unit.species} · #${unit.id}`);
     line('Health', `${Math.ceil(unit.health)} / ${attributes.max_health}`);
+    const condition = unit.infection > 0 ? 'Infected' : unit.health < attributes.max_health * 0.35
+        ? 'Badly hurt' : unit.health < attributes.max_health * 0.9 ? 'Wounded' : 'Healthy';
+    line('Condition', condition);
+    const risks = health_risks(world, unit, world.villages.find(v => v.id === unit.village_id));
+    line('Health risks', risks.join(' · ') || 'None detected');
+    const harm = unit.health_history?.[0];
+    line('Last harm', harm ? `${DAMAGE_CAUSES[harm.cause]} · −${harm.amount.toFixed(1)} HP · Year ${Math.floor(harm.time / world.year_length) + 1}` : 'No damage recorded yet');
+    if (unit.health_history?.length > 1) {
+        const history = document.createElement('details'); history.className = 'damage-history';
+        const title = document.createElement('summary'); title.textContent = 'Recent damage'; history.append(title);
+        for (const entry of unit.health_history.slice(1, 5)) {
+            const row = document.createElement('p');
+            row.textContent = `${DAMAGE_CAUSES[entry.cause]} · −${entry.amount.toFixed(1)} HP · Year ${Math.floor(entry.time / world.year_length) + 1}`;
+            history.append(row);
+        }
+        card.append(history);
+    }
     line('Age', `${Math.floor(unit.age / world.year_length)} years`);
     line('Level / XP', `${attributes.level} · ${Math.floor(unit.xp || 0)} / ${attributes.next_xp ?? 'Master'}`);
     line('Strength / Intelligence', `${attributes.strength} / ${attributes.intelligence}`);
@@ -383,16 +424,62 @@ function update_entity_card() {
         line('Kingdom', kingdom?.name || 'No kingdom');
         line('Food supply', kingdom ? `${Math.floor(kingdom.food)} shared · ${kingdom.food < 5 ? 'Food shortage' : 'Available'}` : 'No shared stores');
         if (kingdom?.king_id === unit.id) line('Title', 'Ruler');
-        line('Role', unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        const vessel = world.machines.find(m => m.crew_id === unit.id);
+        line('Role', vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        if (unit.recovering || unit.medical_role) {
+            const clinics = kingdom?.buildings?.filter(b => MEDICAL_BUILDINGS.has(b.type)) || [];
+            const doctors = world.people.filter(p => p.village_id === kingdom?.id && p.medical_role === 'doctor' && p.health > 0);
+            line('Medical care', unit.medical_role ? unit.task : !clinics.length ? 'No clinic · recovering at home'
+                : !doctors.length ? 'Clinic needs a healthy adult doctor'
+                    : clinics.every(b => !b.stock) ? 'Waiting for medicinal supplies' : unit.task);
+        }
         line('Weapon', TECH_AGES[unit.weapon_level || 0].weapon);
         line('Armor', unit.armor_level ? `${TECH_AGES[unit.armor_level].name} armor` : 'None');
         if (unit.parents?.length) line('Parents', unit.parents.map(parent => parent.name).join(', '));
-        line('Living children', world.people.filter(child => child.parents?.some(parent => parent.id === unit.id)).length);
+        const children = world.people.filter(child => child.parents?.some(parent => parent.id === unit.id));
+        line('Family', unit.family_name || 'Founding household');
+        line('Living / lifetime children', `${children.length} / ${unit.children_count || children.length}`);
+        const culture = world.villages.find(v => v.id === unit.culture_id)?.culture;
+        line('Culture', culture ? `${culture.name} · ${culture.value}` : 'Local traditions');
+        if (unit.heritage_trait) line('Inherited aptitude', unit.heritage_trait);
+        if (kingdom?.king_id === unit.id) line('Ruler personality', ruler_personality(unit));
+        const routine = unit.daily_life;
+        if (routine && unit.role !== 'soldier' && !unit.prisoner_of && !unit.voyage_id && !unit.medical_role && !unit.recovering) {
+            line('Energy', `${Math.round(routine.energy)} / 100`);
+            line('Carrying', `${routine.cargo.food.toFixed(1)} food · ${routine.cargo.wood.toFixed(1)} timber`);
+            line('Delivered supplies', Math.floor(routine.delivered));
+        }
+        const relations = document.createElement('div'); relations.className = 'family-links';
+        relations.setAttribute('aria-label', 'Family and relationships');
+        const relative = (id, name, label) => {
+            const living = world.people.find(person => person.id === id && person.health > 0);
+            const link = document.createElement(living ? 'button' : 'span');
+            link.textContent = `${label}: ${living?.name || name}${living ? '' : ' · remembered'}`;
+            if (living) {
+                link.dataset.action = `relative-${id}`;
+                link.onclick = () => {
+                    inspected_unit = { kind: 'person', id };
+                    followed_unit_id = null; renderer.selected_unit_id = id;
+                    renderer.focus(living.x, living.y, Math.max(6, renderer.zoom));
+                    card.scrollTop = 0; update_zoom(); update_entity_card();
+                };
+            }
+            relations.append(link);
+        };
+        if (unit.partner_id) relative(unit.partner_id,
+            unit.relationships?.find(r => r.id === unit.partner_id)?.name || 'Former partner', 'Partner');
+        for (const parent of unit.parents || []) relative(parent.id, parent.name, 'Parent');
+        for (const child of children.slice(0, 8)) relative(child.id, child.name, 'Child');
+        const family_ids = new Set([unit.partner_id, ...(unit.parents || []).map(p => p.id), ...children.map(p => p.id)]);
+        for (const friend of (unit.relationships || []).filter(r => !family_ids.has(r.id) && r.affinity >= 10)
+            .sort((a, b) => b.affinity - a.affinity).slice(0, 3)) {
+            relative(friend.id, friend.name, `Bond ${Math.round(friend.affinity)}%`);
+        }
+        if (relations.childElementCount) card.append(relations);
     } else {
         line('Nature', unit.species === 'angel' ? 'Guardian · healing aura' : unit.species === 'demon'
             ? 'Hostile · spreads fire' : ['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl'].includes(unit.species) ? 'Predator' : 'Wildlife');
     }
-    line('Condition', unit.infection > 0 ? 'Infected' : unit.health < attributes.max_health * 0.35 ? 'Badly hurt' : unit.health < attributes.max_health * 0.9 ? 'Wounded' : 'Healthy');
     if (unit.prisoner_of) {
         line('Held by', world.villages.find(v => v.id === unit.prisoner_of)?.name || 'Lost kingdom');
         line('Sentence', `${Math.ceil((unit.sentence || 0) / world.year_length)} years remaining`);
@@ -534,6 +621,18 @@ function update_selected_kingdom() {
     const heading = document.createElement('strong'); heading.textContent = kingdom.name;
     heading.prepend(kingdom_flag(kingdom));
     const ruler = document.createElement('div'); ruler.textContent = `Ruler: ${world.people.find(p => p.id === kingdom.king_id && p.health > 0)?.name || 'Awaiting succession'}`;
+    const culture = document.createElement('div');
+    const leader = world.people.find(p => p.id === kingdom.king_id && p.health > 0);
+    const social = society_modifiers(kingdom, leader);
+    culture.className = 'kingdom-culture';
+    culture.textContent = `Culture: ${kingdom.culture.name} (${kingdom.culture.value}) · ${social.personality} ruler`;
+    const influence = document.createElement('div'); influence.className = 'culture-effects';
+    const bonuses = [['research', social.research], ['production', social.production],
+        ['training', social.training], ['recovery', social.healing]]
+        .filter(([, value]) => value > 1).map(([label, value]) => `+${Math.round((value - 1) * 100)}% ${label}`);
+    if (social.war_bias < 0) bonuses.push('favors alliances');
+    if (social.war_bias > 0) bonuses.push('more willing to wage war');
+    influence.textContent = bonuses.join(' · ') || 'Balanced policies';
     const status = document.createElement('span'); status.className = 'kingdom-status';
     status.textContent = enemies.length ? `⚔ At war with ${enemies.map(v => v.name).join(', ')}` : '☼ At peace';
     const stats = document.createElement('div'); stats.className = 'kingdom-quick-stats';
@@ -550,17 +649,28 @@ function update_selected_kingdom() {
     const manage = document.createElement('button'); manage.textContent = 'Manage kingdom ↗';
     manage.onclick = () => $('diplomacy').click();
     const plan = document.createElement('div'); plan.textContent = `Strategy: ${kingdom.plan?.reason || 'Establish the settlement'}`;
-    const buildings = document.createElement('div'); buildings.textContent = `Buildings: ${(kingdom.buildings || []).map(b => BUILDINGS[b.type].label).join(', ') || 'homes and workshops'}`;
+    const care = document.createElement('div'); care.className = 'medical-summary';
+    const clinics = (kingdom.buildings || []).filter(b => MEDICAL_BUILDINGS.has(b.type));
+    const doctor_count = residents.filter(p => p.medical_role === 'doctor' && p.health > 0).length;
+    const medicine = clinics.reduce((total, site) => total + (site.stock || 0), 0);
+    care.textContent = clinics.length ? `Medical care: ${doctor_count} doctors · ${medicine.toFixed(1)} medicinal supplies · ${residents.filter(p => p.recovering).length} recovering · ${clinics.reduce((total, site) => total + (site.treatments || 0), 0)} treatments completed`
+        : 'Medical care: no clinic yet · clinics need 8 residents, two homes and 12 timber (+10 reserve)';
+    const building_counts = new Map();
+    for (const b of kingdom.buildings || []) building_counts.set(b.type, (building_counts.get(b.type) || 0) + 1);
+    const buildings = document.createElement('div'); buildings.textContent = `Buildings: ${[...building_counts].map(([type, count]) => `${BUILDINGS[type].label}${count > 1 ? ` ×${count}` : ''}`).join(', ') || 'homes and workshops'}`;
+    const essentials = document.createElement('div'); essentials.className = 'basic-needs';
+    essentials.textContent = `Basic needs: ${residents.length} residents · ${[kingdom, ...towns].reduce((sum, site) => sum + site.houses.length * 5, 0)} shelter places · ${building_counts.get('farm') || 0}/${farm_target(residents.length)} farms · Food reserve ${Math.floor(kingdom.food)}/${food_reserve(residents.length)} · ${Math.floor((kingdom.buildings || []).filter(b => b.type === 'granary').reduce((sum, b) => sum + (b.stock || 0), 0))} grain stored`;
+    buildings.append(essentials);
     const research = document.createElement('div'); research.textContent = research_status(kingdom);
     const fleet = world.vehicles.filter(vehicle => vehicle.kingdom_id === kingdom.id);
     const transport = document.createElement('div'); transport.textContent = `Transport: ${fleet.length} vehicles · ${fleet.reduce((sum, vehicle) => sum + vehicle.deliveries, 0)} surplus deliveries`;
     const machines = world.machines.filter(machine => machine.kingdom_id === kingdom.id);
-    const fleet_detail = document.createElement('div'); fleet_detail.textContent = `Fleet: ${machines.map(machine => MACHINES[machine.kind].label).join(', ') || 'no boats or aircraft yet'}`;
+    const fleet_detail = document.createElement('div'); fleet_detail.textContent = `Fleet: ${machines.map(machine => `${MACHINES[machine.kind].label} (${machine.crew_aboard ? 'crewed' : machine.crew_id ? 'boarding' : 'awaiting crew'})`).join(', ') || 'no boats or aircraft yet'}`;
     const prisoners = world.people.filter(person => person.prisoner_of === kingdom.id);
     const release = document.createElement('button'); release.textContent = `Release prisoners (${prisoners.length})`;
     release.disabled = !prisoners.length;
     release.onclick = () => { for (const person of prisoners) person.sentence = 0; advance_detention(world, 0); update_ui(); };
-    box.append(heading, ruler, status, stats, age, research, stores, metals, settlements, buildings, transport, fleet_detail, plan, march, diplomacy, manage, release);
+    box.append(heading, ruler, culture, influence, status, stats, age, research, stores, metals, settlements, buildings, care, transport, fleet_detail, plan, march, diplomacy, manage, release);
 }
 function update_world_guidance(stats = world.stats()) {
     const progress = [stats.land > 0, stats.population > 0, world.time > 0.25];
@@ -569,6 +679,10 @@ function update_world_guidance(stats = world.stats()) {
         $(id).setAttribute('aria-label', `${progress[index] ? 'Complete: ' : ''}${$(id).querySelector('b').textContent}`);
     }
     $('guide-progress').textContent = `${progress.filter(Boolean).length}/3`;
+    const guide = $('creation-guide');
+    if (progress.every(Boolean) && guide.dataset.completed !== 'true') {
+        guide.open = false; guide.dataset.completed = 'true';
+    }
     const wars = world.relations.filter(relation => relation.status === 'war').length;
     let icon = paused ? 'Ⅱ' : '▶', kicker = paused ? 'SIMULATION PAUSED' : `RUNNING AT ${speed}×`, title, detail;
     if (!stats.land) {
@@ -655,6 +769,8 @@ function update_ui() {
     }
 }
 function replace_world(next) {
+    $('creation-guide').dataset.completed = 'false';
+    $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
     renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;

@@ -58,6 +58,7 @@ app.whenReady().then(async () => {
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Supplies:")'));
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Towns:")'));
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Ruler:")'));
+        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Culture:")'));
         assert.equal(await js('document.querySelectorAll("#civilizations .kingdom-flag").length'), 3);
         checks.push('Selecting a kingdom opens its detailed status panel');
         await js(`document.getElementById('close-world-info').click()`); await delay(300);
@@ -76,6 +77,16 @@ app.whenReady().then(async () => {
         checks.push('Biome, civilization, and wildlife catalogs expose the expanded choices');
         assert.equal(await js(`(()=>{const tabs=[...document.querySelectorAll('.tabs button')].map(e=>e.getBoundingClientRect());return tabs.every((tab,index)=>index===0||tabs[index-1].right<=tab.left)})()`), true);
         checks.push('Tool categories fit without overlap');
+        assert.equal(await js(`(()=>{const side=document.querySelector('.creator-sidebar').getBoundingClientRect(),map=document.querySelector('#viewport').getBoundingClientRect(),tray=document.querySelector('.tool-panel').getBoundingClientRect();return side.right<=map.left&&map.bottom<=tray.top&&['.tool-description','.brush-section','.view-settings','.quick-start'].every(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return r.left>=side.left&&r.right<=side.right})})()`), true);
+        assert.equal(await js('document.getElementById("creation-guide").open'), false);
+        checks.push('Creator controls dock beside the map and completed guidance folds away');
+        const docked_width = await js('document.querySelector("#world").clientWidth');
+        await click('#toggle-controls'); await delay(150);
+        assert.ok(await js('document.querySelector("#world").clientWidth') > docked_width);
+        assert.equal(await js('document.getElementById("toggle-controls").getAttribute("aria-expanded")'), 'false');
+        await click('#toggle-controls'); await delay(150);
+        assert.equal(await js('document.querySelector("#world").clientWidth'), docked_width);
+        checks.push('Collapsing and restoring creator controls resizes the playable map');
         await fs.writeFile(path.join(artifact_dir, 'world-desktop.png'), (await win.webContents.capturePage()).toPNG());
         await click('#pause'); const before = await js('genesis.snapshot().time'); await delay(400);
         assert.equal(await js('genesis.snapshot().time'), before); checks.push('Pause freezes simulation');
@@ -146,17 +157,39 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("world-tooltip").hidden'), false); checks.push('Inspect shows live tile details');
         await click('#pause');
         for (const kind of ['people', 'animals']) {
-            const point = await js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect();return genesis.snapshot().${kind}.map(u=>({x:r.x+c.origin.x+u.x*6*c.base*c.zoom,y:r.y+c.origin.y+u.y*6*c.base*c.zoom})).find(p=>document.elementFromPoint(Math.round(p.x),Math.round(p.y))?.id==='world')})()`);
+            // At fit zoom a rounded pixel can be closer to a different creature.
+            // Pick a visible target with an unambiguous native click position.
+            const point = await js(`(()=>{
+                const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),snapshot=genesis.snapshot();
+                const scale=6*c.base*c.zoom,all=[...snapshot.people,...snapshot.animals].filter(u=>u.health>0&&!u.voyage_id);
+                for(const unit of snapshot.${kind}){
+                    if(unit.voyage_id||unit.health<=0)continue;
+                    const x=Math.round(r.x+c.origin.x+unit.x*scale),y=Math.round(r.y+c.origin.y+unit.y*scale);
+                    if(document.elementFromPoint(x,y)?.id!=='world')continue;
+                    const wx=(x-r.x-c.origin.x)/scale,wy=(y-r.y-c.origin.y)/scale;
+                    const gap=Math.hypot(wx-unit.x,wy-unit.y);
+                    if(all.every(other=>other.id===unit.id||Math.hypot(wx-other.x,wy-other.y)>gap+0.1))return{x,y,id:unit.id};
+                }
+                return null;
+            })()`);
             assert.ok(point, 'A creature must be visible outside the HUD');
             win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1 });
             win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1 });
             await delay(80);
             assert.equal(await js('document.getElementById("entity-card").hidden'), false);
             assert.ok(await js('document.getElementById("entity-card").textContent.includes("Health")'));
+            assert.ok(await js(`document.getElementById('entity-card').textContent.includes('#${point.id}')`));
             assert.ok(await js(`document.getElementById('entity-card').textContent.includes('${kind === 'people' ? 'Weapon' : 'Nature'}')`));
             assert.ok(await js('document.getElementById("entity-card").textContent.includes("Strength / Intelligence")'));
             if (kind === 'people') {
                 assert.ok(await js('document.getElementById("entity-card").textContent.includes("Food supply")'));
+                assert.ok(await js('document.getElementById("entity-card").textContent.includes("Family")'));
+                assert.ok(await js('document.getElementById("entity-card").textContent.includes("Culture")'));
+                const relative = await js(`(()=>{const link=document.querySelector('.family-links button');return link?{action:link.dataset.action,name:link.textContent.split(': ').slice(1).join(': ')}:null})()`);
+                assert.ok(relative, 'founding citizens have inspectable social contacts');
+                await js(`document.querySelector('[data-action="${relative.action}"]').click()`);
+                assert.equal(await js(`document.querySelector('#entity-card .entity-heading strong').textContent`), relative.name);
+                checks.push('Creature profiles show culture and navigate living family or social links');
                 await js('document.getElementById("entity-card").scrollTop = 160');
                 await delay(650);
                 assert.ok(await js('document.getElementById("entity-card").scrollTop >= 150'));
@@ -241,7 +274,13 @@ app.whenReady().then(async () => {
         const { World } = await import_src('simulation.js');
         const developed = new World({ seed: 'color-world', preset: 'wildlands', name: 'The Living Wildlands' });
         developed.laws.expansion = true;
-        for (let step = 0; step < 3200; step++) developed.step(0.125);
+        // Medical construction also uses timber; allow up to 40 years for this
+        // naturally grown town rather than assume a fixed construction order.
+        for (let step = 0; step < 6400; step++) {
+            developed.step(0.125);
+            if (step >= 3200 && ['farm', 'windmill', 'armory', 'camp'].every(type =>
+                developed.villages.some(v => v.buildings?.some(b => b.type === type)))) break;
+        }
         developed.lighting.phase = 0.5;
         const living_towns = developed.serialize();
         await fs.writeFile(path.join(artifact_dir, 'developed-wildlands.json'), JSON.stringify(living_towns));
@@ -255,12 +294,51 @@ app.whenReady().then(async () => {
         await delay(500);
         await fs.writeFile(path.join(artifact_dir, 'town-industry-closeup.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('A grown world restores veteran health and renders working farms, windmills, armories, and camps');
+        const { apply_damage } = await import_src('health.js');
+        const medical = new World({ preset: 'empty', inhabited: false, name: 'Medical care demonstration' });
+        medical.tiles.fill(3);
+        const ward = medical.found_village(96, 64);
+        ward.houses = [{ x: 96, y: 64 }, { x: 95, y: 64 }];
+        ward.food = 200; ward.wood = 0;
+        ward.buildings = [{ type: 'clinic', x: 99, y: 64, growth: 0, harvests: 0, stock: 20 }];
+        for (let i = 0; i < 8; i++) {
+            medical.add_person(94 + i, 67 + i % 2, ward.id);
+        }
+        const physician = medical.people.find(p => p.job === 'builder');
+        physician.x = 99; physician.y = 64;
+        const patient = medical.people[2]; patient.role = 'soldier'; patient.x = 100.5;
+        patient.y = 64;
+        apply_damage(medical, patient, patient.health - 20, 'combat');
+        medical.step(0.25);
+        assert.equal(patient.task, 'Receiving treatment');
+        const medical_world = medical.serialize();
+        await fs.writeFile(path.join(artifact_dir, 'medical-showcase.json'), JSON.stringify(medical_world));
+        await click('#load');
+        await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(medical_world))}],'medical-showcase.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
+        await delay(150); await click('#pause');
+        if (!await js('document.querySelector("#inspect").classList.contains("active")')) await click('#inspect');
+        const patient_point = await js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),p=genesis.snapshot().people.find(p=>p.id===${patient.id});return{x:Math.round(r.x+c.origin.x+p.x*6*c.base*c.zoom),y:Math.round(r.y+c.origin.y+p.y*6*c.base*c.zoom)}})()`);
+        win.webContents.sendInputEvent({ type: 'mouseDown', ...patient_point, button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', ...patient_point, button: 'left', clickCount: 1 });
+        await delay(100);
+        const medical_profile = await js('document.querySelector("#entity-card").textContent');
+        assert.equal(await js('document.body.classList.contains("info-open")'), false);
+        assert.ok(await js('(()=>{const card=document.querySelector("#entity-card"),r=card.getBoundingClientRect();return !!document.elementFromPoint(r.left+20,r.top+20)?.closest("#entity-card")})()'));
+        assert.ok(medical_profile.includes('Combat wound') && medical_profile.includes('Receiving treatment'));
+        assert.ok(medical_profile.includes('Badly hurt') && medical_profile.includes('Last harm'));
+        await js(`document.querySelector('[data-action="zoom-creature"]').click()`);
+        await delay(150);
+        await fs.writeFile(path.join(artifact_dir, 'medical-care.png'), (await win.webContents.capturePage()).toPNG());
+        await click('#entity-card button');
+        await js(`document.body.classList.add('info-open');document.querySelector('#civilizations button').click()`);
+        assert.ok(await js('document.querySelector(".medical-summary").textContent.includes("1 doctors")'));
+        checks.push('Injured citizens expose their damage cause and treatment while kingdom profiles show medical staffing and supplies');
         const { advance_buildings } = await import_src('settlements.js');
         const { advance_roads, advance_transport } = await import_src('infrastructure.js');
         const modern = developed.villages.find(v => v.alive);
         modern.research_level = 8; modern.tech_points = 560; modern.wood = 2000;
         modern.ore.iron = 1000; modern.ore.coal = 1000; modern.ore.copper = 1000;
-        for (let cycle = 0; cycle < 20; cycle++) advance_buildings(developed, modern, 12, 60, 8);
+        for (let cycle = 0; cycle < 40; cycle++) advance_buildings(developed, modern, 12, 60, 8);
         for (const farm of modern.buildings.filter(b => b.type === 'farm')) farm.stock = 100;
         for (let cycle = 0; cycle < modern.houses.length + modern.buildings.length; cycle++) advance_roads(developed, modern, 8, 8);
         modern.vehicle_timer = 24;
@@ -285,7 +363,7 @@ app.whenReady().then(async () => {
         await fs.writeFile(path.join(artifact_dir, 'modern-town.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('Modern-town import renders roads, monuments, universities, factories, trucks, and later weapons');
         modern.research_level = 13; modern.tech_points = 2700; modern.wood = 2000; modern.ore.stardust = 1000;
-        for (let cycle = 0; cycle < 30; cycle++) advance_buildings(developed, modern, 12, 60, 13);
+        for (let cycle = 0; cycle < 45; cycle++) advance_buildings(developed, modern, 12, 60, 13);
         for (let cycle = 0; cycle < 2; cycle++) { modern.vehicle_timer = 24; advance_transport(developed, 0.125, v => v.research_level); }
         for (let index = 0; index < residents.length; index++) {
             residents[index].weapon_level = 9 + index % 5; residents[index].armor_level = 13;
@@ -316,9 +394,14 @@ app.whenReady().then(async () => {
         }
         capital.buildings = [['castle', 50, 54], ['watchtower', 61, 56], ['prison', 56, 65],
             ['dock', 65, 67], ['aerodrome', 46, 72], ['workshop', 52, 72], ['farm', 42, 64],
-            ['windmill', 40, 69], ['university', 42, 56]].map(([type,x,y])=>({type,x,y,growth:0.8,harvests:2,stock:40,integrity:type==='castle'?300:100,defense_timer:0}));
+            ['windmill', 40, 69], ['university', 42, 56], ['school', 44, 60], ['church', 37, 56],
+            ['temple', 38, 73], ['well', 45, 66], ['granary', 48, 65], ['market', 57, 73], ['monument', 34, 64]]
+            .map(([type,x,y])=>({type,x,y,growth:0.8,harvests:2,stock:40,integrity:type==='castle'?300:100,defense_timer:0}));
+        const crew_members = fortress.people.filter(p => p.village_id === capital.id && p.role !== 'soldier');
         for (const [kind,x,y] of [['boat',68.5,66],['artillery',57,57],['balloon',54,70],['plane',60,61],['airship',60,70]]) {
-            fortress.machines.push({id:fortress.next_id++,kingdom_id:capital.id,kind,x,y,dx:1,dy:0,health:MACHINES[kind].health,decision:0,cooldown:0,cargo:0,recipient_id:null,delivered:0});
+            const sailor = crew_members.shift(); sailor.x = x; sailor.y = y;
+            sailor.task = kind === 'boat' ? 'Sailing coastal boat' : kind === 'artillery' ? 'Operating artillery' : 'Piloting aircraft';
+            fortress.machines.push({id:fortress.next_id++,kingdom_id:capital.id,kind,x,y,dx:1,dy:0,health:MACHINES[kind].health,decision:0,cooldown:0,cargo:0,recipient_id:null,delivered:0,crew_id:sailor.id,crew_aboard:true});
         }
         fortress.set_relation(capital.id, rival.id, 'war');
         const captive = fortress.people.find(p=>p.village_id===rival.id); captive.role='soldier'; captive.x=58;captive.y=65;captive.health=20;
@@ -339,6 +422,27 @@ app.whenReady().then(async () => {
         await js(`(()=>{const button=[...document.querySelectorAll('#selected-kingdom button')].find(b=>b.textContent.startsWith('Release prisoners'));button.click()})()`);
         assert.equal(await js('genesis.snapshot().people.filter(p=>p.prisoner_of).length'),0);
         checks.push('Kingdom prisoner release control returns captives to their home kingdom');
+        assert.ok(await js('document.querySelector("#selected-kingdom").textContent.includes("Basic needs:")'));
+        assert.ok(await js('(()=>{const types=new Set(genesis.snapshot().villages[0].buildings.map(b=>b.type));return ["school","church","temple","well","granary","market","monument"].every(type=>types.has(type))})()'));
+        checks.push('Civic districts render schools, sanctuaries, wells, granaries and markets with basic-needs status');
+        await click('#close-world-info'); await click('#zoom-reset');
+        if (!await js('document.querySelector("#inspect").classList.contains("active")')) await click('#inspect');
+        for (const kind of ['boat', 'balloon']) {
+            const vessel_point = await js(`(()=>{const c=genesis.camera(),r=document.querySelector('#world').getBoundingClientRect(),m=genesis.snapshot().machines.find(m=>m.kind==='${kind}');return{x:Math.round(r.x+c.origin.x+m.x*6*c.base*c.zoom),y:Math.round(r.y+c.origin.y+m.y*6*c.base*c.zoom),id:m.crew_id}})()`);
+            win.webContents.sendInputEvent({ type: 'mouseMove', x: vessel_point.x, y: vessel_point.y });
+            await delay(100);
+            assert.ok(await js('document.querySelector("#world-tooltip").textContent.includes("Crew:")'));
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: vessel_point.x, y: vessel_point.y, button: 'left', clickCount: 1 });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: vessel_point.x, y: vessel_point.y, button: 'left', clickCount: 1 });
+            await delay(100);
+            assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('#${vessel_point.id}')`));
+            assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('${kind === 'boat' ? 'Sailor' : 'Pilot'}')`));
+            await js(`document.querySelector('[data-action="zoom-creature"]').click()`);
+            await delay(150);
+            await fs.writeFile(path.join(artifact_dir, `${kind}-crew.png`), (await win.webContents.capturePage()).toPNG());
+            await click('#entity-card button'); await click('#zoom-reset');
+        }
+        checks.push('Native map clicks inspect named sailors and balloon pilots, with visible crew and aboard status');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         await click('#menu-start');
@@ -358,10 +462,13 @@ app.whenReady().then(async () => {
         assert.equal(await js(`document.querySelector('[data-speed="20"]').classList.contains('active')`), true);
         await fs.writeFile(path.join(artifact_dir, 'world-challenge.png'), (await win.webContents.capturePage()).toPNG());
         checks.push('20× challenge speed and screenshot render');
+        if (!await js('document.body.classList.contains("info-open")')) await click('#world-info');
         await win.setSize(900, 680); await delay(200);
         assert.equal(await js('document.documentElement.scrollWidth <= window.innerWidth'), true); checks.push('Compact layout fits a smaller window');
         assert.equal(await js(`(()=>{const r=document.querySelector('.info-panel').getBoundingClientRect();return r.left>=0&&r.right<=window.innerWidth})()`), true);
         assert.equal(await js(`(()=>{const tabs=[...document.querySelectorAll('.tabs button')].map(e=>e.getBoundingClientRect());return tabs.every((tab,index)=>index===0||tabs[index-1].right<=tab.left)})()`), true);
+        assert.equal(await js(`['zoom-slider','zoom-in','zoom-out','save','load'].every(id=>{const e=document.getElementById(id),r=e.getBoundingClientRect();return getComputedStyle(e).display!=='none'&&r.width>0&&r.left>=0&&r.right<=innerWidth})`), true);
+        checks.push('Compact windows keep zoom, save and load controls available');
         await fs.writeFile(path.join(artifact_dir, 'world-compact.png'), (await win.webContents.capturePage()).toPNG());
         assert.deepEqual(errors, []); checks.push('No renderer errors');
         await fs.writeFile(path.join(artifact_dir, 'smoke-results.json'), JSON.stringify({ checks, errors }, null, 2));

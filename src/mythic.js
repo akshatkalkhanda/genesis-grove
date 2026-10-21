@@ -1,4 +1,5 @@
 import { creature_stats, develop_creature } from './creatures.js';
+import { apply_damage } from './health.js';
 
 export const MYTHIC = Object.freeze({
     angel: { label: 'Angel', health: 250, speed: 1.8 },
@@ -20,7 +21,7 @@ export function advance_mythic(world, unit, dt) {
         const angle = Math.atan2(target.y - unit.y, target.x - unit.x);
         unit.dx = Math.cos(angle); unit.dy = Math.sin(angle);
         if (distance < 2.5) {
-            target.health -= dt * (angel ? 32 : 18) * creature_stats(unit, world.year_length).strength / 10;
+            apply_damage(world, target, dt * (angel ? 32 : 18) * creature_stats(unit, world.year_length).strength / 10, 'combat');
             develop_creature(unit, 0, world.year_length, dt);
             if (target.health <= 0) { unit.kills++; develop_creature(unit, 0, world.year_length, 15); }
         }

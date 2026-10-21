@@ -1,5 +1,15 @@
+import { MAX_BUILDINGS, farm_target, food_reserve } from './civic.js';
+
 export const BUILDINGS = Object.freeze({
     farm: { label: 'Farm', population: 6, age: 0, wood: 8 },
+    well: { label: 'Well', population: 6, age: 0, wood: 8 },
+    granary: { label: 'Granary', population: 8, age: 0, wood: 12 },
+    clinic: { label: 'Clinic', population: 8, age: 0, wood: 12 },
+    school: { label: 'School', population: 12, age: 0, wood: 18 },
+    church: { label: 'Church', population: 18, age: 1, wood: 22 },
+    temple: { label: 'Temple', population: 24, age: 2, wood: 26 },
+    market: { label: 'Market', population: 16, age: 1, wood: 20 },
+    hospital: { label: 'Hospital', population: 30, age: 5, wood: 36 },
     windmill: { label: 'Windmill', population: 12, age: 1, wood: 18 },
     armory: { label: 'Armory', population: 16, age: 2, wood: 22 },
     camp: { label: 'Training camp', population: 10, age: 0, wood: 14 },
@@ -23,29 +33,41 @@ export function advance_buildings(world, kingdom, dt, population, age) {
     kingdom.build_timer = Math.min(60, (kingdom.build_timer || 0) + dt);
     const buildings = kingdom.buildings;
     const mill = buildings.some(building => building.type === 'windmill');
+    const farmers = world.people.filter(p => p.village_id === kingdom.id && p.job === 'farmer'
+        && p.role !== 'soldier' && !world._crew_assignments?.has(p.id) && !p.medical_role && !p.recovering && !p.prisoner_of
+        && !p.voyage_id && p.health > 0 && p.age / world.year_length >= 18).length;
+    let staffed = farmers;
     const dust_rate = buildings.reduce((rate, building) => rate
         + ({ observatory: 1, stargate: 3, condenser: 8 }[building.type] || 0), 0);
     if (dust_rate) kingdom.ore.stardust = Math.min(1e6, (kingdom.ore.stardust || 0)
         + dt / world.year_length * dust_rate);
     for (const building of buildings) {
         if (building.type !== 'farm') continue;
+        if (staffed-- <= 0 || world.fire[world.index(building.x, building.y)] > 0) continue;
         building.growth = Math.min(1, building.growth + dt / 30);
         if (building.growth >= 1) {
-            kingdom.food += mill ? 30 : 18;
-            building.stock = Math.min(120, (building.stock || 0) + (mill ? 10 : 6));
+            const watered = buildings.some(b => b.type === 'well'
+                && Math.hypot(b.x - building.x, b.y - building.y) <= 8);
+            const yield_food = (mill ? 160 : 120) * (watered ? 1.1 : 1);
+            const surplus = Math.min(12, 120 - (building.stock || 0));
+            kingdom.food += yield_food - surplus;
+            building.stock = (building.stock || 0) + surplus;
             building.growth = 0;
             building.harvests = Math.min(1e6, (building.harvests || 0) + 1);
         }
     }
-    if (kingdom.build_timer < 12 || buildings.length >= 24) return;
+    if (kingdom.build_timer < 12 || buildings.length >= MAX_BUILDINGS) return;
+    const farms = buildings.filter(b => b.type === 'farm').length;
     for (const [type, recipe] of Object.entries(BUILDINGS)) {
-        const limit = type === 'farm' ? Math.min(3, Math.ceil(population / 30)) : 1;
+        const limit = type === 'farm' ? farm_target(population) : 1;
+        const essential = ['farm', 'well', 'granary', 'clinic'].includes(type);
+        if (!essential && (farms < farm_target(population) || kingdom.food < food_reserve(population))) continue;
         if (buildings.filter(building => building.type === type).length >= limit
             || population < recipe.population || age < recipe.age
-            || kingdom.houses.length < 2 || kingdom.wood < recipe.wood + 10) continue;
+            || kingdom.houses.length < 2 || kingdom.wood < recipe.wood + (essential ? 4 : 10)) continue;
         let place = null;
         for (let attempt = 0; attempt < 30; attempt++) {
-            const point = world.land_near(kingdom.x, kingdom.y, 16);
+            const point = world.land_near(kingdom.x, kingdom.y, Math.min(40, 12 + Math.sqrt(population) * 2));
             if (!point || Math.hypot(point.x - kingdom.x, point.y - kingdom.y) < 3
                 || buildings.some(b => Math.hypot(b.x - point.x, b.y - point.y) < (type === 'castle' || b.type === 'castle' ? 5 : 3))
                 || kingdom.houses.some(h => Math.hypot(h.x - point.x, h.y - point.y) < (type === 'castle' ? 4 : 2))) continue;

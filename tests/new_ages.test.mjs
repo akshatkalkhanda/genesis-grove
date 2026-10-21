@@ -15,7 +15,7 @@ function developed_town() {
 
 test('research advances beyond steel through all four later ages and equips a carbine', () => {
     const { world, kingdom } = developed_town();
-    for (let cycle = 0; cycle < 12; cycle++) advance_buildings(world, kingdom, 12, 30, 8);
+    for (let cycle = 0; cycle < 28; cycle++) advance_buildings(world, kingdom, 12, 30, 8);
     assert.ok(kingdom.buildings.some(b => b.type === 'monument'));
     for (let level = 5; level <= 8; level++) {
         kingdom.research_level = level - 1;

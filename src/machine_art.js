@@ -15,6 +15,10 @@ export function draw_machine(c, machine, kingdom, now, level = 0) {
         c.fillStyle = '#ffffff30'; c.fillRect(-10, -26, 3, 11);
         c.fillStyle = '#f5ba62'; c.fillRect(-1, 2, 3, 4);
         draw_flag(c, 4, 4, kingdom || {}, 10, 6);
+        if (machine.crew_aboard) {
+            c.fillStyle = '#e9bf8b'; c.fillRect(-2, 2, 4, 4);
+            c.fillStyle = color; c.fillRect(-2, 6, 4, 3);
+        }
     } else if (machine.kind === 'boat') {
         c.translate(0, Math.sin(now / 600 + machine.id));
         c.fillStyle = '#cbe5dd77'; c.fillRect(-13, 6, 23, 1);
@@ -25,6 +29,10 @@ export function draw_machine(c, machine, kingdom, now, level = 0) {
         c.fillStyle = '#f2e8ca'; c.beginPath(); c.moveTo(1, -23); c.lineTo(13, -7); c.lineTo(1, -7); c.fill();
         draw_flag(c, 1, -27, kingdom || {}, 11, 7);
         if (level >= 6) { c.fillStyle = '#40525c'; c.fillRect(-9, -6, 5, 7); c.fillRect(-12, -7, 9, 2); }
+        if (machine.crew_aboard) {
+            c.fillStyle = '#e9bf8b'; c.fillRect(4, -8, 4, 4);
+            c.fillStyle = color; c.fillRect(3, -4, 6, 4);
+        }
     } else if (machine.kind === 'artillery') {
         const face = machine.dx < 0 ? -1 : 1;
         c.scale(face, 1);
@@ -35,6 +43,7 @@ export function draw_machine(c, machine, kingdom, now, level = 0) {
         c.fillStyle = '#354b55'; c.fillRect(13, -9, 5, 8);
         c.fillStyle = color; c.fillRect(-7, -4, 7, 3);
         if (machine.cooldown > 3.7) { c.fillStyle = '#fff1a4'; c.fillRect(19, -8, 5, 5); }
+        if (machine.crew_aboard) { c.fillStyle = '#e9bf8b'; c.fillRect(-11, -9, 4, 4); }
     } else {
         c.translate(0, -11);
         c.rotate(Math.atan2(machine.dy, machine.dx));
@@ -52,6 +61,7 @@ export function draw_machine(c, machine, kingdom, now, level = 0) {
         }
         c.rotate(-Math.atan2(machine.dy, machine.dx));
         draw_flag(c, -2, 5, kingdom || {}, 10, 6);
+        if (machine.crew_aboard) { c.fillStyle = '#e9bf8b'; c.fillRect(3, -3, 3, 3); }
     }
     c.restore();
 }

@@ -1,4 +1,6 @@
 import { defense_hit } from './defenses.js';
+import { sync_crews } from './crews.js';
+import { food_reserve } from './civic.js';
 
 export const MACHINES = Object.freeze({
     boat: { label: 'Coastal boat', domain: 'water', age: 2, building: 'dock', wood: 18, speed: 1.6, health: 180 },
@@ -27,7 +29,8 @@ export function advance_machines(world, dt, level_of, research_costs) {
         && (MACHINES[machine.kind].domain !== 'land' || world.walkable(machine.x, machine.y)));
     for (const kingdom of world.villages.filter(v => v.alive)) {
         kingdom.machine_timer = Math.min(20, (kingdom.machine_timer || 0) + dt);
-        if (kingdom.machine_timer < 20 || world.machines.length >= MAX_MACHINES) continue;
+        const population = world.people.filter(p => p.village_id === kingdom.id && p.health > 0).length;
+        if (kingdom.food < food_reserve(population) || kingdom.machine_timer < 20 || world.machines.length >= MAX_MACHINES) continue;
         const level = level_of(kingdom), reserve = research_costs[level + 1] || {};
         for (const [kind, recipe] of Object.entries(MACHINES)) {
             if (level < recipe.age || kingdom.wood < recipe.wood + 20
@@ -49,6 +52,7 @@ export function advance_machines(world, dt, level_of, research_costs) {
     for (const machine of world.machines) {
         const kingdom = world.villages.find(v => v.id === machine.kingdom_id);
         const recipe = MACHINES[machine.kind];
+        if (!machine.crew_aboard || !world.people.some(p => p.id === machine.crew_id && p.health > 0)) continue;
         machine.decision -= dt; machine.cooldown = Math.max(0, machine.cooldown - dt);
         if (recipe.domain === 'air') {
             machine.decision = 0;
@@ -87,8 +91,28 @@ export function advance_machines(world, dt, level_of, research_costs) {
             const enemy = world.villages.find(v => v.alive && world.relation_status(v.id, kingdom.id) === 'war');
             if (enemy) world.march(machine, { x: enemy.x, y: enemy.y, route: true }, dt, recipe.speed);
         } else {
-            machine.fishing_timer = (machine.fishing_timer || 0) + dt;
-            if (machine.fishing_timer >= 20) { if (!foe) kingdom.food += 6; machine.fishing_timer = 0; }
+            machine.fishing_timer = Math.min(20, (machine.fishing_timer || 0) + dt);
+            if (machine.fishing_timer >= 20 && !machine.cargo) {
+                if (!foe) machine.cargo = 6;
+                machine.fishing_timer = 0;
+            }
+            const dock = kingdom.buildings.find(b => b.type === 'dock');
+            const harbor = machine.cargo && dock ? water_near(world, dock) : null;
+            if (harbor && Math.hypot(machine.x - harbor.x, machine.y - harbor.y) <= 2) {
+                kingdom.food += machine.cargo; machine.cargo = 0;
+                machine.delivered = Math.min(1e6, machine.delivered + 1);
+            }
+            if (harbor) {
+                const angle = Math.atan2(harbor.y - machine.y, harbor.x - machine.x);
+                for (const offset of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+                    const dx = Math.cos(angle + offset), dy = Math.sin(angle + offset);
+                    const x = machine.x + dx * dt * recipe.speed, y = machine.y + dy * dt * recipe.speed;
+                    if (world.inside(x, y) && world.tile(x, y) <= 1) {
+                        machine.dx = dx; machine.dy = dy; break;
+                    }
+                }
+                machine.decision = 3;
+            }
             if (machine.decision <= 0) {
                 const angle = world.random() * Math.PI * 2;
                 machine.dx = Math.cos(angle); machine.dy = Math.sin(angle); machine.decision = 3;
@@ -98,6 +122,7 @@ export function advance_machines(world, dt, level_of, research_costs) {
             else machine.decision = 0;
         }
     }
+    sync_crews(world);
 }
 
 function fly(world, machine, kingdom, dt, recipe) {

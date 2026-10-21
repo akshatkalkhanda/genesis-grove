@@ -20,11 +20,14 @@ export function creature_stats(unit, year_length = 20) {
         level,
         max_health: (unit.species === 'angel' ? 250 : unit.species === 'demon' ? 300 : 100)
             + Math.floor(Math.min(years, 100) * 1.5)
-            + (level - 1) * (unit.trait === 'hardy' ? 12 : 8),
+            + (level - 1) * (unit.trait === 'hardy' ? 12 : 8)
+            + (unit.heritage_trait === 'hardy' ? 4 : 0),
         strength: 10 + (level - 1) * 2 + Math.floor(Math.min(years, 100) / 10)
-            + (unit.trait === 'brave' && level > 1 ? 2 : 0),
+            + (unit.trait === 'brave' && level > 1 ? 2 : 0)
+            + (unit.heritage_trait === 'brave' ? 1 : 0),
         intelligence: 10 + (level - 1) * 2 + Math.floor(Math.min(years, 100) / 5)
-            + (unit.trait === 'curious' && level > 1 ? 3 : 0),
+            + (unit.trait === 'curious' && level > 1 ? 3 : 0)
+            + (unit.heritage_trait === 'curious' ? 1 : 0),
         next_xp: level < 30 ? level * level * 25 : null
     };
 }

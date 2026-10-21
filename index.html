@@ -8,6 +8,7 @@
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="src/style.css">
     <link rel="stylesheet" href="src/ui.css">
+    <link rel="stylesheet" href="src/layout.css">
 </head>
 <body>
     <header class="topbar">
@@ -16,9 +17,17 @@
         <nav><button id="menu">☰ Menu</button><button id="new-world">＋ New world</button><button id="world-info">▤ World</button><button id="diplomacy">⚑ Kingdoms</button><span class="nav-divider"></span><button id="save" class="quiet-action">Save</button><button id="load" class="quiet-action">Load</button><button id="help" class="icon-button" aria-label="How to play" title="How to play">?</button></nav>
     </header>
     <main>
-        <aside class="tool-panel">
-            <div class="panel-heading"><div><div class="eyebrow">BUILD YOUR WORLD</div><h1>Creator tools</h1></div><span>4 categories</span></div>
+        <aside class="creator-sidebar" id="creator-controls" aria-label="Creator controls">
+            <div class="creator-heading"><span class="eyebrow">CREATOR CONTROLS</span><button id="toggle-controls" aria-expanded="true" aria-controls="creator-controls" aria-label="Collapse creator controls" title="Collapse creator controls">‹</button></div>
+            <div class="map-label"><span class="live-dot"></span><b id="age-label">STONE AGE</b><small id="season">Spring · Year 1</small><div class="age-track"><i id="age-progress"></i></div><div class="age-stages" aria-label="Technology ages"><span>Stone</span><span>Copper</span><span>Bronze</span><span>Iron</span><span>Steel</span><span>Renaissance</span><span>Gunpowder</span><span>Industrial</span><span>Modern</span><span>Lightyear</span><span>Interstellar</span><span>Alien</span><span>Supreme</span><span>Cosmic dust</span></div></div>
             <section class="tool-description" aria-live="polite"><div class="active-tool-heading"><span id="selected-icon">◆</span><div><small>ACTIVE TOOL</small><h2 id="selected-name">Meadow</h2></div></div><p id="selected-description">Lay down fertile ground. Every great civilization starts somewhere.</p><strong id="selected-action">DRAG ON THE MAP TO PAINT</strong></section>
+            <section class="brush-section"><div class="row"><label for="brush">Brush size</label><span id="brush-value">4 tiles</span></div><input id="brush" type="range" min="1" max="12" value="4"><div class="brush-preview"><i></i><i></i><i></i><i></i><i></i></div></section>
+            <section class="view-settings" aria-label="Map view controls"><div class="row"><h2>World view</h2><button id="lighting" class="lighting-clock" title="Day and night settings">☀ 08:24</button></div><div class="map-bottom"><div class="map-hint" id="interaction-hint"><b>Meadow selected</b><span>Drag to paint · right-drag to move · scroll to zoom</span></div><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><input id="zoom-slider" type="range" min="0" max="100" value="12" aria-label="Map zoom" title="Drag to set map zoom"><button id="zoom-reset" title="Fit world">100%</button><button id="zoom-in" aria-label="Zoom in">＋</button></div></div></section>
+            <details class="quick-start" id="creation-guide" open><summary><span>Getting started</span><span id="guide-progress">0/3</span></summary><button id="guide-land" data-guide-step="land"><i>1</i><span><b>Shape some land</b><small>Choose Land, then drag on the map</small></span></button><button id="guide-people" data-guide-step="people"><i>2</i><span><b>Add a people</b><small>Place settlers on walkable land</small></span></button><button id="guide-time" data-guide-step="time"><i>3</i><span><b>Let time move</b><small>Press Resume and watch them grow</small></span></button></details>
+            <p class="creator-shortcuts"><kbd>SPACE</kbd> pause <span>·</span> right-drag to pan<br><kbd>I</kbd> inspect <span>·</span> scroll to zoom</p>
+        </aside>
+        <aside class="tool-panel" aria-label="Tool catalog">
+            <div class="panel-heading"><div><div class="eyebrow">BUILD YOUR WORLD</div><h1>Creator tools</h1></div><span>5 categories</span></div>
             <div class="tabs" role="tablist" aria-label="Power categories">
                 <button role="tab" data-category="terrain" aria-selected="true"><span>◆</span> Land</button>
                 <button role="tab" data-category="life" aria-selected="false"><span>♟</span> People</button>
@@ -28,16 +37,12 @@
             </div>
             <div id="catalog-summary" class="catalog-summary" aria-live="polite"></div>
             <div id="tools" class="tools"></div>
-            <section class="brush-section"><div class="row"><label for="brush">Brush size</label><span id="brush-value">4 tiles</span></div><input id="brush" type="range" min="1" max="12" value="4"><div class="brush-preview"><i></i><i></i><i></i><i></i><i></i></div></section>
-            <section class="quick-start" aria-label="Getting started"><div class="section-heading"><h2>Getting started</h2><span id="guide-progress">0/3</span></div><button id="guide-land" data-guide-step="land"><i>1</i><span><b>Shape some land</b><small>Choose Land, then drag on the map</small></span></button><button id="guide-people" data-guide-step="people"><i>2</i><span><b>Add a people</b><small>Place settlers on walkable land</small></span></button><button id="guide-time" data-guide-step="time"><i>3</i><span><b>Let time move</b><small>Press Resume and watch them grow</small></span></button></section>
         </aside>
         <section id="viewport" aria-label="Interactive world. Click and drag to use your selected power.">
             <canvas id="world" aria-label="Living pixel world"></canvas>
-            <div class="map-top"><div class="map-label"><span class="live-dot"></span><b id="age-label">STONE AGE</b><small id="season">Spring · Year 1</small><div class="age-track"><i id="age-progress"></i></div><div class="age-stages" aria-label="Technology ages"><span>Stone</span><span>Copper</span><span>Bronze</span><span>Iron</span><span>Steel</span><span>Renaissance</span><span>Gunpowder</span><span>Industrial</span><span>Modern</span><span>Lightyear</span><span>Interstellar</span><span>Alien</span><span>Supreme</span><span>Cosmic dust</span></div></div><div class="map-actions"><button id="technology" title="Technology ages and unlocks">⚙ Ages</button><button id="borders" class="active" title="Show territory borders">⚑ Borders</button><button id="inspect" title="Inspect a tile (I)">⌕ Inspect</button></div></div>
+            <div class="map-top"><div class="map-actions"><button id="technology" title="Technology ages and unlocks">⚙ Ages</button><button id="borders" class="active" title="Show territory borders">⚑ Borders</button><button id="inspect" title="Inspect a tile (I)">⌕ Inspect</button></div></div>
             <div id="world-tooltip" hidden></div>
-            <button id="lighting" class="lighting-clock" title="Day and night settings">☀ 08:24</button>
             <section id="entity-card" class="entity-card" aria-label="Selected creature details" hidden></section>
-            <div class="map-bottom"><div class="map-hint" id="interaction-hint"><b>Meadow selected</b><span>Drag to paint · right-drag to move · scroll to zoom</span></div><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><input id="zoom-slider" type="range" min="0" max="100" value="12" aria-label="Map zoom" title="Drag to set map zoom"><button id="zoom-reset" title="Fit world">100%</button><button id="zoom-in" aria-label="Zoom in">＋</button></div></div>
             <div id="toast" role="status" hidden></div>
             <div class="paused-banner" id="paused-banner" hidden>Ⅱ &nbsp; PAUSED — EDIT SAFELY</div>
         </section>
