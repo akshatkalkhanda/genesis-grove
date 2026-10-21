@@ -23,8 +23,13 @@ world replacement. Map layers and a quiet presentation view extend M0 for the ge
 sandbox. There is no new kingdom-count requirement or dedicated scenario.
 
 Version 0.20.0 adds the first M2 slice: compact army inspection, live member tasks,
-equipment, target/siege summaries and focus/follow. Persistent orders, dedicated
-army supply and local conquest remain later changes.
+equipment, target/siege summaries and focus/follow. That release left saved orders
+and later conquest changes for the next slices.
+
+Version 0.21.0 persists autonomous orders with reachable targets, assembly, defense,
+attack and retreat. The inspector explains health, food, strength and target
+decisions; legacy worlds remain readable. Local capital conquest, dedicated supply
+inventory/routes and naval army transport remain future work.
 
 ## Read this first
 
@@ -147,21 +152,21 @@ No four-kingdom setup is included; the existing general sandbox remains the targ
 ### M2 — Make land wars explainable · P1 · L
 
 The compact [Army Inspector](../army-inspector.md) exposes home garrisons, live
-member activity/equipment, shared kingdom food and target siege pressure. The next
-slice adds saved autonomous home-group orders, stable identities, reachable sticky
+member activity/equipment, shared kingdom food and target siege pressure. Version
+0.21.0 adds saved autonomous home-group orders, stable identities, reachable sticky
 targets, home defense and food/health/strength decisions. Assemble, defend, march,
 attack and retreat guide actual movement; paused reconstruction only projects
 saved orders. Dedicated inventory/supply routes, local capital conquest and military
 sea transport remain future work. This is a first M2 slice, not completion of the
 milestone's conquest and stronghold gates.
 
-- Give armies stable identities and states: assemble, defend, march, attack, retreat.
-- Evaluate reachable targets, threat, food and equipment instead of only distance.
-- Show targets, supply condition, siege progress, and a short reason for each order.
-- Record diplomatic intent and treaty timers. Keep current pairwise relations first.
-- Make town capture local. The current capital-capture function transfers all towns
+- [x] Save stable home-group identities and autonomous assemble/defend/march/attack/retreat orders.
+- [x] Evaluate reachable targets, home threat, health, shared food and equipped strength.
+- [x] Show targets, shared food, target siege pressure and a short reason for each order.
+- [ ] Record diplomatic intent and treaty timers. Keep current pairwise relations first.
+- [ ] Make town capture local. The current capital-capture function transfers all towns
   and people immediately; introduce relocation or explicit surrender conditions.
-- Keep civilians working and towns recovering while armies campaign.
+- [ ] Verify sustained civilian work and town recovery through the local-conquest changes.
 
 **Done when:** an army cannot cross impassable terrain or attack an unreachable
 target; a stronghold and supply shortage change an outcome; capturing a capital

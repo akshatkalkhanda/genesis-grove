@@ -15,10 +15,11 @@ concise inspectors and native input checks. A Nature slice adds moving rain and
 storms, lightning, drought, blizzards and deep-ocean coastal tsunamis, with optional
 automatic events and saved state. Version 0.19.0 adds named saves/recovery, map
 layers and presentation view. Version 0.20.0 adds compact army inspection and
-focus/follow. Ship inspection and persistent army orders remain future work.
+focus/follow. Version 0.21.0 persists autonomous orders, explains their reasons and
+uses actual health, food, strength and land reachability. Ship inspection remains future work.
 The four kingdoms are only the video example; no dedicated setup is planned.
-Next: persistent army orders and explained decisions, followed by local conquest
-and detailed ship inspection.
+Next: local town conquest and explicit capital-surrender rules, followed by
+detailed ship inspection and military transport.
 See [nature mechanics](nature.md) for current effects and later hazards.
 
 ## Earlier feature priorities

@@ -164,12 +164,13 @@ app.whenReady().then(async () => {
         await load_world(withdrawal.serialize()); await select_army();
         const retreat_text = await js('document.querySelector("#entity-card").textContent');
         assert.ok(retreat_text.includes('Retreat') && retreat_text.includes('Shared kingdom food is low'));
-        await screenshot('army-withdrawal-1366x768');
         const withdrawal_before = await js(`genesis.snapshot().people.filter(p=>p.village_id===${home.id}).map(p=>p.x)`);
         await click('#pause'); await delay(350); await click('#pause');
         const withdrawal_after = await js(`genesis.snapshot().people.filter(p=>p.village_id===${home.id}).map(p=>p.x)`);
         assert.ok(withdrawal_after.every((x, index) => x < withdrawal_before[index]), 'Saved retreat actually moves soldiers home');
-        assert.ok(await js('document.querySelector("#entity-card").textContent.includes("retreating")'));
+        await wait_for('document.querySelector("#entity-card").textContent.includes("retreating")', 'retreating inspector status');
+        await wait_for('document.querySelector("#toast").hidden', 'withdrawal toast clears');
+        await screenshot('army-withdrawal-1366x768');
         checks.push('Saved order and short reason display; food withdrawal really moves members home');
         // Infection naturally removes every soldier from this garrison, via recovery or death.
         const sick = World.deserialize(saved); sick.name = 'Dispersing garrison';

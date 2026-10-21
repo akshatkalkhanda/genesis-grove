@@ -21,7 +21,8 @@ The simulation and procedural renderer use web standards without runtime library
 - `src/machines.js`: bounded fleets of water boats, ground artillery, survey balloons, courier aircraft, and larger flying transports.
 - `src/machine_art.js`: original vessel, aircraft, cannon, and fortification sprites.
 - `src/save_store.js` and `src/save_ui.js`: atomic IndexedDB named saves, bounded recovery, legacy migration, visible-time autosave and pre-replacement protection.
-- `src/army_inspector.js`: read-only active-garrison summaries, badge visibility/hit areas and paused-load reconstruction with the existing transient planner.
+- `src/army_orders.js`: bounded deterministic autonomous garrison orders, land-route reachability, saved-state validation and read-only paused projection.
+- `src/army_inspector.js`: read-only active-garrison summaries, badge visibility/hit areas and paused-load projection of saved orders; legacy worlds preview a home guard until planning runs.
 - `src/map_layers.js`: actual remaining-deposit, army and trade/settler overlays; presentation mode changes the HUD without changing simulation rules.
 - `src/weather.js` and `src/weather_art.js`: bounded saved rain/storm/drought/blizzard/tsunami events, optional natural scheduling, coastal reach checks, actual crop/soil/health/structure effects and original visual effects.
 - `src/sandbox.css`: map-first Observe layout, contextual tool palette and compact dock; summary-first inspectors preserve expanded detail state.
