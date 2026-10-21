@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T } from '../src/simulation.js';
 import { creature_stats } from '../src/creatures.js';
-import { army_members, army_summary, army_visible, army_badge_hit, rebuild_armies } from '../src/army_inspector.js';
+import { army_members, army_summary, army_visible, army_badge_hit, army_target, rebuild_armies } from '../src/army_inspector.js';
 
 function fixture() {
     const world = new World({ preset: 'empty', inhabited: false, seed: 'army-inspection' });
@@ -54,6 +54,7 @@ test('peace, target capture, kingdom death and garrison loss invalidate stale se
     const { world, home, enemy, selection } = fixture();
     world.set_relation(home.id, enemy.id, 'peace');
     assert.equal(army_summary(world, selection).target, undefined);
+    assert.equal(army_target(world, world.armies[0]), undefined);
     world.set_relation(home.id, enemy.id, 'war'); enemy.alive = false;
     assert.equal(army_summary(world, selection).target, undefined);
     home.alive = false;
@@ -67,6 +68,7 @@ test('badge hit area stays in screen pixels and only displayed garrisons can be 
     const army = { count: 4, x: 10, y: 20, kingdom_id: 1, home_id: 2, target_id: null };
     assert.equal(Boolean(army_visible(army, 'political', null, null)), false);
     assert.ok(army_visible(army, 'armies', null, null));
+    assert.ok(army_visible({ ...army, state: 'retreat' }, 'political', null, null));
     assert.ok(army_visible(army, 'political', null, { home_id: 2, kingdom_id: 1 }));
     for (const scale of [0.4, 1, 10]) {
         const origin = { x: 7, y: 13 }, x = 7 + 60 * scale, y = 13 + 120 * scale;
@@ -76,10 +78,11 @@ test('badge hit area stays in screen pixels and only displayed garrisons can be 
     }
 });
 
-test('existing saved worlds rebuild garrisons without persisting inspector state', () => {
+test('saved orders rebuild garrisons without persisting inspector selection', () => {
     const { world, home, selection } = fixture();
     const save = world.serialize();
     assert.equal(Object.hasOwn(save, 'armies'), false);
+    assert.equal(save.army_orders[0].target_id, world.armies[0].target_id);
     const restored = World.deserialize(save);
     const restored_save = restored.serialize();
     rebuild_armies(restored);

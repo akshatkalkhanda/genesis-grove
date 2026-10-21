@@ -487,13 +487,11 @@ function update_army_card() {
     };
     line('Home', home?.name || 'Former settlement');
     line('Members', `${members.length} active soldiers`);
-    line('Target', target?.name || (army.target_id ? 'Changed · awaiting new plan' : 'None · guarding or training'));
+    line('Order', summary.order_label);
+    line('Target', target?.name || (army.target_id ? 'Changed · awaiting new plan' : 'No enemy target'));
     line('Shared food', `${Math.floor(kingdom.food)} in kingdom stores`);
     const explanation = document.createElement('p'); explanation.className = 'army-explanation';
-    explanation.textContent = target
-        ? 'Automatically targets the nearest enemy town on the same landmass. Soldiers can regroup, fight or retreat individually.'
-        : army.target_id ? 'The former target is no longer an enemy town. A new target is chosen when time runs.'
-            : 'No reachable enemy town chosen. Garrisons guard home or train at a camp during peace.';
+    explanation.textContent = summary.order_reason;
     card.append(explanation);
     const actions = document.createElement('div'); actions.className = 'entity-actions';
     const focus = document.createElement('button'); focus.dataset.action = 'focus-army'; focus.textContent = 'Focus';
@@ -512,7 +510,7 @@ function update_army_card() {
         line('Armor', armor.map(([level, count]) => `${count} ${level ? TECH_AGES[level].name : 'no'} armor`).join(' · '))];
     if (target) equipment.push(line('Target siege', `${target.siege || 0} / ${target.kingdom_id ? 8 : 14} pressure`));
     const note = document.createElement('p'); note.className = 'army-explanation';
-    note.textContent = 'Strength sums living members’ strength; it is not a battle prediction. Food is shared by the kingdom; armies carry no separate supply stock. Siege pressure belongs to the target town and can involve several garrisons. Dashed lines show a destination, not a guaranteed route.';
+    note.textContent = 'The saved autonomous order guides movement; member tasks above show current activity. Strength sums living members’ strength; it is not a battle prediction. Food is shared by the kingdom; armies carry no separate supply stock. Siege pressure belongs to the target town and can involve several garrisons. Land routes use a bounded search and are checked as the army moves.';
     equipment.push(note);
     const detail = inspector_details(card, equipment, 'Equipment & how this works', 'army');
     detail.open = Boolean(expanded); card.scrollTop = scroll_top;
@@ -737,7 +735,7 @@ function update_diplomacy(preferred_source = null) {
         const relations = document.createElement('span'); relations.textContent = `${alliances} alliances · ${wars} wars`;
         const armies = world.armies.filter(army => army.kingdom_id === source.id);
         const military = document.createElement('span');
-        military.textContent = `${armies.length} garrisons · ${armies.filter(army => army.target_id).length} marching toward enemy towns`;
+        military.textContent = `${armies.length} garrisons · ${armies.filter(army => ['march', 'attack'].includes(army.state)).length} campaigning`;
         profile.append(heading, ruler, details, technology, research, resources, arsenal, jobs, logistics, military, relations);
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
@@ -810,7 +808,7 @@ function update_selected_kingdom() {
     const metals = document.createElement('div'); metals.textContent = `Ore: ${ore.copper || 0} copper · ${ore.tin || 0} tin · ${ore.iron || 0} iron · ${ore.coal || 0} coal · ${Math.floor(ore.stardust || 0)} stardust`;
     const settlements = document.createElement('div'); settlements.textContent = `Towns: Capital, ${towns.map(c => c.name).join(', ') || 'no colonies yet'}`;
     const march = document.createElement('div'); march.textContent = armies.length
-        ? `Army: ${armies.map(a => `${a.count} ${a.target_name ? `marching to ${a.target_name}` : 'defending home'}`).join(' · ')}`
+        ? `Army: ${armies.map(a => `${a.count} · ${a.state}${a.target_name ? ` → ${a.target_name}` : ''}`).join(' · ')}`
         : 'Army: no formed garrison yet';
     const diplomacy = document.createElement('div'); diplomacy.textContent = `Allies: ${allies.map(v => v.name).join(', ') || 'none'}`;
     const manage = document.createElement('button'); manage.textContent = 'Manage kingdom ↗';

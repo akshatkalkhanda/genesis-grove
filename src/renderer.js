@@ -1,5 +1,5 @@
 import { draw_map_layer } from './map_layers.js';
-import { army_visible, army_badge_hit } from './army_inspector.js';
+import { army_visible, army_badge_hit, army_target } from './army_inspector.js';
 import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
@@ -335,9 +335,10 @@ export class Renderer {
             if (!kingdom?.alive) continue;
             const x = o.x + army.x * CELL * s, y = o.y + army.y * CELL * s;
             if (x < -30 || x > this.width + 30 || y < -30 || y > this.height + 30) continue;
-            if (army.target_id && (this.zoom > 1.4 || army.kingdom_id === this.selected_kingdom_id || this.layer === 'armies')) {
+            const target = army_target(world, army);
+            if (target && ['march', 'attack'].includes(army.state) && (this.zoom > 1.4 || army.kingdom_id === this.selected_kingdom_id || this.layer === 'armies')) {
                 c.strokeStyle = `${kingdom.color}77`; c.lineWidth = 1.5; c.setLineDash([4, 4]);
-                c.beginPath(); c.moveTo(x, y); c.lineTo(o.x + army.target_x * CELL * s, o.y + army.target_y * CELL * s); c.stroke(); c.setLineDash([]);
+                c.beginPath(); c.moveTo(x, y); c.lineTo(o.x + target.x * CELL * s, o.y + target.y * CELL * s); c.stroke(); c.setLineDash([]);
             }
             c.fillStyle = '#11221ce8'; c.fillRect(x - 12, y - 27, 27, 18);
             if (this.selected_army?.home_id === army.home_id && this.selected_army?.kingdom_id === army.kingdom_id) {

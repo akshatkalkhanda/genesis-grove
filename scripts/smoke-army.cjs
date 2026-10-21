@@ -70,7 +70,7 @@ app.whenReady().then(async () => {
         home_id = home.id;
         for (const site of [home, enemy]) {
             site.food = 300;
-            for (let index = 0; index < 8; index++) {
+            for (let index = 0; index < (site === home ? 8 : 4); index++) {
                 world.add_person(site.x + index * 0.25, site.y + index % 2, site.id);
                 const person = world.people.at(-1); person.role = 'soldier'; person.task = 'Guarding';
                 person.weapon_level = index % 3; person.armor_level = index % 2;
@@ -78,6 +78,7 @@ app.whenReady().then(async () => {
         }
         world.add_animal(88, 45, 'deer');
         world.set_relation(home.id, enemy.id, 'war');
+        world.plan_armies(new Map([[home.id, new Set([enemy.id])], [enemy.id, new Set([home.id])]]));
         const packaged_index = path.join(__dirname, '..', 'dist', 'mac-arm64',
             'Genesis Grove.app', 'Contents', 'Resources', 'app.asar', 'index.html');
         const game_index = process.env.GENESIS_SMOKE_INDEX || (process.argv.includes('--packaged')
@@ -94,6 +95,7 @@ app.whenReady().then(async () => {
         const text = await js('document.querySelector("#entity-card").textContent');
         assert.ok(text.includes('8 active soldiers') && text.includes(enemy.name) && text.includes('Shared food'));
         assert.ok(text.includes('Strength (sum)') && text.includes('no separate supply stock'));
+        assert.ok(text.includes('Order') && text.includes('March') && text.includes('Keeping the selected reachable enemy town'));
         await screenshot('army-1366x768');
         await click('#entity-card details summary');
         await delay(650);
@@ -144,7 +146,7 @@ app.whenReady().then(async () => {
         await delay(600);
         assert.ok(await js('document.querySelector("#entity-card").textContent.includes("Changed · awaiting new plan")'));
         await click('#pause'); await delay(250); await click('#pause'); await delay(600);
-        assert.ok(await js('document.querySelector("#entity-card").textContent.includes("None · guarding or training")'));
+        assert.ok(await js('document.querySelector("#entity-card").textContent.includes("No enemy target")'));
         await key('Escape');
         await click('#map-layers summary'); await click('[name="map-layer"][value="armies"]');
         await select_army();
@@ -154,6 +156,21 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.querySelector("#entity-card").hidden'), true);
         await select_army();
         checks.push('Existing JSON save roundtrip rebuilds army data and clears old selection');
+        const withdrawal = World.deserialize(saved); withdrawal.name = 'Autonomous withdrawal';
+        withdrawal.set_relation(home.id, enemy.id, 'war');
+        for (const person of withdrawal.people.filter(person => person.village_id === home.id)) person.x += 20;
+        withdrawal.villages.find(site => site.id === home.id).food = 2;
+        withdrawal.plan_armies(new Map([[home.id, new Set([enemy.id])], [enemy.id, new Set([home.id])]]));
+        await load_world(withdrawal.serialize()); await select_army();
+        const retreat_text = await js('document.querySelector("#entity-card").textContent');
+        assert.ok(retreat_text.includes('Retreat') && retreat_text.includes('Shared kingdom food is low'));
+        await screenshot('army-withdrawal-1366x768');
+        const withdrawal_before = await js(`genesis.snapshot().people.filter(p=>p.village_id===${home.id}).map(p=>p.x)`);
+        await click('#pause'); await delay(350); await click('#pause');
+        const withdrawal_after = await js(`genesis.snapshot().people.filter(p=>p.village_id===${home.id}).map(p=>p.x)`);
+        assert.ok(withdrawal_after.every((x, index) => x < withdrawal_before[index]), 'Saved retreat actually moves soldiers home');
+        assert.ok(await js('document.querySelector("#entity-card").textContent.includes("retreating")'));
+        checks.push('Saved order and short reason display; food withdrawal really moves members home');
         // Infection naturally removes every soldier from this garrison, via recovery or death.
         const sick = World.deserialize(saved); sick.name = 'Dispersing garrison';
         for (const person of sick.people.filter(p => p.village_id === home.id)) {

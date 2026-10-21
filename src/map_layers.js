@@ -2,7 +2,7 @@ export const MAP_LAYERS = Object.freeze({
     terrain: 'Terrain', political: 'Kingdoms', armies: 'Armies', routes: 'Routes', resources: 'Resources'
 });
 export function layer_summary(world, layer) {
-    if (layer === 'armies') return `${world.armies.filter(a => a.count > 0).length} armies · ${world.armies.filter(a => a.target_id).length} marching`;
+    if (layer === 'armies') return `${world.armies.filter(a => a.count > 0).length} armies · ${world.armies.filter(a => ['march', 'attack'].includes(a.state)).length} campaigning`;
     if (layer === 'routes') return `${world.trades.length} trade shipments · ${world.voyages.length} settler journeys`;
     if (layer === 'resources') return `${world.ores.reduce((n, ore) => n + (ore > 0 ? 1 : 0), 0)} remaining deposit tiles · copper / tin / iron / coal / stardust`;
     return layer === 'terrain' ? 'Terrain and biomes · political tint hidden' : 'Kingdom borders and banners';

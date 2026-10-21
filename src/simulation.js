@@ -1,6 +1,7 @@
 import { WEATHER, spawn_weather, advance_weather, valid_weather } from './weather.js';
 import { initialize_creature, creature_stats, develop_creature, TRAITS } from './creatures.js';
 import { find_path } from './pathfinding.js';
+import { plan_armies, army_identity, army_reachable, prune_army_orders, valid_army_orders } from './army_orders.js';
 import { kingdom_plan, diplomatic_choice } from './strategy.js';
 import { BUILDINGS, advance_buildings } from './settlements.js';
 import { DAY_LENGTHS } from './daylight.js';
@@ -124,6 +125,7 @@ export class World {
         this.vehicles = [];
         this.machines = [];
         this.armies = [];
+        this.army_orders = [];
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
         this.year_length = this.scenario === 'hundred' ? 2 : 20;
@@ -540,6 +542,7 @@ export class World {
             defender.alive = false; defender.houses = []; defender.siege = 0;
             this.log(`${attacker.name} conquers ${defender.name} and its towns.`, 'disaster', defender);
         }
+        prune_army_orders(this);
         return true;
     }
     resolve_sieges() {
@@ -725,6 +728,7 @@ export class World {
         }
         const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
         this.colonies = this.colonies.filter(c => living.has(c.kingdom_id));
+        prune_army_orders(this);
     }
     move(unit, dt, speed) {
         speed *= 1 + (this.roads[this.index(unit.x, unit.y)] || 0) * 0.15;
@@ -763,7 +767,9 @@ export class World {
                 if (this._routes.size > 4096) this._routes.clear();
                 this._routes.set(key, find_path(this, unit, target)[0] || null);
             }
-            target = this._routes.get(key) || target;
+            const waypoint = this._routes.get(key);
+            if (!waypoint && target.army) return;
+            target = waypoint || target;
         }
         const angle = Math.atan2(target.y - unit.y, target.x - unit.x);
         const side = unit.id % 2 ? 1 : -1;
@@ -776,37 +782,12 @@ export class World {
         unit.decision = 0;
     }
     plan_armies(war_targets) {
-        const groups = new Map();
-        for (const person of this.people) {
-            if (person.role !== 'soldier' || person.voyage_id || person.prisoner_of
-                || this.machines.some(m => m.crew_id === person.id) || person.recovering || person.health <= 0) continue;
-            const key = person.home_id || person.village_id;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push(person);
+        // Expansion also uses these labels; terrain edits invalidate them immediately.
+        if (!this._army_masses || this._army_masses_revision !== this.navigation_revision) {
+            this._army_masses = this.landmasses();
+            this._army_masses_revision = this.navigation_revision;
         }
-        if (!this._army_masses || this.tick % 32 === 0) this._army_masses = this.landmasses();
-        const sites = [...this.villages.filter(v => v.alive), ...this.colonies];
-        const orders = new Map();
-        this.armies = [];
-        for (const [home_id, soldiers] of groups) {
-            const kingdom_id = soldiers[0].village_id;
-            const enemies = war_targets.get(kingdom_id);
-            const x = soldiers.reduce((sum, p) => sum + p.x, 0) / soldiers.length;
-            const y = soldiers.reduce((sum, p) => sum + p.y, 0) / soldiers.length;
-            const landmass = this._army_masses[this.index(soldiers[0].x, soldiers[0].y)];
-            let target = null, nearest = Infinity;
-            if (enemies && landmass >= 0) for (const site of sites) {
-                if (!enemies.has(site.kingdom_id || site.id) || this._army_masses[this.index(site.x, site.y)] !== landmass) continue;
-                const distance = (site.x - x) ** 2 + (site.y - y) ** 2;
-                if (distance < nearest) { nearest = distance; target = site; }
-            }
-            const order = { kingdom_id, home_id, x, y, count: soldiers.length,
-                target_id: target?.id || null, target_name: target?.name || null,
-                target_x: target?.x ?? null, target_y: target?.y ?? null };
-            orders.set(home_id, order);
-            this.armies.push(order);
-        }
-        return orders;
+        return plan_armies(this, war_targets);
     }
     advance_history() {
         if (this.tick % 80 === 0) for (const kingdom of this.villages.filter(v => v.alive)) {
@@ -953,13 +934,18 @@ export class World {
                 p.dx = Math.cos(a); p.dy = Math.sin(a); p.decision = 0.5 + this.random() * 3;
                 if (p.role !== 'soldier') delete p.work_target;
             }
-            const order = p.role === 'soldier' ? army_orders.get(p.home_id || p.village_id) : null;
+            const order = p.role === 'soldier' ? army_orders.get(army_identity(p.village_id, p.home_id || p.village_id)) : null;
             let holding_position = false;
-            let march_target = order?.target_id && p.age > 5
-                ? Math.hypot(p.x - order.x, p.y - order.y) > 5 ? { x: order.x, y: order.y }
-                    : { x: order.target_x, y: order.target_y, route: true } : null;
+            const offensive = order && ['march', 'attack'].includes(order.state);
+            let march_target = order && home ? offensive && p.age > 5
+                ? { x: order.target_x, y: order.target_y, route: true, army: true }
+                : { x: home.x, y: home.y, route: true, army: true } : null;
+            if (order?.reason === 'home_blocked') march_target = { x: p.x, y: p.y };
             if (p.role !== 'soldier') march_target = p.work_target || null;
-            p.task = march_target?.task || (order?.target_id ? 'Marching' : p.role === 'soldier' ? 'Guarding' : 'Exploring');
+            p.task = p.role !== 'soldier' ? march_target?.task || 'Exploring'
+                : order?.state === 'assemble' ? 'Assembling' : order?.state === 'retreat' ? 'Retreating'
+                    : offensive ? 'Marching' : 'Guarding';
+            if (order && march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) <= 2) holding_position = true;
             const crew = crew_intent(this, p);
             const care = crew || (v && home ? medical_intent(this, p, v, home, dt) : null);
             if (care) { march_target = care.target; holding_position = care.holding; }
@@ -975,10 +961,14 @@ export class World {
                     const distance = (other.x - p.x) ** 2 + (other.y - p.y) ** 2;
                     if (distance < nearest) { foe = other; nearest = distance; }
                 }
+                if (foe && order && (!offensive && (order.state === 'retreat'
+                    || Math.hypot(foe.x - home.x, foe.y - home.y) > 12)
+                    || !army_reachable(this, p, foe))) foe = null;
                 if (foe) {
                     const angle = Math.atan2(foe.y - p.y, foe.x - p.x);
                     p.dx = Math.cos(angle); p.dy = Math.sin(angle);
-                    march_target = foe;
+                    march_target = { x: foe.x, y: foe.y, route: true, army: true };
+                    holding_position = false;
                     if (nearest < range * range) {
                         const weapon = 1 + (p.weapon_level || 0) * 0.28;
                         const armor = 1 + (foe.armor_level || 0) * 0.10;
@@ -1001,18 +991,19 @@ export class World {
                 }
             }
             const camp = v?.buildings?.find(building => building.type === 'camp');
-            if (p.role === 'soldier' && !care && !enemies && camp && v.food > 10) {
-                march_target = { x: camp.x, y: camp.y, route: true };
+            if (p.role === 'soldier' && !care && order?.reason === 'peace' && !enemies && camp && v.food > 10) {
+                march_target = { x: camp.x, y: camp.y, route: true, army: true };
+                holding_position = Math.hypot(p.x - camp.x, p.y - camp.y) <= 2;
                 p.task = 'Training';
                 if (Math.hypot(p.x - camp.x, p.y - camp.y) < 6) {
                     develop_creature(p, 0, this.year_length, dt / this.year_length * 8);
                 }
             }
-            if (p.role === 'soldier' && !care && enemies && home
-                && p.health < attributes.max_health * (p.trait === 'careful' ? 0.5 : 0.3)) {
-                march_target = { x: home.x, y: home.y, route: true }; p.task = 'Retreating';
+            if (p.role === 'soldier' && !care && home
+                && (order?.state === 'retreat' || (enemies && p.health < attributes.max_health * (p.trait === 'careful' ? 0.5 : 0.3)))) {
+                march_target = { x: home.x, y: home.y, route: true, army: true }; p.task = 'Retreating';
             }
-            if (p.task === 'Retreating') holding_position = false;
+            if (p.task === 'Retreating') holding_position = Math.hypot(p.x - home.x, p.y - home.y) <= 2;
             if (!holding_position) {
                 if (march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) > 1) this.march(p, march_target, dt, 1.55);
                 else this.move(p, dt, (p.role === 'soldier' ? 1.55 : 1.3) * (p.race === 'foxfolk' ? 1.15 : 1));
@@ -1303,7 +1294,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1443,9 +1434,11 @@ export class World {
             if (!r || !integer(r.a, 1, data.next_id - 1) || !integer(r.b, 1, data.next_id - 1) || r.a >= r.b || !villages.has(r.a) || !villages.has(r.b) || !['peace', 'alliance', 'war'].includes(r.status) || relation_keys.has(`${r.a}:${r.b}`)) invalid();
             relation_keys.add(`${r.a}:${r.b}`);
         }
+        if (!valid_army_orders(data)) invalid();
         const w = new World({ preset: 'empty', inhabited: false });
         for (const k of ['name', 'seed', 'rng', 'time', 'tick', 'next_id', 'people', 'animals', 'villages', 'events']) w[k] = structuredClone(data[k]);
         w.relations = structuredClone(data.relations || []);
+        w.army_orders = structuredClone(data.army_orders || []);
         w.colonies = structuredClone(data.colonies || []);
         w.voyages = structuredClone(data.voyages || []);
         w.trades = structuredClone(data.trades || []);
