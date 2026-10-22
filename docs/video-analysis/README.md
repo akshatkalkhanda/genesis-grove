@@ -35,7 +35,10 @@ Version 0.22.0 addresses survival before further conquest: bounded local fires, 
 automatic tsunamis and consistent rebellion homes/households. The [survival report](../survival-and-disasters.md)
 records the observed causes, measured checks and remaining challenge balance issue.
 
-Version 0.23.0 fixes generation-wide clan pairing bans and clears dense-map clutter.\n[Evidence, map rules and limitations](../generations-and-map-readability.md).\n\n## Read this first
+Version 0.23.0 fixes generation-wide clan pairing bans and clears dense-map clutter.
+[Evidence, map rules and limitations](../generations-and-map-readability.md).
+
+## Read this first
 
 - [Visual roadmap](roadmap.svg): implementation order and completion gates.
 - [UI layout concept](ui-layout.svg): Observe, Create and Inspect; not an implemented screen.

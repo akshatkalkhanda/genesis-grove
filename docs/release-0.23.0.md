@@ -13,9 +13,17 @@ Dense cities now have smaller sprites, quiet empty outposts, thin borders, subdu
 ground detail, bounded names that avoid collisions, and concise hover summaries.
 Selecting life or a kingdom opens its existing detailed inspector.
 
-[Staged city before](images/dense-city-before-0.23.0.png) ·\n[Same staged city after](images/dense-city-after-0.23.0.png)\n\n## Verification
+[Staged city before](images/dense-city-before-0.23.0.png) ·
+[Same staged city after](images/dense-city-after-0.23.0.png)
 
-- 145 simulation/save tests and JavaScript syntax checks passed.\n- Source general Mac smoke: 57 checks passed. Packaged Mac: 57 general, seven\n  army and three dense-map groups passed, with no renderer errors.\n- Both Mac arm64 and Windows x64 ZIPs passed archive integrity checks. All 39\n  application source files match the verified workspace in both bundles.\n- Native platform CI and uploaded-asset checks are linked in the public release.
+## Verification
+
+- 145 simulation/save tests and JavaScript syntax checks passed.
+- Source general Mac smoke: 57 checks passed. Packaged Mac: 57 general, seven
+  army and three dense-map groups passed, with no renderer errors.
+- Both Mac arm64 and Windows x64 ZIPs passed archive integrity checks. All 39
+  application source files match the verified workspace in both bundles.
+- Native platform CI and uploaded-asset checks are linked in the public release.
 
 Original worlds and a separate named live recovery are preserved. Installation
 does not restore or rewind a world automatically. Packages remain unsigned;

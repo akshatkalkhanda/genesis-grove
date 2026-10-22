@@ -18,7 +18,9 @@ layers and presentation view. Version 0.20.0 adds compact army inspection and
 focus/follow. Version 0.21.0 persists autonomous orders, explains their reasons and
 uses actual health, food, strength and land reachability. Version 0.22.0 fixes local fire bounds, tsunami frequency and rebellion household/home
 consistency after investigating a real population collapse. [Evidence and remaining
-balance work](survival-and-disasters.md). Version 0.23.0 repairs distant-family birth blocking and reduces dense-city map\nclutter. [Investigation and limits](generations-and-map-readability.md).\nShip inspection remains future work.
+balance work](survival-and-disasters.md). Version 0.23.0 repairs distant-family birth blocking and reduces dense-city map
+clutter. [Investigation and limits](generations-and-map-readability.md).
+Ship inspection remains future work.
 The four kingdoms are only the video example; no dedicated setup is planned.
 Next: local town conquest and explicit capital-surrender rules, followed by
 detailed ship inspection and military transport.

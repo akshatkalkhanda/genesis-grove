@@ -23,7 +23,10 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
-Version 0.23.0 fixes distant-family birth blocking and clears dense-map clutter with\nsmaller sprites, quiet empty outposts and bounded labels. See the\n[generation and map-readability report](docs/generations-and-map-readability.md).\nVersion 0.22.0 bounds wildfire spread, makes automatic tsunamis rare, and repairs
+Version 0.23.0 fixes distant-family birth blocking and clears dense-map clutter with
+smaller sprites, quiet empty outposts and bounded labels. See the
+[generation and map-readability report](docs/generations-and-map-readability.md).
+Version 0.22.0 bounds wildfire spread, makes automatic tsunamis rare, and repairs
 rebellion homes and households. See the [survival investigation](docs/survival-and-disasters.md).
 Version 0.21.0 added saved autonomous army orders with visible reasons, reachable
 campaign targets, assembly, defense and retreat. Version 0.20.0 added a compact
@@ -109,7 +112,8 @@ Dialogs pause the simulation while open. Time does not advance in a hidden brows
 npm test             # deterministic simulation and save validation
 npm run lint         # JavaScript syntax checks
 npm run smoke        # actual Electron UI, native pointer input, screenshot and export checks
-npm run smoke:army   # army badge, inspector, follow, compact layouts and save/load native checks\nnpm run smoke:readability # dense-city overview/close zoom, compact layouts and no simulation edits
+npm run smoke:army   # army badge, inspector, follow, compact layouts and save/load native checks
+npm run smoke:readability # dense-city overview/close zoom, compact layouts and no simulation edits
 npm run build        # unpacked desktop app for the host platform
 npm run dist:mac     # macOS ZIP
 npm run dist:win     # Windows installer and portable executable; build on Windows
