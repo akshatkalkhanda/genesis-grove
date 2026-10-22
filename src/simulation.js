@@ -354,6 +354,7 @@ export class World {
         village.road_timer = 0; village.road_cursor = 0; village.vehicle_timer = 0;
         initialize_culture(village);
         village.king_id = null;
+        village.king_since_year = null;
         village.machine_timer = 0;
         this.add_house(village);
         this.log(`${village.name} is founded. A new story begins.`, 'village', village);
@@ -575,7 +576,7 @@ export class World {
             if (site.siege >= (site.kingdom_id ? 8 : 14)) this.conquer_site(site, leader);
         }
     }
-    add_person(x, y, village_id = null, race = 'human') {
+    add_person(x, y, village_id = null, race = 'human', newborn = false) {
         if (!this.walkable(x, y) || this.people.length >= this.max_people) return false;
         if (!village_id) {
             let nearest = this.villages.filter(v => v.alive && v.race === race).find(v => Math.hypot(v.x - x, v.y - y) < 22);
@@ -586,11 +587,14 @@ export class World {
         const counts = Object.fromEntries(JOBS.map(job => [job, 0]));
         for (const person of this.people) if (person.village_id === village_id && person.role !== 'soldier') counts[person.job]++;
         const job = JOBS.reduce((least, candidate) => counts[candidate] < counts[least] ? candidate : least);
-        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job, role: 'civilian', health: 100, age: 20 * this.year_length, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
+        this.people.push({ id: this.next_id++, x, y, village_id, home_id: village_id, voyage_id: null, race: RACES[race] ? race : 'human', job, role: 'civilian', health: 100, age: (newborn ? 0 : 20) * this.year_length, dx: 0, dy: 0, decision: this.random(), gather: this.random() * 3, infection: 0, weapon_level: 0, armor_level: 0 });
         initialize_creature(this.people.at(-1));
         const kingdom = this.villages.find(v => v.id === village_id);
         initialize_society_person(this.people.at(-1), kingdom);
-        if (kingdom && !kingdom.king_id) kingdom.king_id = this.people.at(-1).id;
+        if (kingdom && !kingdom.king_id && !newborn) {
+            kingdom.king_id = this.people.at(-1).id;
+            kingdom.king_since_year = this.year;
+        }
         return true;
     }
     add_animal(x, y, species) {
@@ -727,8 +731,13 @@ export class World {
                 v.alive = false;
                 this.log(`${v.name} falls silent. Its story lives on.`, 'disaster', v);
             }
-            const ruler = choose_ruler(v, this.people.filter(p => p.village_id === v.id));
-            if (ruler && ruler.id !== v.king_id) this.log(`${ruler.name} becomes ruler of ${v.name}.`, 'village', ruler);
+            const ruler = choose_ruler(v, this.people.filter(p => p.village_id === v.id), this.year_length);
+            if (ruler && ruler.id !== v.king_id) {
+                const inherited = ruler.parents?.some(parent => parent.id === v.king_id);
+                this.log(`${ruler.name} becomes ruler of ${v.name}, crowned King${inherited ? ' by inheritance' : ' by merit'}.`, 'village', ruler);
+                v.king_since_year = this.year;
+            }
+            if (!ruler) v.king_since_year = null;
             v.king_id = ruler?.id || null;
         }
         const living = new Set(this.villages.filter(v => v.alive).map(v => v.id));
@@ -1226,7 +1235,7 @@ export class World {
                 const site = sites.find(candidate => select_parents(this, v.id, candidate.id));
                 const parents = site ? select_parents(this, v.id, site.id) : null;
                 const p = parents && this.land_near(site.x, site.y, 4);
-                if (p && parents && this.add_person(p.x, p.y, v.id, v.race)) {
+                if (p && parents && this.add_person(p.x, p.y, v.id, v.race, true)) {
                     const child = this.people.at(-1);
                     child.home_id = site.id;
                     child.age = 0;
@@ -1333,6 +1342,8 @@ export class World {
                 || (b.defense_timer !== undefined && !num(b.defense_timer, 0, 3)))) invalid();
             if (v.build_timer !== undefined && !num(v.build_timer, 0, 60)) invalid();
             if (v.king_id !== undefined && v.king_id !== null && !integer(v.king_id, 1, data.next_id - 1)) invalid();
+            if (v.king_since_year !== undefined && v.king_since_year !== null
+                && !integer(v.king_since_year, 1, Math.floor(data.time / (data.year_length || 20)) + 1)) invalid();
             if (v.machine_timer !== undefined && !num(v.machine_timer, 0, 20)) invalid();
             if ((v.road_timer !== undefined && !num(v.road_timer, 0, 8))
                 || (v.road_cursor !== undefined && !integer(v.road_cursor, 0, 1000))
@@ -1456,6 +1467,7 @@ export class World {
             kingdom.buildings ||= []; kingdom.build_timer ||= 0;
             kingdom.road_timer ||= 0; kingdom.road_cursor ||= 0; kingdom.vehicle_timer ||= 0;
             kingdom.king_id ??= null;
+            kingdom.king_since_year ??= null;
             kingdom.machine_timer ||= 0;
         }
         w.laws = { natural_events: data.laws?.natural_events ?? false, rebellions: data.laws?.rebellions || false, diplomacy: data.laws?.diplomacy || false, expansion: data.laws?.expansion ?? data.scenario === 'hundred' };

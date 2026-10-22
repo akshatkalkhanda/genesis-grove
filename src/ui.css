@@ -273,6 +273,9 @@ button.history-event:hover{background:#304832;border-color:#a0be7d}.event-disast
 .family-links{display:grid;gap:5px;margin:10px 0;padding:9px;border:1px solid #4e6947;border-radius:8px;background:#1c3026}
 .family-links button,.family-links span{display:block;text-align:left;font-size:10px;line-height:1.4;padding:6px 8px;overflow-wrap:anywhere}
 .family-links span{color:#9bac97}
+.royal-house{display:grid;gap:4px;padding:8px;border:1px solid #796d43;border-radius:7px;background:#292f23}
+.selected-kingdom .royal-house button{margin:0;text-align:left;font-size:12px;overflow-wrap:anywhere}
+.royal-house small{color:#c3ba93;font-size:11px}
 .kingdom-culture{padding-top:7px;color:#d6e8b6}
 .culture-effects{color:#afc79d;font-size:10px;line-height:1.5}
 

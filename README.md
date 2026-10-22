@@ -23,6 +23,8 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
+Version 0.24.0 adds visible kings, inspectable heirs, recorded reigns and adult-child
+inheritance with merit succession as fallback. See [kings and succession](docs/kings-and-succession.md).
 Version 0.23.0 fixes distant-family birth blocking and clears dense-map clutter with
 smaller sprites, quiet empty outposts and bounded labels. See the
 [generation and map-readability report](docs/generations-and-map-readability.md).

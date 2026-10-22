@@ -8,7 +8,7 @@ import { creature_stats } from './creatures.js';
 import { BUILDINGS } from './settlements.js';
 import { advance_daylight } from './daylight.js';
 import { VEHICLES } from './infrastructure.js';
-import { draw_flag } from './heraldry.js';
+import { draw_flag, royal_successors } from './heraldry.js';
 import { MACHINES } from './machines.js';
 import { CIVIC_DESCRIPTIONS, farm_target, food_reserve } from './civic.js';
 import { advance_detention } from './defenses.js';
@@ -564,7 +564,20 @@ function update_entity_card() {
         const kingdom = world.villages.find(v => v.id === unit.village_id);
         line('Kingdom', kingdom?.name || 'No kingdom');
         line('Food supply', kingdom ? `${Math.floor(kingdom.food)} shared · ${kingdom.food < 5 ? 'Food shortage' : 'Available'}` : 'No shared stores');
-        if (kingdom?.king_id === unit.id) line('Title', 'Ruler');
+        if (kingdom?.king_id === unit.id) {
+            line('Title', '♛ King');
+            line('Reign', kingdom.king_since_year
+                ? `Since Year ${kingdom.king_since_year} · ${world.year - kingdom.king_since_year + 1} ${world.year === kingdom.king_since_year ? 'year' : 'years'}`
+                : 'Began before royal records');
+            const heir = royal_successors(kingdom,
+                world.people.filter(person => person.village_id === kingdom.id), world.year_length)[0];
+            line('Heir', heir ? `${heir.name} · ${heir.parents?.some(p => p.id === unit.id) ? 'adult child' : 'by merit'}` : 'No eligible adult');
+            const policy = ruler_personality(unit);
+            const effect = { Scholar: '+15% research', Builder: '+12% production',
+                Guardian: '+15% training', Diplomat: 'Favors alliances',
+                Conqueror: 'More willing to wage war', Steward: 'Balanced policies' }[policy];
+            line('Royal policy', `${policy} · ${effect}`);
+        }
         const vessel = world.machines.find(m => m.crew_id === unit.id);
         line('Role', vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
         if (unit.recovering || unit.medical_role) {
@@ -583,7 +596,6 @@ function update_entity_card() {
         const culture = world.villages.find(v => v.id === unit.culture_id)?.culture;
         line('Culture', culture ? `${culture.name} · ${culture.value}` : 'Local traditions');
         if (unit.heritage_trait) line('Inherited aptitude', unit.heritage_trait);
-        if (kingdom?.king_id === unit.id) line('Ruler personality', ruler_personality(unit));
         const routine = unit.daily_life;
         if (routine && unit.role !== 'soldier' && !unit.prisoner_of && !unit.voyage_id && !unit.medical_role && !unit.recovering) {
             line('Energy', `${Math.round(routine.energy)} / 100`);
@@ -636,7 +648,8 @@ function update_entity_card() {
     };
     actions.append(zoom, follow); card.append(actions);
     const detail_rows = [...card.children].filter(e => e.classList.contains('entity-row') || e.classList.contains('family-links') || e.classList.contains('damage-history'));
-    const primary_labels = new Set(['Species', 'Health', 'Condition', 'Age', 'Kingdom', 'Role']);
+    const primary_labels = new Set(['Species', 'Health', 'Condition', 'Age', 'Kingdom', 'Role',
+        'Title', 'Reign', 'Heir', 'Royal policy']);
     const secondary = detail_rows.filter(e => !primary_labels.has(e.firstElementChild?.textContent));
     const detail = inspector_details(card, secondary, 'Health, traits, equipment & family', 'citizen');
     detail.open = expanded.has('citizen');
@@ -706,7 +719,7 @@ function update_diplomacy(preferred_source = null) {
         const wars = alive.filter(v => v.id !== source.id && world.relation_status(v.id, source.id) === 'war').length;
         const heading = document.createElement('strong'); heading.textContent = source.name; heading.style.setProperty('--kingdom-color', source.color);
         heading.prepend(kingdom_flag(source));
-        const ruler = document.createElement('span'); ruler.textContent = `Ruler: ${world.people.find(p => p.id === source.king_id && p.health > 0)?.name || 'Awaiting succession'}`;
+        const ruler = document.createElement('span'); ruler.textContent = `King: ${world.people.find(p => p.id === source.king_id && p.health > 0)?.name || 'Awaiting an adult successor'}`;
         const details = document.createElement('span'); details.textContent = `${population} people · ${soldiers} soldiers · ${colonies.length + 1} towns · founded year ${source.founded_year || 1}`;
         const technology = document.createElement('span');
         const level = technology_level(source);
@@ -767,16 +780,44 @@ function update_selected_kingdom() {
     const armies = world.armies.filter(a => a.kingdom_id === kingdom.id && a.count >= 2);
     const detail_focus = box.querySelector('details > summary') === document.activeElement;
     const detail_open = box.querySelector('details')?.open || false;
+    const focused_action = box.contains(document.activeElement) ? document.activeElement.dataset.action : null;
     const box_scroll = box.closest('.info-panel').scrollTop;
     box.replaceChildren();
     const heading = document.createElement('strong'); heading.textContent = kingdom.name;
     heading.prepend(kingdom_flag(kingdom));
-    const ruler = document.createElement('div'); ruler.textContent = `Ruler: ${world.people.find(p => p.id === kingdom.king_id && p.health > 0)?.name || 'Awaiting succession'}`;
+    const ruler = document.createElement('div'); ruler.className = 'royal-house';
+    ruler.setAttribute('aria-label', 'King and succession');
     const culture = document.createElement('div');
     const leader = world.people.find(p => p.id === kingdom.king_id && p.health > 0);
+    const heir = royal_successors(kingdom, residents, world.year_length)[0];
+    const royal_link = (person, label, action) => {
+        const row = document.createElement(person ? 'button' : 'span');
+        row.textContent = `${label}: ${person?.name || 'No eligible adult'}`;
+        if (person) {
+            row.dataset.action = action;
+            row.setAttribute('aria-label', `Inspect ${action === 'inspect-king' ? 'king' : 'heir'} ${person.name}`);
+            row.onclick = () => {
+                inspected_unit = { kind: 'person', id: person.id }; followed_unit_id = null;
+                renderer.selected_unit_id = person.id; renderer.focus(person.x, person.y, 8);
+                document.body.classList.remove('info-open', 'kingdom-inspecting');
+                $('world-info').classList.remove('active');
+                $('entity-card').hidden = false; $('entity-card').scrollTop = 0;
+                update_zoom(); update_entity_card();
+            };
+        }
+        ruler.append(row);
+    };
+    royal_link(leader, '♛ King', 'inspect-king');
+    royal_link(heir, heir?.parents?.some(parent => parent.id === kingdom.king_id)
+        ? 'Heir · adult child' : 'Heir · by merit', 'inspect-heir');
+    const reign = document.createElement('small');
+    reign.textContent = leader ? kingdom.king_since_year
+        ? `Reign since Year ${kingdom.king_since_year}` : 'Reign began before royal records'
+        : 'Crown vacant until an eligible adult can succeed';
+    ruler.append(reign);
     const social = society_modifiers(kingdom, leader);
     culture.className = 'kingdom-culture';
-    culture.textContent = `Culture: ${kingdom.culture.name} (${kingdom.culture.value}) · ${social.personality} ruler`;
+    culture.textContent = `Culture: ${kingdom.culture.name} (${kingdom.culture.value}) · ${social.personality} royal policy`;
     const influence = document.createElement('div'); influence.className = 'culture-effects';
     const bonuses = [['research', social.research], ['production', social.production],
         ['training', social.training], ['recovery', social.healing]]
@@ -825,6 +866,7 @@ function update_selected_kingdom() {
     const detail = inspector_details(box, [culture, influence, research, metals, settlements, buildings, care, transport, fleet_detail, diplomacy, release], 'Economy, culture, fleet & care', 'kingdom');
     detail.open = detail_open; box.append(manage);
     if (detail_focus) detail.querySelector('summary').focus({ preventScroll: true });
+    if (focused_action) box.querySelector(`[data-action="${focused_action}"]`)?.focus({ preventScroll: true });
     box.closest('.info-panel').scrollTop = box_scroll;
 }
 function update_world_guidance(stats = world.stats()) {

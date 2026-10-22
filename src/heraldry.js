@@ -26,9 +26,20 @@ export function draw_flag(c, x, y, kingdom, width = 18, height = 12) {
     c.restore();
 }
 
-export function choose_ruler(kingdom, residents) {
-    const eligible = residents.filter(person => person.health > 0 && !person.voyage_id && !person.prisoner_of);
+export function royal_successors(kingdom, residents, year_length = 20) {
+    const eligible = residents.filter(person => person.id !== kingdom.king_id
+        && person.health > 0 && !person.voyage_id && !person.prisoner_of
+        && person.age >= 18 * year_length);
+    const child = person => person.parents?.some(parent => parent.id === kingdom.king_id) || false;
+    return eligible.sort((a, b) => Number(child(b)) - Number(child(a))
+        || (child(a) && child(b) ? b.age - a.age
+            : (b.xp || 0) + b.age - (a.xp || 0) - a.age) || a.id - b.id);
+}
+
+export function choose_ruler(kingdom, residents, year_length = 20) {
+    const eligible = residents.filter(person => person.health > 0 && !person.prisoner_of
+        && person.age >= 18 * year_length);
     const current = eligible.find(person => person.id === kingdom.king_id);
     if (current) return current;
-    return eligible.sort((a, b) => (b.xp || 0) + b.age - (a.xp || 0) - a.age || a.id - b.id)[0] || null;
+    return royal_successors(kingdom, residents, year_length)[0] || null;
 }

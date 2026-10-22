@@ -102,7 +102,7 @@ app.whenReady().then(async () => {
         assert.equal(await js('document.getElementById("selected-kingdom").hidden'), false);
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Supplies:")'));
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Towns:")'));
-        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Ruler:")'));
+        assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("♛ King:")'));
         assert.ok(await js('document.getElementById("selected-kingdom").textContent.includes("Culture:")'));
         assert.equal(await js('document.querySelectorAll("#civilizations .kingdom-flag").length'), 3);
         checks.push('Selecting a kingdom opens its detailed status panel');
