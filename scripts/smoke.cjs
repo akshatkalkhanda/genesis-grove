@@ -702,6 +702,11 @@ app.whenReady().then(async () => {
             win.webContents.sendInputEvent({ type: 'mouseUp', x: vessel_point.x, y: vessel_point.y, button: 'left', clickCount: 1 });
             await delay(100);
             assert.equal(await js(`document.querySelector('#entity-card').hidden`), false);
+            if (kind === 'boat') {
+                assert.equal(await js(`document.querySelector('#entity-card').getAttribute('aria-label')`), 'Selected ship details');
+                await click('[data-detail="ship"] > summary');
+                await click(`[data-action="ship-person-${vessel_point.id}"]`);
+            }
             assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('#${vessel_point.id}')`));
             assert.ok(await js(`document.querySelector('#entity-card').textContent.includes('${kind === 'boat' ? 'Sailor' : 'Pilot'}')`));
             await js(`document.querySelector('[data-action="zoom-creature"]').click()`);
@@ -709,7 +714,7 @@ app.whenReady().then(async () => {
             await fs.writeFile(path.join(artifact_dir, `${kind}-crew.png`), (await win.webContents.capturePage()).toPNG());
             await click('#entity-card button'); await click('#zoom-reset');
         }
-        checks.push('Native map clicks inspect named sailors and balloon pilots, with visible crew and aboard status');
+        checks.push('Native ship selection links to named sailors; balloon pilots remain directly inspectable with aboard status');
         await click('#new-world');
         await js(`(()=>{const scenario=document.getElementById('scenario');scenario.value='hundred';scenario.dispatchEvent(new Event('change'));document.querySelector('#new-form').requestSubmit()})()`);
         await wait_for(`!document.querySelector('#new-dialog').open && genesis.snapshot().villages.length===100`, 'hundred-kingdom creation');

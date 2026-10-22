@@ -121,6 +121,12 @@ body.info-open .info-panel { display: flex; }
 .army-identity { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .army-identity .kingdom-flag { flex-shrink: 0; }
 .army-explanation { color: #afc0a8; font-size: 13px; line-height: 1.5; margin: 10px 0; }
+.ship-card .entity-row b { overflow-wrap: anywhere; }
+.ship-card .army-identity { margin-bottom: 5px; }
+.ship-card .entity-activity { margin: 7px 0; }
+.ship-progress { display: block; width: 100%; height: 8px; margin-top: 9px; accent-color: #b3d6cf; }
+.ship-crew { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.ship-crew button { min-height: 36px; text-align: left; max-width: 100%; overflow-wrap: anywhere; }
 .army-siege { padding: 8px 10px; margin: 8px 0; border: 1px solid #728459; border-radius: 7px; background: #283a29; font-size: 13px; line-height: 1.4; }
 .siege-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .siege-heading strong { font-size: 13px; }

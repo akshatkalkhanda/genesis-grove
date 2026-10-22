@@ -71,7 +71,9 @@ larger-settlement performance. Preserve finite goods and explain shortages.
 Existing: kingdoms, adult kings and succession, simple cultures, diplomacy,
 alliances, wars, rebellion and local/capital conquest. Add clans, languages,
 religions, loyalty, deeper succession/culture and explainable political decisions.
-Naval troop transport and ship inspection follow the land-campaign foundation.
+The read-only Ship Inspector follows the land-campaign foundation; military
+transport remains planned as assemble → embark → sail → land → attack/return.
+See the scoped [naval milestones](roadmap.md#naval-milestones).
 
 ## Phase5 — world and player systems
 
@@ -153,19 +155,20 @@ For the browser, open http://127.0.0.1:4173.
 The final verification record is maintained below after the single consolidated
 pass. A packaged build is not proof of interactive Windows gameplay.
 
-### Phase 1 verification record
+### Phase 1 and naval verification record
 
-The consolidated unit run passed 225 of 226 tests. The sole failure exposed
-fleeing civilians drawing attackers out of siege range; offensive pursuit now
-stays within the objective assault area. The affected five-file set passed 67/67;
-a final check of the simulation file after the pursuit refinement passed 29/29.
-All 226 tests are therefore accounted for as passing, without rerunning unrelated
-passed suites. JavaScript syntax lint passed.
+The Phase 1 consolidated unit run passed 225 of 226 tests. The sole failure
+exposed fleeing civilians drawing attackers out of siege range; offensive pursuit
+now stays within the objective assault area. The affected set passed 67/67, and
+29/29 simulation tests passed after the final pursuit refinement. All 226 Phase 1
+test cases are accounted for as passing. Ship inspection added eight new unit
+cases; the focused ship/army/integration batch passed 21/21. Syntax lint and diff
+whitespace checks passed. Unrelated passing suites were not repeatedly rerun.
 
-The packaged Mac batch passed traits 4/4, general 57/57, army 7/7 and siege 4/4,
-with zero renderer errors. Actual 1x/20x progression was 2.125/43 simulation
-seconds (ratio 20.2353), and pause preserved the exact state. Compact layouts at
-1024 and 1366 pixels were reviewed. This native batch preceded the final pursuit
-fix; final release packages must include that fix. Mac and Windows ZIP builds
-succeeded; interactive Windows gameplay was not tested. Ship inspection is a
-separate follow-on milestone before the combined public release.
+The final combined packaged Mac batch passed ships 5/5, traits 4/4, general 57/57,
+army 7/7 and siege 4/4: 77/77 total, zero renderer errors. Actual 1x/20x progression
+was 2.125/43.125 simulation seconds (ratio 20.2941), and pause preserved the exact
+state. Compact layouts at 1024 and 1366 pixels were reviewed. Both final platform
+ZIPs passed integrity checks; their bundled code/assets match the final source.
+Interactive Windows gameplay was not tested. See the [Ship Inspector runbook](ship-inspector.md)
+and [military transport scope](roadmap.md#naval-milestones).

@@ -25,7 +25,8 @@
     "dist:win:zip": "electron-builder --win zip --x64 --config.win.signAndEditExecutable=false --publish never",
     "smoke:stability": "electron scripts/smoke-stability.cjs",
     "smoke:sieges": "electron scripts/smoke-sieges.cjs",
-    "smoke:traits": "electron scripts/smoke-traits.cjs"
+    "smoke:traits": "electron scripts/smoke-traits.cjs",
+    "smoke:ships": "electron scripts/smoke-ships.cjs"
   },
   "devDependencies": {
     "electron": "43.7.7",

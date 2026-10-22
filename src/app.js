@@ -1,5 +1,6 @@
 import { MAP_LAYERS, layer_summary } from './map_layers.js';
 import { army_summary, rebuild_armies } from './army_inspector.js';
+import { ship_summary, ship_position } from './ship_inspector.js';
 import { create_save_ui } from './save_ui.js';
 import { WEATHER } from './weather.js';
 import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
@@ -178,8 +179,8 @@ function select_tool(id) {
     $('world-tooltip').hidden = true;
     if (id === 'inspect') {
         $('selected-icon').textContent = '⌕'; $('selected-name').textContent = 'Inspect world';
-        $('selected-description').textContent = 'Click a person, animal or army banner for its profile. Armies layer reveals home garrisons.';
-        $('selected-action').textContent = 'CLICK A CREATURE OR ARMY BANNER';
+        $('selected-description').textContent = 'Click a person, animal, ship or army banner for its profile. Armies layer reveals home garrisons.';
+        $('selected-action').textContent = 'CLICK LIFE, A SHIP OR AN ARMY BANNER';
     } else {
         previous_tool = id;
         const item = Object.values(TOOLS).flat().find(t => t[0] === id);
@@ -449,6 +450,17 @@ $('minimap').onclick = event => {
 };
 function inspect(p) {
     if (inspected_unit) { $('world-tooltip').hidden = true; return; }
+    const ship = renderer.ship_at(world, p);
+    if (ship) {
+        const summary = ship_summary(world, ship), box = $('world-tooltip');
+        if (summary) {
+            box.textContent = `${summary.title} · ${summary.owner ? `${summary.owner.name}${summary.owner.alive ? '' : ' (inactive)'}` : 'Unknown kingdom'}${summary.crew?.members.length ? ` · ${summary.crew.label}: ${summary.crew.members.map(person => person.name).join(', ')}` : ''} · click to inspect`;
+            box.hidden = false;
+            box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - box.offsetWidth - 8))}px`;
+            box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - box.offsetHeight - 96))}px`;
+            return;
+        }
+    }
     const army = renderer.army_at(world, p);
     if (army) {
         const box = $('world-tooltip');
@@ -483,7 +495,7 @@ function inspect(p) {
         if (deposit && !building) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
     }
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain');
-    add('Click life to inspect · Kingdoms for town details');
+    add('Click life or ships to inspect · Kingdoms for town details');
     box.hidden = false;
     const bounds = box.getBoundingClientRect();
     box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - bounds.width - 8))}px`;
@@ -491,12 +503,13 @@ function inspect(p) {
 }
 function inspect_click(p) {
     const tile = renderer.world_point(p.x, p.y);
-    const army = renderer.army_at(world, p);
-    const found = army ? null : world.unit_near(tile.x, tile.y);
-    inspected_unit = army ? { kind: 'army', id: army.home_id, kingdom_id: army.kingdom_id }
-        : found ? { kind: found.kind, id: found.unit.id } : null;
+    const ship = renderer.ship_at(world, p);
+    const army = ship ? null : renderer.army_at(world, p);
+    const found = ship || army ? null : world.unit_near(tile.x, tile.y);
+    inspected_unit = ship || (army ? { kind: 'army', id: army.home_id, kingdom_id: army.kingdom_id }
+        : found ? { kind: found.kind, id: found.unit.id } : null);
     renderer.selected_unit_id = found?.unit.id || null;
-    audio.feedback('inspect', army ? `Army, ${army.count} soldiers`
+    audio.feedback('inspect', ship ? `${ship_summary(world, ship)?.title || 'Ship'}, selected` : army ? `Army, ${army.count} soldiers`
         : found ? `${found.unit.name || found.unit.species}, selected` : 'Inspecting land');
     followed_unit_id = null;
     const card = $('entity-card'); card.hidden = !inspected_unit;
@@ -517,6 +530,115 @@ function inspect_click(p) {
         card.style.top = `${Math.max(8, Math.min(p.y + 16, canvas.clientHeight - card.offsetHeight - 8))}px`;
         $('world-tooltip').hidden = true;
     }
+}
+const ship_key = selection => selection?.kind === 'ship' ? `ship:${selection.collection}:${selection.id}` : null;
+function update_ship_card() {
+    const summary = ship_summary(world, inspected_unit), card = $('entity-card');
+    if (!summary) {
+        inspected_unit = null; followed_unit_id = null; card.hidden = true;
+        toast('This ship has arrived or is no longer in the world.'); return;
+    }
+    const key = ship_key(inspected_unit), expanded = card.querySelector('[data-detail="ship"]')?.open;
+    const scroll_top = card.scrollTop;
+    const active = card.contains(document.activeElement) ? document.activeElement : null;
+    const focused_action = active?.dataset.action, focused_summary = active?.tagName === 'SUMMARY';
+    card.replaceChildren(); card.classList.remove('has-siege'); card.classList.add('ship-card');
+    card.dataset.shipKey = key; card.setAttribute('aria-label', 'Selected ship details');
+    const heading = document.createElement('div'); heading.className = 'entity-heading';
+    const name = document.createElement('strong'); name.textContent = summary.title;
+    const close = document.createElement('button'); close.dataset.action = 'close-ship';
+    close.textContent = '×'; close.setAttribute('aria-label', 'Close ship details');
+    close.onclick = () => { inspected_unit = null; followed_unit_id = null; card.hidden = true; };
+    heading.append(name, close); card.append(heading);
+    const identity = document.createElement('div'); identity.className = 'army-identity';
+    const owner = document.createElement('strong');
+    owner.textContent = summary.owner ? `${summary.owner.name}${summary.owner.alive ? '' : ' (inactive)'}` : 'Unknown kingdom';
+    if (summary.owner) identity.append(kingdom_flag(summary.owner));
+    identity.append(owner); card.append(identity);
+    const activity = document.createElement('div'); activity.className = 'entity-activity';
+    const action = document.createElement('strong');
+    action.textContent = `${followed_unit_id === key ? '◉ Following · ' : ''}${summary.activity}`;
+    activity.append(action); card.append(activity);
+    const line = (label, value) => {
+        const row = document.createElement('div'); row.className = 'entity-row';
+        const name = document.createElement('span'); name.textContent = label;
+        const text = document.createElement('b'); text.textContent = value;
+        row.append(name, text); card.append(row); return row;
+    };
+    if (summary.health) line('Health', `${Math.ceil(summary.health.current)} / ${summary.health.max}`);
+    if (summary.cargo) line('Cargo', `${summary.cargo.amount.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${summary.cargo.label}`);
+    const location = point => `${point.label} · ${point.x.toFixed(1)}, ${point.y.toFixed(1)}`;
+    if (summary.destination) line('Destination', location(summary.destination));
+    if (summary.route) {
+        const progress = document.createElement('progress'); progress.className = 'ship-progress';
+        progress.max = 1; progress.value = summary.progress; progress.setAttribute('aria-label', 'Journey progress');
+        card.append(progress); line('Journey', `${Math.floor(summary.progress * 100)}% complete`);
+    }
+    const reason = document.createElement('p'); reason.className = 'army-explanation'; reason.textContent = summary.reason;
+    card.append(reason);
+    const actions = document.createElement('div'); actions.className = 'entity-actions';
+    const focus = document.createElement('button'); focus.dataset.action = 'focus-ship'; focus.textContent = 'Focus';
+    focus.onclick = () => {
+        if (ship_key(inspected_unit) !== key) return;
+        const point = ship_position(world, inspected_unit);
+        if (!point) { update_ship_card(); return; }
+        followed_unit_id = null; renderer.focus(point.x, point.y, 4); update_zoom(); update_ship_card();
+    };
+    const follow = document.createElement('button'); follow.dataset.action = 'follow-ship';
+    follow.textContent = followed_unit_id === key ? 'Stop following' : 'Follow';
+    follow.setAttribute('aria-pressed', String(followed_unit_id === key));
+    follow.onclick = () => {
+        if (ship_key(inspected_unit) !== key) return;
+        const point = ship_position(world, inspected_unit);
+        if (!point) { update_ship_card(); return; }
+        followed_unit_id = followed_unit_id === key ? null : key;
+        if (followed_unit_id) { renderer.focus(point.x, point.y, 4); update_zoom(); }
+        update_ship_card();
+    };
+    actions.append(focus, follow); card.append(actions);
+    const detail = [line('Vessel', `${summary.category} · #${summary.vessel.id}`)];
+    if (!summary.health) detail.push(line('Hull health', 'Not modeled'));
+    if (!summary.cargo) detail.push(line('Cargo', 'Not modeled'));
+    if (!summary.crew) detail.push(line('Crew', 'Not modeled'));
+    detail.push(line('Passengers', summary.selection.collection === 'voyages' ? 'Not modeled separately' : 'Not modeled'));
+    if (!summary.destination) detail.push(line('Destination', 'No directed route'));
+    if (summary.boarding_point) detail.push(line('Crew boarding point', location(summary.boarding_point)));
+    detail.push(line('Position', `${summary.point.x.toFixed(1)}, ${summary.point.y.toFixed(1)}`));
+    if (summary.origin) detail.push(line('Origin', location(summary.origin)));
+    if (summary.crew) {
+        const crew = document.createElement('div'); crew.className = 'ship-crew';
+        const label = document.createElement('strong');
+        label.textContent = `${summary.crew.label}: ${summary.crew.members.length}${summary.crew.aboard === null ? '' : summary.crew.aboard ? ' · aboard' : ' · not aboard'}`;
+        crew.append(label);
+        for (const person of summary.crew.members) {
+            if (summary.selection.collection === 'voyages') {
+                const name = document.createElement('span'); name.className = 'ship-settler';
+                name.textContent = `${person.name} · #${person.id}`; crew.append(name); continue;
+            }
+            const link = document.createElement('button'); link.dataset.action = `ship-person-${person.id}`;
+            link.textContent = `Inspect ${person.name}`;
+            link.onclick = () => {
+                if (ship_key(inspected_unit) !== key || !ship_summary(world, inspected_unit)?.crew?.members.some(unit => unit.id === person.id)) return;
+                inspected_unit = { kind: 'person', id: person.id }; followed_unit_id = null;
+                renderer.selected_unit_id = person.id; card.scrollTop = 0; update_entity_card();
+            };
+            crew.append(link);
+        }
+        detail.push(crew);
+    }
+    if (summary.cargo?.sources) detail.push(line('Cargo sources', Object.entries(summary.cargo.sources)
+        .map(([source, amount]) => `${source.replaceAll('_', ' ')} ${amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}`).join(' · ')));
+    const note = document.createElement('p'); note.className = 'army-explanation';
+    note.textContent = summary.selection.collection === 'machines'
+        ? 'Coastal boats fish and return food to a dock. Their health, assigned sailor and stored catch are simulated. They do not carry an army.'
+        : summary.selection.collection === 'voyages'
+            ? 'This voyage carries the named settlers to establish an outpost. Launch supplies are spent on departure; no remaining cargo or ship health is simulated.'
+            : 'This shipment moves the recorded cargo between kingdoms. Separate ship health, crew and passenger records are not simulated.';
+    detail.push(note);
+    const disclosure = inspector_details(card, detail, 'Crew, route & vessel details', 'ship');
+    disclosure.open = Boolean(expanded); card.scrollTop = scroll_top;
+    if (focused_action) card.querySelector(`[data-action="${focused_action}"]`)?.focus({ preventScroll: true });
+    if (focused_summary) disclosure.querySelector('summary').focus({ preventScroll: true });
 }
 function update_army_card() {
     const summary = army_summary(world, inspected_unit);
@@ -608,6 +730,8 @@ function update_army_card() {
 }
 function update_entity_card() {
     if (!inspected_unit) return;
+    if (inspected_unit.kind === 'ship') { update_ship_card(); return; }
+    $('entity-card').classList.remove('ship-card'); delete $('entity-card').dataset.shipKey;
     if (inspected_unit.kind === 'army') { update_army_card(); return; }
     const unit = (inspected_unit.kind === 'person' ? world.people : world.animals).find(u => u.id === inspected_unit.id);
     if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
@@ -1234,7 +1358,8 @@ function frame(now) {
         if (pointer_down && last_pointer) { paint_elapsed += dt; if (paint_elapsed > 0.085) { paint(last_pointer, true); paint_elapsed = 0; } }
     }
     if (followed_unit_id) {
-        const unit = inspected_unit?.kind === 'army'
+        const unit = inspected_unit?.kind === 'ship'
+            ? ship_position(world, inspected_unit) : inspected_unit?.kind === 'army'
             ? world.armies.find(army => army.home_id === inspected_unit.id
                 && army.kingdom_id === inspected_unit.kingdom_id)
             : world.people.find(p => p.id === followed_unit_id) || world.animals.find(a => a.id === followed_unit_id);
@@ -1244,6 +1369,7 @@ function frame(now) {
     renderer.touch_preview = touch_camera.editing ? touch_camera.stroke : [];
     renderer.selected_army = inspected_unit?.kind === 'army'
         ? { home_id: inspected_unit.id, kingdom_id: inspected_unit.kingdom_id } : null;
+    renderer.selected_ship = inspected_unit?.kind === 'ship' ? inspected_unit : null;
     renderer.render(world, now);
     ui_elapsed += dt;
     if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }

@@ -2,6 +2,7 @@ import { draw_compact, home_populations, settlement_labels, map_detail } from '.
 import { Camera } from './camera.js';
 import { draw_map_layer } from './map_layers.js';
 import { army_visible, army_badge_hit, army_target, siege_markers, siege_badge_layout } from './army_inspector.js';
+import { ship_position } from './ship_inspector.js';
 import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
@@ -48,6 +49,27 @@ export class Renderer extends Camera {
             world.villages.some(kingdom => kingdom.id === army.kingdom_id && kingdom.alive)
             && army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)
             && army_badge_hit(army, point, this.origin, this.scale));
+    }
+    ship_at(world, point) {
+        // Match the compact hull/sail extents rather than a broad world-radius.
+        // A small screen-space minimum keeps tiny zoomed-out vessels clickable.
+        let selected = null, distance = Infinity;
+        for (const collection of ['voyages', 'trades', 'machines']) for (const vessel of world[collection]) {
+            if (vessel.kind !== (collection === 'machines' ? 'boat' : 'ship')) continue;
+            const selection = { kind: 'ship', collection, id: vessel.id };
+            const anchor = ship_position(world, selection);
+            if (!anchor) continue;
+            const x = this.origin.x + anchor.x * CELL * this.scale;
+            const y = this.origin.y + anchor.y * CELL * this.scale;
+            const factor = 0.42 * this.scale;
+            const [left, right, top, bottom] = collection === 'machines' ? [15, 17, 28, 9]
+                : collection === 'voyages' ? [6, 9, 12, 5] : [6, 6, 10, 4];
+            if (point.x < x - Math.max(12, left * factor) || point.x > x + Math.max(12, right * factor)
+                || point.y < y - Math.max(12, top * factor) || point.y > y + Math.max(12, bottom * factor)) continue;
+            const squared = (point.x - x) ** 2 + (point.y - y) ** 2;
+            if (squared <= distance) { selected = selection; distance = squared; }
+        }
+        return selected;
     }
     cache(world) {
         const c = this.tc;
@@ -253,8 +275,11 @@ export class Renderer extends Camera {
             c.globalAlpha = 1;
         }
         for (const voyage of world.voyages) {
-            const x = (voyage.x + (voyage.target_x - voyage.x) * voyage.progress) * CELL;
-            const y = (voyage.y + (voyage.target_y - voyage.y) * voyage.progress) * CELL;
+            const point = voyage.kind === 'ship' ? ship_position(world, { kind: 'ship', collection: 'voyages', id: voyage.id })
+                : { x: voyage.x + (voyage.target_x - voyage.x) * voyage.progress,
+                    y: voyage.y + (voyage.target_y - voyage.y) * voyage.progress };
+            if (!point) continue;
+            const x = point.x * CELL, y = point.y * CELL;
             draw_compact(c, x, y, 0.42, () => {
             c.fillStyle = '#352d26'; c.fillRect(x - 6, y + 2, 13, 3);
             c.fillStyle = voyage.kind === 'ship' ? '#e8e3c9' : '#bca87b';
@@ -266,8 +291,11 @@ export class Renderer extends Camera {
         for (const trade of world.trades || []) {
             const sender = kingdoms.get(trade.from_id), recipient = kingdoms.get(trade.to_id);
             if (!sender || !recipient) continue;
-            const x = (sender.x + (recipient.x - sender.x) * trade.progress) * CELL;
-            const y = (sender.y + (recipient.y - sender.y) * trade.progress) * CELL;
+            const point = trade.kind === 'ship' ? ship_position(world, { kind: 'ship', collection: 'trades', id: trade.id })
+                : { x: sender.x + (recipient.x - sender.x) * trade.progress,
+                    y: sender.y + (recipient.y - sender.y) * trade.progress };
+            if (!point) continue;
+            const x = point.x * CELL, y = point.y * CELL;
             draw_compact(c, x, y, 0.42, () => {
             c.fillStyle = trade.kind === 'ship' ? '#735b45' : '#8e724e'; c.fillRect(x - 6, y, 12, 4);
             c.fillStyle = trade.good === 'food' ? '#c6bb6d' : trade.good === 'wood' ? '#7e9d59' : '#a9b8b8'; c.fillRect(x - 3, y - 4, 6, 4);
@@ -313,6 +341,14 @@ export class Renderer extends Camera {
             if (selected) {
                 c.strokeStyle = '#f5e8a8'; c.lineWidth = 1 / s;
                 c.beginPath(); c.ellipse(selected.x * CELL, selected.y * CELL + 3, 7, 4, 0, 0, Math.PI * 2); c.stroke();
+            }
+        }
+        if (this.selected_ship) {
+            const point = ship_position(world, this.selected_ship);
+            if (point) {
+                c.strokeStyle = '#f5e8a8'; c.lineWidth = 1.5 / s;
+                c.beginPath(); c.ellipse(point.x * CELL, point.y * CELL + 2,
+                    Math.max(8, 10 / s), Math.max(4, 5 / s), 0, 0, Math.PI * 2); c.stroke();
             }
         }
         for (let i = 0; i < world.fire.length; i++) if (world.fire[i] > 0) {

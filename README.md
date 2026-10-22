@@ -26,6 +26,8 @@ If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` 
 Version 0.27.0 adds individual traits, three diets, nutrition and energy, survival
 decisions, and a compact trait/diet editor in the creature inspector. See the
 [simulation roadmap and Phase 1 walkthrough](docs/simulation-roadmap.md).
+The same update adds a compact read-only [Ship Inspector](docs/ship-inspector.md)
+for existing settler/trade ships and coastal boats, with Focus and Follow.
 Version 0.26.0 makes town sieges and capital surrender visible, with saved attacker
 progress, compact inspector details and coherent ownership/asset transfers.
 See [town sieges and surrender](docs/town-sieges.md).
