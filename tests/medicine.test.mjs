@@ -162,7 +162,7 @@ test('damage reasons are real events, bounded, and preserved with medical state 
 test('actual hunger, fire and old age record causes instead of inferring from a low bar', () => {
     const { world, kingdom, patient } = ward();
     kingdom.buildings = []; kingdom.food = 0; world.fertility.fill(0);
-    patient.gather = 3;
+    patient.gather = 3; patient.needs.nutrition = 0;
     world.step(0.125);
     assert.ok(patient.health_history.some(e => e.cause === 'starvation'));
     patient.age = 90 * world.year_length; patient.infection = 1;

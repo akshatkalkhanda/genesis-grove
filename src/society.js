@@ -1,3 +1,4 @@
+import { trait_modifiers, valid_character_traits } from './character_traits.js';
 import { initialize_creature, TRAITS } from './creatures.js';
 
 export const CULTURAL_VALUES = ['knowledge', 'craft', 'kinship', 'valor'];
@@ -107,7 +108,7 @@ function remember(person, other, amount) {
         record = { id: other.id, name: other.name, affinity: 0 };
         person.relationships.push(record);
     }
-    record.affinity = Math.min(100, record.affinity + amount);
+    record.affinity = Math.max(0, Math.min(100, record.affinity + amount));
 }
 
 // Called by daily activities when two citizens actually spend time together.
@@ -115,8 +116,15 @@ export function socialize(a, b, amount = 5) {
     if (!a || !b || a.id === b.id || a.health <= 0 || b.health <= 0) return;
     initialize_society_person(a);
     initialize_society_person(b);
-    remember(a, b, Math.max(0, Math.min(10, amount)));
-    remember(b, a, Math.max(0, Math.min(10, amount)));
+    remember(a, b, Math.max(0, Math.min(10, amount + trait_modifiers(b).social_in)));
+    remember(b, a, Math.max(0, Math.min(10, amount + trait_modifiers(a).social_in)));
+}
+
+// An observed theft can reduce trust without creating unbounded relationship records.
+export function adjust_relationship(person, other, amount) {
+    if (!person || !other || person.id === other.id || !Number.isFinite(amount)) return;
+    initialize_society_person(person); initialize_society_person(other);
+    remember(person, other, Math.max(-10, Math.min(10, amount)));
 }
 
 export function advance_society(world) {
@@ -159,12 +167,12 @@ export function select_parents(world, kingdom_id, home_id) {
     const by_id = new Map(world.people.map(p => [p.id, p]));
     const candidates = world.people.filter(p => p.village_id === kingdom_id
         && p.home_id === home_id && available(p, world.year_length)
-        && p.partner_id && world.year - (p.last_child_year ?? -100) >= 2)
+        && trait_modifiers(p).fertility > 0 && p.partner_id && world.year - (p.last_child_year ?? -100) >= 2)
         .sort((a, b) => (a.children_count || 0) - (b.children_count || 0) || a.id - b.id);
     for (const p of candidates) {
         const q = by_id.get(p.partner_id);
         if (q && q.partner_id === p.id && q.village_id === kingdom_id && q.home_id === home_id
-            && available(q, world.year_length) && !related(p, q, by_id)
+            && available(q, world.year_length) && trait_modifiers(q).fertility > 0 && !related(p, q, by_id)
             && world.year - (q.last_child_year ?? -100) >= 2) return [p, q];
     }
     return null;
@@ -200,7 +208,8 @@ export function validate_culture(kingdom) {
 
 export function validate_society_person(p, next_id) {
     const valid_id = id => integer(id, 1, next_id - 1);
-    return (p.family_id === undefined || valid_id(p.family_id))
+    return valid_character_traits(p)
+        && (p.family_id === undefined || valid_id(p.family_id))
         && (p.family_name === undefined || text(p.family_name, 40))
         && (p.culture_id === undefined || valid_id(p.culture_id))
         && (p.partner_id == null || (valid_id(p.partner_id) && p.partner_id !== p.id))

@@ -1,6 +1,7 @@
 import { defense_hit } from './defenses.js';
 import { sync_crews } from './crews.js';
 import { food_reserve } from './civic.js';
+import { pack_food, receive_food } from './diets.js';
 
 export const MACHINES = Object.freeze({
     boat: { label: 'Coastal boat', domain: 'water', age: 2, building: 'dock', wood: 18, speed: 1.6, health: 180 },
@@ -125,6 +126,15 @@ export function advance_machines(world, dt, level_of, research_costs) {
     sync_crews(world);
 }
 
+function unload_food(machine, kingdom) {
+    const cargo = machine.food_cargo || { amount: machine.cargo,
+        food_stores: { plant: machine.cargo } };
+    if (!receive_food(kingdom, cargo)) return false;
+    machine.cargo = 0;
+    delete machine.food_cargo;
+    return true;
+}
+
 function fly(world, machine, kingdom, dt, recipe) {
     let target = kingdom;
     if (machine.kind === 'balloon') {
@@ -135,18 +145,23 @@ function fly(world, machine, kingdom, dt, recipe) {
     } else {
         let recipient = machine.recipient_id && world.villages.find(v => v.id === machine.recipient_id && v.alive
             && world.relation_status(v.id, kingdom.id) !== 'war');
-        if (machine.recipient_id && !recipient) {
-            kingdom.food += machine.cargo; machine.cargo = 0; machine.recipient_id = null;
-        }
+        if (machine.recipient_id && !recipient) machine.recipient_id = null;
+        if (machine.cargo && !recipient) unload_food(machine, kingdom);
         if (!machine.cargo && !machine.recipient_id && Math.hypot(machine.x - kingdom.x, machine.y - kingdom.y) < 2) {
             recipient = world.villages.find(v => v.alive && v.id !== kingdom.id
                 && world.relation_status(v.id, kingdom.id) !== 'war' && kingdom.food > v.food + 30);
-            if (recipient) { machine.recipient_id = recipient.id; machine.cargo = 12; kingdom.food -= 12; }
+            const cargo = recipient && pack_food(kingdom, 12);
+            if (cargo) {
+                machine.recipient_id = recipient.id;
+                machine.food_cargo = cargo; machine.cargo = cargo.amount;
+            }
         }
         if (machine.cargo && recipient) target = recipient;
         if (machine.cargo && recipient && Math.hypot(machine.x - recipient.x, machine.y - recipient.y) < 1) {
-            recipient.food += machine.cargo; machine.cargo = 0; machine.recipient_id = null;
-            machine.delivered = Math.min(1e6, machine.delivered + 1); target = kingdom;
+            if (unload_food(machine, recipient)) {
+                machine.recipient_id = null;
+                machine.delivered = Math.min(1e6, machine.delivered + 1); target = kingdom;
+            }
         }
     }
     const distance = Math.hypot(target.x - machine.x, target.y - machine.y);

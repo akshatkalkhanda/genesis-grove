@@ -1,4 +1,6 @@
-import { socialize } from './society.js';
+import { has_trait } from './character_traits.js';
+import { find_path } from './pathfinding.js';
+import { socialize, adjust_relationship } from './society.js';
 // Civilian routines use simulation seconds, independent of the visual day/night clock.
 const PHASES = ['travel', 'work', 'return', 'rest', 'social'];
 const WOODED = new Set([4, 9, 12, 13, 15]);
@@ -104,7 +106,10 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
             const companion = world.people.find(other => other.id === state.partner_id);
             if (companion && companion.health > 0 && !companion.prisoner_of && !companion.voyage_id
                 && companion.village_id === person.village_id
-                && Math.hypot(person.x - companion.x, person.y - companion.y) < 4) socialize(person, companion, 2);
+                && Math.hypot(person.x - companion.x, person.y - companion.y) < 4) {
+                socialize(person, companion, 2);
+                attempt_theft(world, person, companion);
+            }
             state.phase = 'travel'; state.timer = 0; state.partner_id = null;
         }
     }
@@ -117,6 +122,40 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
     const target = state.phase === 'travel' ? state.site : state.phase === 'return' ? house : null;
     return { target: target ? { x: target.x, y: target.y, route: true, task } : null,
         holding: !target || near(person, target) };
+}
+
+// Only an actual completed social encounter calls this; no new per-frame search.
+export function attempt_theft(world, person, companion) {
+    const eligible = unit => unit && unit.health > 0 && unit.role !== 'soldier'
+        && unit.age / world.year_length >= 18 && !unit.prisoner_of && !unit.voyage_id
+        && !unit.recovering && !unit.medical_role
+        && !world.machines.some(machine => machine.crew_id === unit.id);
+    if (!has_trait(person, 'thief') || has_trait(person, 'honest') || !eligible(person)
+        || !eligible(companion) || person.id === companion.id
+        || person.village_id !== companion.village_id
+        || Math.hypot(person.x - companion.x, person.y - companion.y) >= 4
+        || !world.walkable(person.x, person.y) || !world.walkable(companion.x, companion.y)) return null;
+    const same_tile = world.index(person.x, person.y) === world.index(companion.x, companion.y);
+    if (!same_tile && !find_path(world, person, companion, 256).length) return null;
+    const cargo = person.daily_life?.cargo, carried = companion.daily_life?.cargo;
+    if (!cargo || !carried) return null;
+    for (const [good, capacity] of [['food', 12], ['wood', 8]]) {
+        if (!Number.isFinite(cargo[good]) || !Number.isFinite(carried[good])
+            || cargo[good] < 0 || carried[good] < 0 || cargo[good] > capacity || carried[good] > capacity) continue;
+        const amount = Math.min(1, Math.max(0, carried[good]), Math.max(0, capacity - cargo[good]));
+        if (!amount) continue;
+        carried[good] -= amount; cargo[good] += amount;
+        person.trait_thefts = Math.min(1e6, (person.trait_thefts || 0) + 1);
+        adjust_relationship(companion, person, -5);
+        const quantity = Number(amount.toFixed(2)) || 'a little';
+        const label = good === 'wood' ? 'timber' : good;
+        world.note_character_event?.(person,
+            `Pilfered ${quantity} ${label} from ${companion.name || 'a neighbor'}'s carried supplies.`);
+        world.note_character_event?.(companion,
+            `${person.name || 'A neighbor'} took ${quantity} ${label} from carried supplies.`);
+        return { good, amount, victim_id: companion.id };
+    }
+    return null;
 }
 
 // Replaces civilian gather credits. Subsistence remains immediate to sustain early settlements;

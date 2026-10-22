@@ -20,6 +20,8 @@ import { draw_tree } from './world_art.js';
 import { ruler_personality, society_modifiers } from './society.js';
 import { DAMAGE_CAUSES, health_risks } from './health.js';
 import { MEDICAL_BUILDINGS } from './medicine.js';
+import { bind_character_ui } from './character_ui.js';
+import { life_stage } from './needs.js';
 const $ = id => document.getElementById(id);
 function kingdom_flag(kingdom) {
     const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
@@ -141,6 +143,10 @@ function toast(message) {
     audio.feedback(/^Saved /.test(message) ? 'save' : /^Restored/.test(message) ? 'load' : 'ui', message,
         { key: 'notice', interval: 500 });
 }
+const character_editor = bind_character_ui({
+    get_world: () => world, get_selection: () => inspected_unit,
+    on_change: () => update_ui(), notify: toast
+});
 // Keep the map clear until the player explicitly chooses a creator tool.
 $('sandbox-dock').append(document.querySelector('.tabs'));
 document.querySelector('.tool-panel').append(document.querySelector('.tool-description'), document.querySelector('.brush-section'));
@@ -626,7 +632,13 @@ function update_entity_card() {
     else renderer.animal(art, { ...unit, x: 0, y: 0 });
     card.append(portrait);
     const activity = document.createElement('div'); activity.className = 'entity-activity';
-    activity.textContent = `${followed_unit_id === unit.id ? '◉ Following · ' : ''}${unit.task || (inspected_unit.kind === 'person' ? 'Exploring' : 'Roaming the wilds')}`;
+    const current_action = document.createElement('strong');
+    current_action.textContent = `${followed_unit_id === unit.id ? '◉ Following · ' : ''}${unit.current_action || unit.task || (inspected_unit.kind === 'person' ? 'Exploring' : 'Roaming the wilds')}`;
+    activity.append(current_action);
+    if (unit.action_reason) {
+        const reason = document.createElement('span'); reason.className = 'entity-action-reason';
+        reason.textContent = unit.action_reason; activity.append(reason);
+    }
     card.append(activity);
     const health = document.createElement('div'); health.className = 'entity-health';
     health.setAttribute('role', 'meter'); health.setAttribute('aria-label', 'Health');
@@ -653,9 +665,11 @@ function update_entity_card() {
         card.append(history);
     }
     line('Age', `${Math.floor(unit.age / world.year_length)} years`);
+    line('Life stage', life_stage(unit, world.year_length));
     line('Level / XP', `${attributes.level} · ${Math.floor(unit.xp || 0)} / ${attributes.next_xp ?? 'Master'}`);
     line('Strength / Intelligence', `${attributes.strength} / ${attributes.intelligence}`);
     line('Trait', unit.trait || 'Unknown');
+    card.append(character_editor.profile(unit, inspected_unit.kind, expanded));
     line('Kills', unit.kills || 0);
     line('Terrain', TERRAIN_NAMES[world.tile(unit.x, unit.y)]);
     if (inspected_unit.kind === 'person') {
@@ -696,7 +710,7 @@ function update_entity_card() {
         if (unit.heritage_trait) line('Inherited aptitude', unit.heritage_trait);
         const routine = unit.daily_life;
         if (routine && unit.role !== 'soldier' && !unit.prisoner_of && !unit.voyage_id && !unit.medical_role && !unit.recovering) {
-            line('Energy', `${Math.round(routine.energy)} / 100`);
+            if (!Number.isFinite(unit.needs?.energy)) line('Routine energy', `${Math.round(routine.energy)} / 100`);
             line('Carrying', `${routine.cargo.food.toFixed(1)} food · ${routine.cargo.wood.toFixed(1)} timber`);
             line('Delivered supplies', Math.floor(routine.delivered));
         }
@@ -745,7 +759,7 @@ function update_entity_card() {
         update_entity_card();
     };
     actions.append(zoom, follow); card.append(actions);
-    const detail_rows = [...card.children].filter(e => e.classList.contains('entity-row') || e.classList.contains('family-links') || e.classList.contains('damage-history'));
+    const detail_rows = [...card.children].filter(e => e.classList.contains('entity-row') || e.classList.contains('family-links') || e.classList.contains('damage-history') || e.classList.contains('character-profile'));
     const primary_labels = new Set(['Species', 'Health', 'Condition', 'Age', 'Kingdom', 'Role',
         'Title', 'Reign', 'Heir', 'Royal policy']);
     const secondary = detail_rows.filter(e => !primary_labels.has(e.firstElementChild?.textContent));
@@ -997,6 +1011,7 @@ function update_world_guidance(stats = world.stats()) {
     $('world-state-detail').textContent = detail;
 }
 function update_ui() {
+    character_editor.refresh();
     $('layer-legend').hidden = renderer.layer === 'political';
     $('layer-legend').textContent = layer_summary(world, renderer.layer);
     $('weather-summary').textContent = world.weather.length ? `${world.weather.length} natural event${world.weather.length === 1 ? '' : 's'}` : '☁ Nature';
@@ -1071,6 +1086,7 @@ function update_ui() {
     }
 }
 function replace_world(next) {
+    character_editor.close();
     $('creation-guide').dataset.completed = 'false';
     $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
