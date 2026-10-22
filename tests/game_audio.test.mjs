@@ -91,3 +91,47 @@ test('tools and major events use appropriate distinct sound families', () => {
     assert.equal(event_sound({ text: 'Two kingdoms declare war', kind: 'village' }), 'war');
     assert.equal(event_sound({ text: 'Kingdoms agree on peace', kind: 'village' }), 'peace');
 });
+
+
+test('event cues distinguish actual actions from fragments inside kingdom names', () => {
+    for (const text of ['Dwarf village is founded.', 'A village establishes a colony.',
+        'Sage Hollow builds a barracks.']) {
+        assert.equal(event_sound({ text, kind: 'village' }), 'build', text);
+    }
+    for (const [text, sound] of [
+        ['Thunderstorm begins.', 'lightning'], ['Rain cloud begins.', 'rain'],
+        ['Blizzard begins.', 'wind'], ['Drought begins.', 'wind'],
+        ['A star falls. The earth will remember.', 'meteor'],
+        ['A terrible flash reshapes the land.', 'explosion'],
+        ['Dwarf Hollow enters the Iron Age. Their forges can now craft swords.', 'research'],
+        ['Dwarf Hollow captures Willowmere.', 'war']
+    ]) assert.equal(event_sound({ text, kind: 'disaster' }), sound, text);
+});
+
+test('fast-play event bursts drop throttled cues without building a speech backlog', async () => {
+    const f = fixture(); await f.audio.configure({ enabled: true });
+    const old = { text: 'A village is founded', kind: 'village' };
+    let events = [old]; f.audio.reset_events(events);
+    for (let i = 0; i < 100; i++) {
+        events = [{ text: `Thunderstorm ${i} begins`, kind: 'disaster' }, ...events];
+        f.audio.observe_events(events); f.advance(25);
+    }
+    assert.equal(f.effects.length, 1); assert.equal(f.messages.length, 1);
+    assert.equal(f.audio.pending, null);
+    f.messages[0].onend(); f.advance(6000); f.audio.observe_events(events);
+    assert.equal(f.messages.length, 1, 'Suppressed events must never replay later');
+    events = [{ text: 'A tsunami begins', kind: 'disaster' }, ...events];
+    f.audio.observe_events(events);
+    assert.equal(f.messages.length, 2); assert.equal(f.effects.at(-1).kind, 'tsunami');
+});
+
+test('priority announcements cancel the current voice and ignore late completion callbacks', async () => {
+    const f = fixture(); await f.audio.configure({ enabled: true });
+    f.audio.speak('Running'); f.audio.speak('Outdated pending message');
+    f.audio.speak('Time paused', { priority: true });
+    assert.ok(f.speech.cancelled > 0); assert.equal(f.audio.pending, null);
+    assert.equal(f.messages.at(-1).text, 'Time paused');
+    f.messages[0].onend(); assert.equal(f.audio.speaking, true);
+    f.messages.at(-1).onend(); assert.equal(f.audio.speaking, false);
+    assert.equal(f.messages.length, 2);
+});

@@ -39,14 +39,17 @@ export function tool_sound(tool) {
 }
 export function event_sound(event) {
     const text = event.text.toLowerCase();
-    if (/crowned|becomes ruler/.test(text)) return 'coronation';
-    if (/peace|alliance/.test(text)) return 'peace';
-    if (/war|conquer|captur|siege/.test(text)) return 'war';
-    if (/lightning|thunder/.test(text)) return 'lightning';
-    if (/tsunami/.test(text)) return 'tsunami';
-    if (/meteor/.test(text)) return 'meteor';
-    if (/fire|burn/.test(text)) return 'fire';
-    if (/age|research|discover/.test(text)) return 'research';
+    if (/\bcrowned\b|\bbecomes ruler\b/.test(text)) return 'coronation';
+    if (/\bpeace\b|\balliance\b/.test(text)) return 'peace';
+    if (/\bwar\b|\bconquers?\b|\bcaptures?\b|\bsiege\b/.test(text)) return 'war';
+    if (/\blightning\b|\bthunder(?:storm)?\b/.test(text)) return 'lightning';
+    if (/\btsunami\b/.test(text)) return 'tsunami';
+    if (/\bmeteor\b|\ba star falls\b/.test(text)) return 'meteor';
+    if (/\ba terrible flash\b/.test(text)) return 'explosion';
+    if (/\bfire\b|\bburn(?:s|ing|ed)?\b/.test(text)) return 'fire';
+    if (/\brain(?:cloud)?\b/.test(text)) return 'rain';
+    if (/\bblizzard\b|\bdrought\b/.test(text)) return 'wind';
+    if (/\benters the .+ age\b|\bresearch\b|\bdiscover(?:s|ed|y)?\b/.test(text)) return 'research';
     return event.kind === 'disaster' ? 'alert' : 'build';
 }
 const noise_cache = new WeakMap();

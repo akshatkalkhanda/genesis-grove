@@ -23,6 +23,8 @@ clutter. [Investigation and limits](generations-and-map-readability.md).
 Version 0.24.0 exposes kings and heirs, records new reigns and prioritizes eligible adult direct children during succession. [Rules and UI](kings-and-succession.md).
 Version 0.25.0 adds smooth anchored zoom, touch gesture protection and progressive
 map detail, plus action sounds and local spoken feedback. [Audio coverage](audio-feedback.md). [Camera controls and visibility levels](zoom-and-visibility.md).
+Version 0.25.1 validates two populated save snapshots over long runs and fixes event
+sound classification. [Stability results and limits](stability-pass-0.25.1.md).
 Ship inspection remains future work.
 The four kingdoms are only the video example; no dedicated setup is planned.
 Next: local town conquest and explicit capital-surrender rules, followed by

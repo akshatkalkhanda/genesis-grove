@@ -57,3 +57,12 @@ and avoiding historical replay. Desktop tests render every effect with real Web
 Audio, check distinct/non-silent/unclipped PCM, verify real local-speech start and
 completion where voices exist, exercise volume/mute controls and compare exact
 paused world snapshots. Layout is checked at 1024×768 and 1366×768.
+
+## Event cue correction, 0.25.1
+
+Event matching now uses complete words and action phrases. A Dwarf village no
+longer sounds like a war, and a village name no longer triggers an age discovery.
+Rain, blizzard, drought, falling stars and the nuclear flash use their respective
+effect families. Automatic world announcements still have a five-second real-time
+limit: suppressed events are dropped and never replayed as a backlog at high speed.
+New regression checks cover bursts and priority announcements with late callbacks.
