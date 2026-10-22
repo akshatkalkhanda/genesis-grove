@@ -526,6 +526,7 @@ function update_army_card() {
     const focused_action = active?.dataset.action;
     const focused_summary = active?.tagName === 'SUMMARY';
     card.replaceChildren(); card.setAttribute('aria-label', 'Selected army details');
+    card.classList.toggle('has-siege', Boolean(summary.siege));
     const heading = document.createElement('div'); heading.className = 'entity-heading';
     const name = document.createElement('strong'); name.textContent = 'Home garrison';
     const close = document.createElement('button'); close.dataset.action = 'close-army';
@@ -544,10 +545,33 @@ function update_army_card() {
         const val = document.createElement('b'); val.textContent = value;
         row.append(key, val); card.append(row); return row;
     };
-    line('Home', home?.name || 'Former settlement');
+    const home_row = line('Home', home?.name || 'Former settlement');
     line('Members', `${members.length} active soldiers`);
     line('Order', summary.order_label);
     line('Target', target?.name || (army.target_id ? 'Changed · awaiting new plan' : 'No enemy target'));
+    if (summary.siege) {
+        const siege = summary.siege;
+        const panel = document.createElement('section'); panel.className = 'army-siege';
+        panel.setAttribute('aria-label', 'Target siege');
+        const heading = document.createElement('div'); heading.className = 'siege-heading';
+        const status = document.createElement('strong'); status.textContent = `${siege.kind === 'capital' ? 'Capital' : 'Town'} siege · ${siege.state}`;
+        const focus_target = document.createElement('button'); focus_target.dataset.action = 'focus-target';
+        focus_target.textContent = 'Target ↗'; focus_target.setAttribute('aria-label', `Focus target ${target.name}`);
+        focus_target.onclick = () => {
+            const current = inspected_unit && army_summary(world, inspected_unit)?.target;
+            if (!current) return;
+            followed_unit_id = null; renderer.focus(current.x, current.y, 4); update_zoom(); update_army_card();
+        };
+        heading.append(status, focus_target);
+        const progress = document.createElement('progress'); progress.max = siege.required;
+        progress.value = siege.progress; progress.setAttribute('aria-label', `${target.name} siege progress`);
+        const amount = document.createElement('div'); amount.className = 'siege-amount';
+        amount.textContent = `${Math.floor(siege.percent)}% · ${siege.progress.toFixed(1)} / ${siege.required} pressure`;
+        const forces = document.createElement('div'); forces.className = 'siege-forces';
+        forces.textContent = `${siege.attacker_name ? `Attacker: ${siege.attacker_name}` : 'No attacking kingdom'} · ${siege.attackers} attackers · ${siege.defenders} defenders${siege.fortification ? ` + ${siege.fortification} fortification` : ''}`;
+        const rule = document.createElement('p'); rule.className = 'siege-rule'; rule.textContent = siege.rule;
+        panel.append(heading, progress, amount, forces, rule); card.append(panel);
+    }
     line('Shared food', `${Math.floor(kingdom.food)} in kingdom stores`);
     const explanation = document.createElement('p'); explanation.className = 'army-explanation';
     explanation.textContent = summary.order_reason;
@@ -567,7 +591,7 @@ function update_army_card() {
     const equipment = [line('Strength (sum)', String(strength)),
         line('Weapons', weapons.map(([level, count]) => `${count} ${TECH_AGES[level].weapon}`).join(' · ')),
         line('Armor', armor.map(([level, count]) => `${count} ${level ? TECH_AGES[level].name : 'no'} armor`).join(' · '))];
-    if (target) equipment.push(line('Target siege', `${target.siege || 0} / ${target.kingdom_id ? 8 : 14} pressure`));
+    if (summary.siege) equipment.unshift(home_row);
     const note = document.createElement('p'); note.className = 'army-explanation';
     note.textContent = 'The saved autonomous order guides movement; member tasks above show current activity. Strength sums living members’ strength; it is not a battle prediction. Food is shared by the kingdom; armies carry no separate supply stock. Siege pressure belongs to the target town and can involve several garrisons. Land routes use a bounded search and are checked as the army moves.';
     equipment.push(note);
@@ -583,6 +607,7 @@ function update_entity_card() {
     if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
     const attributes = creature_stats(unit, world.year_length);
     const card = $('entity-card');
+    card.classList.remove('has-siege');
     card.setAttribute('aria-label', 'Selected creature details');
     const detail_focus = card.contains(document.activeElement) ? document.activeElement.closest('[data-detail]')?.dataset.detail : null;
     const expanded = new Set([...card.querySelectorAll('details[open]')].map(d => d.dataset.detail));

@@ -134,8 +134,11 @@ test('peace, ownership, death, dispersed membership and kingdom changes invalida
     assert.equal(plan().reason, 'target_changed');
     const other = World.deserialize(original);
     assert.equal(other.conquer_site(other.villages[1], home.id), true);
-    other.plan_armies(new Map([[home.id, new Set([enemy.id])]]));
     assert.equal(other.army_orders[0].reason, 'target_changed');
+    assert.equal(other.army_orders[0].target_id, null);
+    assert.ok(other.relations.every(relation => relation.a !== enemy.id && relation.b !== enemy.id));
+    other.plan_armies(new Map());
+    assert.equal(other.army_orders[0].reason, 'peace');
     members.forEach(person => { person.recovering = true; });
     assert.equal(plan(), undefined); assert.equal(army_summary(world, selection), null);
     members.forEach(person => { person.recovering = false; person.village_id = enemy.id; person.home_id = enemy.id; });

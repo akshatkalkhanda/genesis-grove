@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T } from '../src/simulation.js';
 import { creature_stats } from '../src/creatures.js';
-import { army_members, army_summary, army_visible, army_badge_hit, army_target, rebuild_armies } from '../src/army_inspector.js';
+import { army_members, army_summary, army_visible, army_badge_hit, army_target,
+    rebuild_armies, siege_markers, siege_badge_layout } from '../src/army_inspector.js';
 
 function fixture() {
     const world = new World({ preset: 'empty', inhabited: false, seed: 'army-inspection' });
@@ -92,4 +93,64 @@ test('saved orders rebuild garrisons without persisting inspector selection', ()
     assert.equal(summary.members.length, 8);
     assert.ok(summary.target);
     assert.deepEqual(restored.serialize().people.map(person => person.id), save.people.map(person => person.id));
+});
+
+test('target siege summary is primary target data and does not attribute rival pressure to this army', () => {
+    const { world, home, enemy, selection } = fixture();
+    const rival = world.found_village(160, 90);
+    world.set_relation(rival.id, enemy.id, 'war');
+    for (let index = 0; index < 4; index++) {
+        world.add_person(enemy.x + index * 0.3, enemy.y, rival.id);
+        world.people.at(-1).role = 'soldier';
+    }
+    enemy.siege = 12; enemy.siege_attacker_id = rival.id;
+    const before = world.serialize();
+    const summary = army_summary(world, selection);
+    assert.equal(summary.siege.kind, 'capital');
+    assert.equal(summary.siege.attacker_id, rival.id);
+    assert.equal(summary.siege.attacker_name, rival.name);
+    assert.notEqual(summary.siege.attacker_id, home.id);
+    assert.equal(summary.siege.attackers, 4);
+    assert.ok(summary.siege.required > 14, 'Display the mechanics threshold, not the former hard-coded value');
+    assert.deepEqual(world.serialize(), before);
+});
+
+test('siege marker eligibility validates pressure, current attacks and selected targets without mutations', () => {
+    const { world, home, enemy, selection } = fixture();
+    const selected = { home_id: home.id, kingdom_id: home.id };
+    const quiet = world.found_village(70, 90);
+    assert.deepEqual(siege_markers(world, null), []);
+    let markers = siege_markers(world, selected);
+    assert.equal(markers.length, 1);
+    assert.equal(markers[0].site.id, enemy.id);
+    assert.equal(markers[0].siege.percent, 0);
+    assert.ok(!markers.some(marker => marker.site.id === quiet.id));
+    enemy.siege = 12; enemy.siege_attacker_id = home.id;
+    for (const person of world.people) { person.x = enemy.x - 2; person.y = enemy.y; }
+    const before = world.serialize();
+    markers = siege_markers(world, null);
+    assert.equal(markers.length, 1);
+    assert.ok(markers[0].siege.percent > 0);
+    assert.deepEqual(world.serialize(), before);
+    world.set_relation(home.id, enemy.id, 'peace');
+    const paused = world.serialize();
+    assert.equal(army_summary(world, selection).siege, null);
+    assert.deepEqual(siege_markers(world, selected), []);
+    assert.deepEqual(world.serialize(), paused, 'Ended pressure is hidden while saved paused state stays exact');
+});
+
+test('siege badge dimensions remain fixed at every zoom and avoid occupied labels/window edges', () => {
+    const marker = { site: { x: 50, y: 50 } };
+    for (const scale of [0.4, 1, 4, 24]) {
+        const camera = { origin: { x: 400 - 300 * scale, y: 300 - 300 * scale },
+            scale, width: 1024, height: 650 };
+        const box = siege_badge_layout(marker, camera);
+        assert.equal(box.width, 100); assert.equal(box.height, 28);
+        assert.ok(box.x >= 8 && box.x + box.width <= camera.width - 8);
+        assert.ok(box.y >= 70 && box.y + box.height <= camera.height - 70);
+        const shifted = siege_badge_layout(marker, camera, [box]);
+        assert.notDeepEqual(shifted, box);
+        assert.equal(siege_badge_layout(marker, camera,
+            [{ x: 0, y: 0, width: 1024, height: 650 }]), null);
+    }
 });

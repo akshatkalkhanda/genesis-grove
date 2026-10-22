@@ -185,7 +185,7 @@ test('town claims leave wilderness unclaimed and armies march together toward re
     const loaded = World.deserialize(JSON.parse(JSON.stringify(world.serialize())));
     loaded.step(0.125);
     assert.equal(loaded.armies.find(a => a.kingdom_id === first.id).target_id, second.id);
-    for (let i = 0; i < 300 && second.alive; i++) world.step(0.125);
+    for (let i = 0; i < 480 && second.alive; i++) world.step(0.125);
     assert.equal(second.alive, false, 'the marching group can reach and capture its target');
     assert.equal(world.territory_at(65, 40), first.id, 'captured towns change visible claims');
     world.step(0.125);
@@ -444,12 +444,12 @@ test('sieges capture towns and capitals, preserving the conquered population', (
     w.people.at(-1).home_id = colony.id;
     assert.equal(w.set_relation(attacker.id, defender.id, 'war'), true);
     for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = 58; person.y = 45; person.role = 'soldier'; }
-    for (let i = 1; i <= 8; i++) { w.tick = i * 8; w.resolve_sieges(); }
+    for (let i = 1; i <= 12; i++) { w.tick = i * 8; w.resolve_sieges(); }
     assert.equal(colony.kingdom_id, attacker.id);
     assert.ok(w.people.some(p => p.home_id === colony.id && p.village_id === attacker.id));
     for (const person of w.people.filter(p => p.village_id === attacker.id)) { person.x = defender.x; person.y = defender.y; }
     for (const person of w.people.filter(p => p.village_id === defender.id)) { person.x = 40; person.y = 45; }
-    for (let i = 9; i <= 23; i++) { w.tick = i * 8; w.resolve_sieges(); }
+    for (let i = 13; i <= 36; i++) { w.tick = i * 8; w.resolve_sieges(); }
     assert.equal(defender.alive, false);
     assert.ok(w.people.every(p => p.village_id === attacker.id));
     assert.ok(w.colonies.some(c => c.name === defender.name && c.kingdom_id === attacker.id));

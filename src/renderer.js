@@ -1,7 +1,7 @@
 import { draw_compact, home_populations, settlement_labels, map_detail } from './map_readability.js';
 import { Camera } from './camera.js';
 import { draw_map_layer } from './map_layers.js';
-import { army_visible, army_badge_hit, army_target } from './army_inspector.js';
+import { army_visible, army_badge_hit, army_target, siege_markers, siege_badge_layout } from './army_inspector.js';
 import { draw_weather } from './weather_art.js';
 import { WIDTH, HEIGHT, T, TECH_AGES, technology_level } from './simulation.js';
 import { creature_stats } from './creatures.js';
@@ -185,7 +185,7 @@ export class Renderer extends Camera {
         const c = this.ctx, o = this.origin, s = this.scale;
         const detail = map_detail(s);
         const counts = { level: detail.level, houses: 0, facilities: 0, people: 0,
-            markers: 0, activities: 0, names: 0, settlements: 0 };
+            markers: 0, activities: 0, names: 0, settlements: 0, sieges: 0 };
         this.visibility = counts;
         const visible = unit => {
             const x = o.x + unit.x * CELL * s, y = o.y + unit.y * CELL * s;
@@ -405,6 +405,21 @@ export class Renderer extends Camera {
             c.fillStyle = '#eff4df'; c.font = 'bold 9px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
             c.fillText(String(army.count), x + 9, y - 15);
             label_boxes.push({ x: x - 14, y: y - 29, width: 31, height: 22 });
+        }
+        for (const marker of siege_markers(world, this.selected_army)) {
+            if (counts.sieges >= 6) break;
+            const box = siege_badge_layout(marker, { origin: o, scale: s,
+                width: this.width, height: this.height }, label_boxes);
+            if (!box) continue;
+            const { x, y, width, height } = box;
+            c.fillStyle = '#172820f2'; c.beginPath(); c.roundRect(x, y, width, height, 4); c.fill();
+            c.strokeStyle = marker.selected ? '#f2e4a3' : '#a59463'; c.lineWidth = marker.selected ? 2 : 1;
+            c.stroke();
+            c.fillStyle = '#eee4bd'; c.font = '600 10px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'left';
+            c.fillText(`${marker.siege.kind === 'capital' ? 'Capital' : 'Town'} · ${Math.floor(marker.siege.percent)}%`, x + 6, y + 12);
+            c.fillStyle = '#40503a'; c.fillRect(x + 6, y + 18, width - 12, 4);
+            c.fillStyle = '#d8bf7a'; c.fillRect(x + 6, y + 18, (width - 12) * marker.siege.percent / 100, 4);
+            label_boxes.push(box); counts.sieges++;
         }
         if (this.borders) for (const label of settlement_labels(world, {
             zoom: this.zoom, selected: this.selected_kingdom_id, origin: o, scale: s,

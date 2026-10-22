@@ -1,6 +1,7 @@
 import { creature_stats } from './creatures.js';
 
 import { refresh_armies, ARMY_REASONS } from './army_orders.js';
+import { siege_summary } from './sieges.js';
 
 // Rebuild markers from saved orders only, including while paused.
 export function rebuild_armies(world) {
@@ -38,6 +39,45 @@ export function army_target(world, army) {
                     || (relation.b === army.kingdom_id && relation.a === (site.kingdom_id || site.id)))));
 }
 
+// Only actual pressure, attacking forces, or the selected target get a map marker.
+// Summaries validate saved pressure against current diplomacy without changing it.
+export function siege_markers(world, selected) {
+    const targets = new Set();
+    let selected_target = null;
+    for (const army of world.armies) {
+        const target = army_target(world, army);
+        if (!target) continue;
+        const is_selected = army.home_id === selected?.home_id
+            && army.kingdom_id === selected?.kingdom_id;
+        if (is_selected) selected_target = target.id;
+        if (is_selected || army.state === 'attack') targets.add(target.id);
+    }
+    return [...world.villages.filter(site => site.alive), ...world.colonies]
+        .filter(site => site.siege > 0 || targets.has(site.id))
+        .map(site => ({ site, siege: siege_summary(world, site), selected: site.id === selected_target }))
+        .filter(marker => marker.selected || marker.siege.progress > 0
+            || marker.siege.attackers >= 2)
+        .sort((a, b) => Number(b.selected) - Number(a.selected)
+            || b.siege.percent - a.siege.percent || a.site.id - b.site.id);
+}
+
+// Fixed screen dimensions and collision checks keep zoomed-out siege labels restrained.
+export function siege_badge_layout(marker, camera, reserved = []) {
+    const x = camera.origin.x + marker.site.x * 6 * camera.scale;
+    const y = camera.origin.y + marker.site.y * 6 * camera.scale;
+    const width = 100, height = 28;
+    for (const [dx, dy] of [[16, -14], [-116, -14], [-50, 20], [-50, -60]]) {
+        const box = { x: x + dx, y: y + dy, width, height };
+        if (box.x < 8 || box.x + width > camera.width - 8
+            || box.y < 70 || box.y + height > camera.height - 70) continue;
+        if (reserved.some(other => box.x < other.x + other.width + 4
+            && box.x + width + 4 > other.x && box.y < other.y + other.height + 4
+            && box.y + height + 4 > other.y)) continue;
+        return box;
+    }
+    return null;
+}
+
 export function army_summary(world, selection) {
     const army = world.armies.find(group => group.home_id === selection.id
         && group.kingdom_id === selection.kingdom_id);
@@ -54,6 +94,7 @@ export function army_summary(world, selection) {
         + creature_stats(person, world.year_length).strength, 0);
     const pending = army.target_id && !target;
     return { army, kingdom, home, target, members, strength,
+        siege: target ? siege_summary(world, target) : null,
         order_label: `${army.state[0].toUpperCase()}${army.state.slice(1)}${pending ? ' · awaiting review' : ''}`,
         order_reason: pending ? 'The former target is no longer an enemy town. The saved order will be reviewed when time runs.'
             : ARMY_REASONS[army.reason],

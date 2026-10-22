@@ -23,6 +23,9 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
+Version 0.26.0 makes town sieges and capital surrender visible, with saved attacker
+progress, compact inspector details and coherent ownership/asset transfers.
+See [town sieges and surrender](docs/town-sieges.md).
 Version 0.25.1 corrects event sound selection and adds repeatable long-run checks.
 See the [stability report](docs/stability-pass-0.25.1.md).
 Version 0.25.0 adds smooth anchored zoom, two-finger camera gestures and

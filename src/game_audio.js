@@ -40,7 +40,7 @@ export function tool_sound(tool) {
 export function event_sound(event) {
     const text = event.text.toLowerCase();
     if (/\bcrowned\b|\bbecomes ruler\b/.test(text)) return 'coronation';
-    if (/\bpeace\b|\balliance\b/.test(text)) return 'peace';
+    if (/\bpeace\b|\balliance\b|\bsurrender(?:s|ed)?\b/.test(text)) return 'peace';
     if (/\bwar\b|\bconquers?\b|\bcaptures?\b|\bsiege\b/.test(text)) return 'war';
     if (/\blightning\b|\bthunder(?:storm)?\b/.test(text)) return 'lightning';
     if (/\btsunami\b/.test(text)) return 'tsunami';

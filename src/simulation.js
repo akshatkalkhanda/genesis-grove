@@ -2,7 +2,8 @@ import { advance_fire, ignite_fire, FIRE_FUELS, MAX_FIRE_SPREAD } from './wildfi
 import { WEATHER, spawn_weather, advance_weather, valid_weather } from './weather.js';
 import { initialize_creature, creature_stats, develop_creature, TRAITS } from './creatures.js';
 import { find_path } from './pathfinding.js';
-import { plan_armies, army_identity, army_reachable, prune_army_orders, valid_army_orders } from './army_orders.js';
+import { advance_sieges, valid_siege_state } from './sieges.js';
+import { plan_armies, army_identity, army_reachable, prune_army_orders, refresh_armies, valid_army_orders } from './army_orders.js';
 import { kingdom_plan, diplomatic_choice } from './strategy.js';
 import { BUILDINGS, advance_buildings } from './settlements.js';
 import { DAY_LENGTHS } from './daylight.js';
@@ -64,6 +65,12 @@ const NAMES = ['Amberwick', 'Willowmere', 'Rosehaven', 'Tidewatch', 'Mossvale', 
 const MAX_VILLAGES = 120;
 const MAX_PEOPLE = 1200;
 const MAX_COLONIES = 240;
+// Normal construction retains its caps. Surrenders reserve one town per historical
+// kingdom and conserve facilities/stores under a whole-world aggregate ceiling.
+const MAX_SAVED_COLONIES = MAX_COLONIES + MAX_VILLAGES;
+const MAX_SAVED_BUILDINGS = MAX_BUILDINGS * MAX_VILLAGES;
+const MAX_SAVED_ORE_STOCK = 1e6 * MAX_VILLAGES;
+const MAX_SAVED_BASIC_STOCK = 1e9 * MAX_VILLAGES;
 const MAX_VOYAGES = 40;
 const MAX_TRADES = 60;
 export const JOBS = Object.freeze(['farmer', 'lumberjack', 'miner', 'smith', 'builder']);
@@ -342,7 +349,14 @@ export class World {
         return true;
     }
     found_village(x, y, race = 'human') {
-        if (this.villages.length >= MAX_VILLAGES) return this.villages.reduce((a, b) => Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b);
+        if (this.villages.length >= MAX_VILLAGES) {
+            const annexed = new Set(this.colonies.map(town => town.former_capital_id));
+            const living = this.villages.filter(kingdom => kingdom.alive);
+            const candidates = living.length ? living : this.villages.filter(kingdom => !annexed.has(kingdom.id));
+            return candidates.reduce((nearest, kingdom) => !nearest
+                || Math.hypot(kingdom.x - x, kingdom.y - y) < Math.hypot(nearest.x - x, nearest.y - y)
+                ? kingdom : nearest, null);
+        }
         const n = this.villages.length;
         const profile = RACES[race] || RACES.human;
         const name = n < NAMES.length ? NAMES[n] : `${NAMES[n % NAMES.length]} ${Math.floor(n / NAMES.length) + 1}`;
@@ -522,65 +536,129 @@ export class World {
     conquer_site(site, attacker_id) {
         const attacker = this.villages.find(v => v.id === attacker_id && v.alive);
         const defender = this.villages.find(v => v.id === (site.kingdom_id || site.id) && v.alive);
-        if (!attacker || !defender || attacker.id === defender.id) return false;
+        if (!attacker || !defender || attacker.id === defender.id
+            || this.relation_status(attacker.id, defender.id) !== 'war'
+            || ![...this.villages, ...this.colonies].includes(site)) return false;
+        const captured_buildings = (defender.buildings || []).filter(building => !site.kingdom_id
+            || Math.hypot(building.x - site.x, building.y - site.y) <= 8);
+        if ((attacker.buildings?.length ?? 0) + captured_buildings.length > MAX_SAVED_BUILDINGS) return false;
+        if (!site.kingdom_id) {
+            if (this.colonies.length >= MAX_SAVED_COLONIES) return false;
+            // Preflight every aggregate before changing ownership; imports enforce
+            // these same global ceilings so legitimate captures never discard overflow.
+            if (this.trades.some(trade => !Number.isFinite(trade.amount) || trade.amount < 0)) return false;
+            const internal_cargo = good => this.trades.filter(trade => trade.good === good
+                && [attacker.id, defender.id].includes(trade.from_id)
+                && [attacker.id, defender.id].includes(trade.to_id))
+                .reduce((sum, trade) => sum + trade.amount, 0);
+            for (const key of ['food', 'wood', 'weapons', 'armor_stock']) {
+                const limit = ['food', 'wood'].includes(key) ? MAX_SAVED_BASIC_STOCK : MAX_SAVED_ORE_STOCK;
+                if (![attacker[key] ?? 0, defender[key] ?? 0].every(value => Number.isFinite(value) && value >= 0)
+                    || (attacker[key] ?? 0) + (defender[key] ?? 0) + internal_cargo(key) > limit) return false;
+            }
+            for (const key of ['copper', 'tin', 'iron', 'coal', 'stardust']) {
+                if (![attacker.ore?.[key] ?? 0, defender.ore?.[key] ?? 0]
+                    .every(value => Number.isFinite(value) && value >= 0)
+                    || (attacker.ore?.[key] ?? 0) + (defender.ore?.[key] ?? 0) + internal_cargo(key) > MAX_SAVED_ORE_STOCK) return false;
+            }
+        }
+        const moved_buildings = new Set(captured_buildings);
+        attacker.buildings = [...(attacker.buildings || []), ...captured_buildings];
+        defender.buildings = (defender.buildings || []).filter(building => !moved_buildings.has(building));
+        site.siege = 0; site.siege_attacker_id = null;
         if (site.kingdom_id) {
             site.kingdom_id = attacker.id;
-            site.siege = 0;
-            for (const person of this.people) if (person.village_id === defender.id) {
-                if (person.voyage_id && person.home_id === site.id) person.home_id = defender.id;
-                else if (!person.voyage_id && (person.home_id === site.id || Math.hypot(person.x - site.x, person.y - site.y) < 7)) {
-                    person.village_id = attacker.id; person.home_id = site.id;
+            const crews = new Set(this.machines.map(machine => machine.crew_id));
+            for (const person of this.people.filter(person => person.village_id === defender.id
+                && person.home_id === site.id)) {
+                // Absent personnel keep a coherent voyage/vehicle assignment under
+                // their former kingdom; local residents retain this same home town.
+                if (person.voyage_id || crews.has(person.id)) rehome_person(this, person, defender.id, defender.id);
+                else rehome_person(this, person, attacker.id, site.id);
+                if (person.prisoner_of && this.relation_status(person.village_id, person.prisoner_of) !== 'war') {
+                    person.prisoner_of = null; person.sentence = 0; person.task = 'Released';
                 }
             }
             this.log(`${attacker.name} captures ${site.name} from ${defender.name}.`, 'disaster', site);
         } else {
-            if (this.colonies.length >= MAX_COLONIES) return false;
-            const captured = { id: this.next_id++, kingdom_id: attacker.id, x: site.x, y: site.y, name: site.name, houses: structuredClone(site.houses), age: site.age, birth_timer: 0, expansion_timer: 0, siege: 0 };
+            const captured = { id: this.next_id++, former_capital_id: defender.id,
+                kingdom_id: attacker.id, x: site.x, y: site.y, name: site.name,
+                houses: site.houses, age: site.age, birth_timer: site.birth_timer,
+                expansion_timer: site.expansion_timer, siege: 0, siege_attacker_id: null };
             this.colonies.push(captured);
-            for (const colony of this.colonies) if (colony.kingdom_id === defender.id) colony.kingdom_id = attacker.id;
-            for (const voyage of this.voyages) if (voyage.kingdom_id === defender.id) voyage.kingdom_id = attacker.id;
-            for (const person of this.people) if (person.village_id === defender.id) {
-                person.village_id = attacker.id;
-                if (person.home_id === defender.id) person.home_id = captured.id;
+            const towns = new Set([captured.id]);
+            for (const colony of this.colonies) if (colony.kingdom_id === defender.id) {
+                colony.kingdom_id = attacker.id; colony.siege = 0; colony.siege_attacker_id = null;
+                towns.add(colony.id);
             }
-            defender.alive = false; defender.houses = []; defender.siege = 0;
-            this.log(`${attacker.name} conquers ${defender.name} and its towns.`, 'disaster', defender);
+            for (const person of this.people) {
+                if (person.village_id === defender.id) rehome_person(this, person, attacker.id,
+                    towns.has(person.home_id) ? person.home_id : captured.id);
+                if (person.prisoner_of === defender.id) person.prisoner_of = attacker.id;
+                if (person.prisoner_of === person.village_id) {
+                    person.prisoner_of = null; person.sentence = 0; person.task = 'Released';
+                }
+            }
+            for (const collection of [this.voyages, this.machines, this.vehicles]) {
+                for (const item of collection) {
+                    if (item.kingdom_id === defender.id) item.kingdom_id = attacker.id;
+                    if (item.recipient_id === defender.id) item.recipient_id = attacker.id;
+                }
+            }
+            for (const trade of this.trades) {
+                if (trade.from_id === defender.id) trade.from_id = attacker.id;
+                if (trade.to_id === defender.id) trade.to_id = attacker.id;
+            }
+            // A shipment that becomes internal is delivered exactly once, conserving its cargo.
+            for (const trade of this.trades.filter(trade => trade.from_id === trade.to_id)) {
+                const recipient = this.villages.find(kingdom => kingdom.id === trade.to_id);
+                if (recipient) this.change_resource(recipient, trade.good, trade.amount);
+            }
+            this.trades = this.trades.filter(trade => trade.from_id !== trade.to_id);
+            for (const key of ['food', 'wood', 'weapons', 'armor_stock']) {
+                attacker[key] = (attacker[key] ?? 0) + (defender[key] ?? 0); defender[key] = 0;
+            }
+            for (const key of ['copper', 'tin', 'iron', 'coal', 'stardust']) {
+                attacker.ore[key] = (attacker.ore[key] ?? 0) + (defender.ore[key] ?? 0); defender.ore[key] = 0;
+            }
+            for (const key of ['barracks', 'mine_level', 'forge_level']) {
+                attacker[key] = Math.max(attacker[key] ?? 0, defender[key] ?? 0); defender[key] = 0;
+            }
+            for (const key of ['birth_timer', 'expansion_timer', 'build_timer', 'road_timer',
+                'road_cursor', 'vehicle_timer', 'machine_timer', 'mine_timer', 'forge_timer', 'training_timer']) defender[key] = 0;
+            defender.alive = false; defender.houses = []; defender.king_id = null; defender.king_since_year = null;
+            this.relations = this.relations.filter(relation => relation.a !== defender.id && relation.b !== defender.id);
+            for (const person of this.people) if (person.prisoner_of
+                && this.relation_status(person.village_id, person.prisoner_of) !== 'war') {
+                person.prisoner_of = null; person.sentence = 0; person.task = 'Released';
+            }
+            for (const town of [...this.villages, ...this.colonies]) if (town.siege_attacker_id === defender.id) {
+                town.siege = 0; town.siege_attacker_id = null;
+            }
+            this.log(`${defender.name} surrenders to ${attacker.name}; its wars end and its people, towns and stores join the victor.`, 'disaster', defender);
         }
         prune_army_orders(this);
+        for (const order of this.army_orders) {
+            if (!order.target_id) continue;
+            const target = [...this.villages.filter(kingdom => kingdom.alive), ...this.colonies]
+                .find(town => town.id === order.target_id);
+            if (!target || this.relation_status(order.kingdom_id, target.kingdom_id || target.id) !== 'war') {
+                Object.assign(order, { state: 'defend', reason: 'target_changed', target_id: null, issued_tick: this.tick });
+            }
+        }
+        refresh_armies(this);
+        this.revision++;
         return true;
     }
-    resolve_sieges() {
-        if (this.tick % 8 !== 0) return;
-        const enemies = new Map();
-        for (const relation of this.relations) if (relation.status === 'war') {
-            if (!enemies.has(relation.a)) enemies.set(relation.a, new Set());
-            if (!enemies.has(relation.b)) enemies.set(relation.b, new Set());
-            enemies.get(relation.a).add(relation.b);
-            enemies.get(relation.b).add(relation.a);
-        }
-        if (!enemies.size) return;
-        for (const site of [...this.villages.filter(v => v.alive), ...this.colonies]) {
-            const owner = site.kingdom_id || site.id, rivals = enemies.get(owner);
-            if (!rivals) continue;
-            let defenders = 0;
-            const attackers = new Map();
-            for (const person of this.people) {
-                if (person.voyage_id || person.prisoner_of || person.role !== 'soldier' || person.health <= 0 || (person.x - site.x) ** 2 + (person.y - site.y) ** 2 > 36) continue;
-                if (person.village_id === owner) defenders++;
-                else if (rivals.has(person.village_id)) attackers.set(person.village_id, (attackers.get(person.village_id) || 0) + 1);
-            }
-            const kingdom = this.villages.find(v => v.id === owner);
-            if (kingdom?.buildings?.some(b => b.type === 'castle' && Math.hypot(b.x - site.x, b.y - site.y) < 18)) defenders += 3;
-            const [leader, count] = [...attackers].sort((a, b) => b[1] - a[1])[0] || [];
-            site.siege = count >= 2 && count > defenders ? (site.siege || 0) + count - defenders : Math.max(0, (site.siege || 0) - 1);
-            if (site.siege >= (site.kingdom_id ? 8 : 14)) this.conquer_site(site, leader);
-        }
+    resolve_sieges(dt = 1) {
+        advance_sieges(this, dt);
     }
     add_person(x, y, village_id = null, race = 'human', newborn = false) {
         if (!this.walkable(x, y) || this.people.length >= this.max_people) return false;
         if (!village_id) {
             let nearest = this.villages.filter(v => v.alive && v.race === race).find(v => Math.hypot(v.x - x, v.y - y) < 22);
             nearest ||= this.found_village(x, y, race);
+            if (!nearest) return false;
             nearest.alive = true;
             village_id = nearest.id;
         }
@@ -918,7 +996,7 @@ export class World {
         this.advance_history();
         this.advance_voyages(dt);
         this.advance_trades(dt);
-        this.resolve_sieges();
+        this.resolve_sieges(dt);
         const war_targets = new Map();
         for (const relation of this.relations) {
             if (relation.status !== 'war') continue;
@@ -1322,7 +1400,7 @@ export class World {
             || !data.fire_spread.every(n => integer(n, -1, MAX_FIRE_SPREAD)))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
-        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 200) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
+        if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 200) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_SAVED_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
         if (data.scenario !== undefined && !['sandbox', 'hundred'].includes(data.scenario)) invalid();
         if (data.year_length !== undefined && ![2, 20].includes(data.year_length)) invalid();
         if (data.lighting !== undefined && (!data.lighting || !num(data.lighting.phase, 0, 1)
@@ -1333,8 +1411,9 @@ export class World {
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
             if (!point(v) || typeof v.name !== 'string' || v.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(v.color) || typeof v.alive !== 'boolean' || !array(v.houses, 220) || !v.houses.every(point) || (v.race !== undefined && !RACES[v.race])) invalid();
-            if (!['food', 'wood', 'age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
-            if (v.buildings !== undefined && (!array(v.buildings, MAX_BUILDINGS) || v.buildings.some(b =>
+            if (!['food', 'wood'].every(k => num(v[k], 0, MAX_SAVED_BASIC_STOCK))
+                || !['age', 'birth_timer', 'expansion_timer'].every(k => num(v[k]))) invalid();
+            if (v.buildings !== undefined && (!array(v.buildings, MAX_SAVED_BUILDINGS) || v.buildings.some(b =>
                 !point(b) || !BUILDINGS[b.type] || !num(b.growth, 0, 1)
                 || !integer(b.harvests, 0, 1e6) || (b.stock !== undefined && !num(b.stock, 0, 120))))) invalid();
             if (v.buildings?.some(b => (b.treatments !== undefined && !integer(b.treatments, 0, 1e6))
@@ -1346,17 +1425,28 @@ export class World {
                 && !integer(v.king_since_year, 1, Math.floor(data.time / (data.year_length || 20)) + 1)) invalid();
             if (v.machine_timer !== undefined && !num(v.machine_timer, 0, 20)) invalid();
             if ((v.road_timer !== undefined && !num(v.road_timer, 0, 8))
-                || (v.road_cursor !== undefined && !integer(v.road_cursor, 0, 1000))
+                || (v.road_cursor !== undefined && !integer(v.road_cursor, 0, 220 + MAX_SAVED_BUILDINGS + MAX_SAVED_COLONIES))
                 || (v.vehicle_timer !== undefined && !num(v.vehicle_timer, 0, 24))) invalid();
             if (v.plan !== undefined && (!v.plan || !['recover', 'build', 'defend', 'expand', 'develop'].includes(v.plan.mode)
                 || typeof v.plan.reason !== 'string' || v.plan.reason.length > 100)) invalid();
             if ((v.deaths !== undefined && !integer(v.deaths, 0, 1e9)) || (v.founded_year !== undefined && !integer(v.founded_year, 1, 1e9)) || (v.siege !== undefined && !num(v.siege, 0, 1000)) || (v.tech_points !== undefined && !num(v.tech_points, 0, 1e6)) || (v.research_level !== undefined && !integer(v.research_level, 0, TECH_AGES.length - 1))) invalid();
-            if (v.ore !== undefined && (!v.ore || !['copper','tin','iron','coal'].every(k => num(v.ore[k], 0, 1e6)))) invalid();
-            if (v.ore?.stardust !== undefined && !num(v.ore.stardust, 0, 1e6)) invalid();
-            if (v.weapons !== undefined && !integer(v.weapons, 0, 1e6)) invalid();
+            if (v.ore !== undefined && (!v.ore || !['copper','tin','iron','coal'].every(k => num(v.ore[k], 0, MAX_SAVED_ORE_STOCK)))) invalid();
+            if (v.ore?.stardust !== undefined && !num(v.ore.stardust, 0, MAX_SAVED_ORE_STOCK)) invalid();
+            if (v.weapons !== undefined && !integer(v.weapons, 0, MAX_SAVED_ORE_STOCK)) invalid();
+            if (v.armor_stock !== undefined && !integer(v.armor_stock, 0, MAX_SAVED_ORE_STOCK)) invalid();
             if (v.training_timer !== undefined && !num(v.training_timer, 0, 1e6)) invalid();
             if (['barracks','mine_level','forge_level'].some(k => v[k] !== undefined && !integer(v[k], 0, 1))) invalid();
             id(v.id);
+        }
+        // Capture may concentrate assets in one kingdom, but never raises the
+        // world's bounded inventory/facility budget accepted by this schema.
+        if (data.villages.reduce((sum, kingdom) => sum + (kingdom.buildings?.length || 0), 0) > MAX_SAVED_BUILDINGS) invalid();
+        for (const key of ['food', 'wood', 'weapons', 'armor_stock']) {
+            const limit = ['food', 'wood'].includes(key) ? MAX_SAVED_BASIC_STOCK : MAX_SAVED_ORE_STOCK;
+            if (data.villages.reduce((sum, kingdom) => sum + (kingdom[key] || 0), 0) > limit) invalid();
+        }
+        for (const key of ['copper', 'tin', 'iron', 'coal', 'stardust']) {
+            if (data.villages.reduce((sum, kingdom) => sum + (kingdom.ore?.[key] || 0), 0) > MAX_SAVED_ORE_STOCK) invalid();
         }
         const villages = new Set(data.villages.map(v => v.id));
         for (const machine of data.machines || []) {
@@ -1379,11 +1469,18 @@ export class World {
                 || !integer(vehicle.deliveries, 0, 1e6)) invalid();
             id(vehicle.id);
         }
-        const colonies = new Map();
+        const colonies = new Map(), former_capitals = new Set();
         for (const c of data.colonies || []) {
             if (!point(c) || !villages.has(c.kingdom_id) || typeof c.name !== 'string' || c.name.length > 40 || !array(c.houses, 220) || !c.houses.every(point) || !['age', 'birth_timer', 'expansion_timer', 'siege'].every(k => num(c[k]))) invalid();
+            if (c.former_capital_id !== undefined) {
+                if (!data.villages.some(kingdom => kingdom.id === c.former_capital_id && !kingdom.alive)
+                    || former_capitals.has(c.former_capital_id)) invalid();
+                former_capitals.add(c.former_capital_id);
+            }
             id(c.id); colonies.set(c.id, c.kingdom_id);
         }
+        if ((data.colonies || []).length - former_capitals.size > MAX_COLONIES) invalid();
+        for (const site of [...data.villages, ...(data.colonies || [])]) if (!valid_siege_state(site, villages)) invalid();
         const voyages = new Map();
         for (const v of data.voyages || []) {
             if (!point(v) || !point({ x: v.target_x, y: v.target_y }) || !villages.has(v.kingdom_id) || !num(v.progress, 0, 1) || !num(v.duration, 0.001, 500) || !['ship', 'caravan'].includes(v.kind) || !array(v.crew_ids, 3) || v.crew_ids.length !== 3 || new Set(v.crew_ids).size !== 3) invalid();
@@ -1392,6 +1489,14 @@ export class World {
         for (const trade of data.trades || []) {
             if (!villages.has(trade.from_id) || !villages.has(trade.to_id) || trade.from_id === trade.to_id || !['food','wood','copper','tin','iron','coal','stardust'].includes(trade.good) || !integer(trade.amount, 1, 100) || !num(trade.progress, 0, 1) || !num(trade.duration, 0.001, 500) || !['ship','caravan'].includes(trade.kind)) invalid();
             id(trade.id);
+        }
+        for (const good of ['food', 'wood', 'copper', 'tin', 'iron', 'coal', 'stardust']) {
+            const limit = ['food', 'wood'].includes(good) ? MAX_SAVED_BASIC_STOCK : MAX_SAVED_ORE_STOCK;
+            const stores = data.villages.reduce((sum, kingdom) => sum
+                + (['food', 'wood'].includes(good) ? kingdom[good] : kingdom.ore?.[good] ?? 0), 0);
+            const cargo = (data.trades || []).filter(trade => trade.good === good)
+                .reduce((sum, trade) => sum + trade.amount, 0);
+            if (stores + cargo > limit) invalid();
         }
         for (const u of [...data.people, ...data.animals]) {
             if (!valid_health_history(u, data.time)) invalid();

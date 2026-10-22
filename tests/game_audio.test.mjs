@@ -104,7 +104,8 @@ test('event cues distinguish actual actions from fragments inside kingdom names'
         ['A star falls. The earth will remember.', 'meteor'],
         ['A terrible flash reshapes the land.', 'explosion'],
         ['Dwarf Hollow enters the Iron Age. Their forges can now craft swords.', 'research'],
-        ['Dwarf Hollow captures Willowmere.', 'war']
+        ['Dwarf Hollow captures Willowmere.', 'war'],
+        ['Willowmere surrenders. Its wars end.', 'peace']
     ]) assert.equal(event_sound({ text, kind: 'disaster' }), sound, text);
 });
 
