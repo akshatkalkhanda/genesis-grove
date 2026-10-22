@@ -281,3 +281,5 @@ button.history-event:hover{background:#304832;border-color:#a0be7d}.event-disast
 
 .damage-history{padding:9px;margin:8px 0;border:1px solid #4e6947;border-radius:7px;color:#bfd2af;font-size:10px}
 .damage-history summary{cursor:pointer}.damage-history p{font-size:10px;line-height:1.5;margin:8px 0}.medical-summary{color:#b2dfbf;line-height:1.6}
+
+#audio-dialog{width:460px}#audio-dialog label{font-size:13px}#audio-dialog input[type=range]{display:block;width:100%;margin-top:10px}#audio-dialog output{float:right;color:#c9de9f}#audio-dialog .dialog-buttons{flex-wrap:wrap}.menu-audio{margin-top:14px;font-size:12px}

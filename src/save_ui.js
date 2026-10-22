@@ -1,7 +1,7 @@
 import { World } from './simulation.js';
 import { SaveLibrary, indexed_backend, AutosaveClock, LEGACY_SAVE_KEY } from './save_store.js';
 
-export function create_save_ui({ get_world, is_started, replace, after_load, pause, is_paused, notify }) {
+export function create_save_ui({ get_world, is_started, replace, after_load, pause, is_paused, notify, feedback = () => {} }) {
     const $ = id => document.getElementById(id);
     const library = new SaveLibrary(indexed_backend());
     const clock = new AutosaveClock();
@@ -13,6 +13,7 @@ export function create_save_ui({ get_world, is_started, replace, after_load, pau
     const status = (text, error = false) => {
         $('save-status').textContent = text; $('save-status').classList.toggle('save-error', error);
         $('save').title = text;
+        if (error) feedback('alert', text);
     };
     const marker = () => world_id + JSON.stringify(get_world().serialize());
     const ready = (async () => {
@@ -55,6 +56,7 @@ export function create_save_ui({ get_world, is_started, replace, after_load, pau
             last_marker = record ? marker() : null;
             clock.reset(performance.now()); pause(was_paused);
             status(record ? `Restored · ${record.name}` : 'New world · not saved yet');
+            feedback(record ? 'load' : 'build', record ? `Restored ${record.name}` : 'New world ready');
             return true;
         } catch (error) {
             status('Recovery failed · current world kept', true);

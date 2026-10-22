@@ -1,4 +1,11 @@
 // Artwork stays anchored to the saved world; only its footprint changes.
+export function map_detail(scale) {
+    const tile_pixels = 6 * scale;
+    return { level: tile_pixels < 8 ? 'world' : tile_pixels < 26 ? 'town' : 'citizen',
+        buildings: tile_pixels >= 8, people: tile_pixels >= 8,
+        activities: tile_pixels >= 42, names: tile_pixels >= 42 };
+}
+
 export function draw_compact(c, x, y, factor, paint) {
     c.save(); c.translate(x, y); c.scale(factor, factor); c.translate(-x, -y);
     paint(); c.restore();

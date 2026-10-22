@@ -21,6 +21,8 @@ consistency after investigating a real population collapse. [Evidence and remain
 balance work](survival-and-disasters.md). Version 0.23.0 repairs distant-family birth blocking and reduces dense-city map
 clutter. [Investigation and limits](generations-and-map-readability.md).
 Version 0.24.0 exposes kings and heirs, records new reigns and prioritizes eligible adult direct children during succession. [Rules and UI](kings-and-succession.md).
+Version 0.25.0 adds smooth anchored zoom, touch gesture protection and progressive
+map detail, plus action sounds and local spoken feedback. [Audio coverage](audio-feedback.md). [Camera controls and visibility levels](zoom-and-visibility.md).
 Ship inspection remains future work.
 The four kingdoms are only the video example; no dedicated setup is planned.
 Next: local town conquest and explicit capital-surrender rules, followed by

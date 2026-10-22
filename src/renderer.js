@@ -1,4 +1,5 @@
-import { draw_compact, home_populations, settlement_labels } from './map_readability.js';
+import { draw_compact, home_populations, settlement_labels, map_detail } from './map_readability.js';
+import { Camera } from './camera.js';
 import { draw_map_layer } from './map_layers.js';
 import { army_visible, army_badge_hit, army_target } from './army_inspector.js';
 import { draw_weather } from './weather_art.js';
@@ -15,8 +16,9 @@ import { draw_civic_building } from './civic_art.js';
 export const PALETTE = ['#174655', '#28717a', '#c0b981', '#83a85d', '#547b46', '#8d9068', '#8d9b8d', '#bf6336', '#696a56', '#429b67', '#c5aa59', '#bedee2', '#b75e55', '#8965a7', '#63b5bd', '#aa85c7', '#d9a75b'];
 const CELL = 6;
 function tile_hash(x, y) { return ((Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263)) >>> 0) / 4294967295; }
-export class Renderer {
+export class Renderer extends Camera {
     constructor(canvas, minimap) {
+        super(WIDTH, HEIGHT, CELL);
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d', { alpha: false });
         this.minimap = minimap;
@@ -36,40 +38,16 @@ export class Renderer {
         new ResizeObserver(() => this.resize()).observe(canvas);
     }
     resize() {
-        this.width = this.canvas.clientWidth;
-        this.height = this.canvas.clientHeight;
+        this.set_viewport(this.canvas.clientWidth, this.canvas.clientHeight);
         this.dpr = Math.min(window.devicePixelRatio || 1, 2);
         this.canvas.width = Math.round(this.width * this.dpr);
         this.canvas.height = Math.round(this.height * this.dpr);
-        this.base = Math.min(this.width / (WIDTH * CELL), this.height / (HEIGHT * CELL)) * 0.93;
     }
-    get scale() { return this.base * this.zoom; }
-    get origin() { return { x: (this.width - WIDTH * CELL * this.scale) / 2 + this.pan_x, y: (this.height - HEIGHT * CELL * this.scale) / 2 + this.pan_y }; }
     army_at(world, point) {
         return [...world.armies].reverse().find(army =>
             world.villages.some(kingdom => kingdom.id === army.kingdom_id && kingdom.alive)
             && army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)
             && army_badge_hit(army, point, this.origin, this.scale));
-    }
-    world_point(x, y) {
-        const o = this.origin;
-        return { x: (x - o.x) / this.scale / CELL, y: (y - o.y) / this.scale / CELL };
-    }
-    zoom_at(multiplier, x = this.width / 2, y = this.height / 2) {
-        const before = this.world_point(x, y);
-        this.zoom = Math.max(0.65, Math.min(24, this.zoom * multiplier));
-        const after = this.world_point(x, y);
-        this.pan_x += (after.x - before.x) * CELL * this.scale;
-        this.pan_y += (after.y - before.y) * CELL * this.scale;
-    }
-    fit() { this.zoom = 1; this.pan_x = 0; this.pan_y = 0; }
-    focus(x, y, zoom = 2.4) {
-        this.zoom = zoom;
-        this.center_on(x, y);
-    }
-    center_on(x, y) {
-        this.pan_x = (WIDTH / 2 - x) * CELL * this.scale;
-        this.pan_y = (HEIGHT / 2 - y) * CELL * this.scale;
     }
     cache(world) {
         const c = this.tc;
@@ -205,6 +183,14 @@ export class Renderer {
     render(world, now) {
         if (this.last_revision !== world.revision && now - this.last_cache > 220) { this.cache(world); this.last_cache = now; }
         const c = this.ctx, o = this.origin, s = this.scale;
+        const detail = map_detail(s);
+        const counts = { level: detail.level, houses: 0, facilities: 0, people: 0,
+            markers: 0, activities: 0, names: 0, settlements: 0 };
+        this.visibility = counts;
+        const visible = unit => {
+            const x = o.x + unit.x * CELL * s, y = o.y + unit.y * CELL * s;
+            return x >= -80 && x <= this.width + 80 && y >= -80 && y <= this.height + 80;
+        };
         c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         c.fillStyle = '#143e4b'; c.fillRect(0, 0, this.width, this.height);
         c.save(); c.translate(o.x, o.y); c.scale(s, s); c.imageSmoothingEnabled = false;
@@ -231,21 +217,23 @@ export class Renderer {
         c.globalAlpha = 1;
         for (const v of world.villages) {
             if (!v.alive) continue;
-            for (let j = 0; j < Math.min(v.houses.length, 5); j++) {
+            for (let j = 0; detail.buildings && j < Math.min(v.houses.length, 5); j++) {
                 const h = v.houses[j], x = h.x * CELL + 8, y = h.y * CELL + 5;
                 if (world.walkable(h.x + 2, h.y + 1)) {
                     c.fillStyle = '#7d7844'; c.fillRect(x, y, 8, 7);
                     c.fillStyle = '#c2ad60'; for (let k = 1; k < 8; k += 2) c.fillRect(x + k, y + 1, 1, 5);
                 }
             }
-            for (const h of v.houses) draw_compact(c, h.x * CELL, h.y * CELL, 0.5,
+            for (const h of detail.buildings ? v.houses : []) { counts.houses++; draw_compact(c, h.x * CELL, h.y * CELL, 0.5,
                 () => this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v)));
+            }
             draw_compact(c, v.x * CELL, v.y * CELL, 0.5,
                 () => this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v), v));
             if (this.zoom >= 4) draw_compact(c, v.x * CELL, v.y * CELL, 0.45,
                 () => this.industry(c, v.x * CELL, v.y * CELL, v));
-            for (const building of v.buildings || []) draw_compact(c, building.x * CELL, building.y * CELL, 0.45,
+            for (const building of detail.buildings ? v.buildings || [] : []) { counts.facilities++; draw_compact(c, building.x * CELL, building.y * CELL, 0.45,
                 () => this.building(c, building, v.color, now, v));
+            }
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
@@ -257,8 +245,9 @@ export class Renderer {
                 continue;
             }
             c.globalAlpha = inhabited ? 1 : 0.25;
-            for (const house of colony.houses) draw_compact(c, house.x * CELL, house.y * CELL, 0.5,
+            for (const house of detail.buildings ? colony.houses : []) { counts.houses++; draw_compact(c, house.x * CELL, house.y * CELL, 0.5,
                 () => this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false, technology_level(kingdom)));
+            }
             if (inhabited) draw_compact(c, colony.x * CELL, colony.y * CELL, 0.5,
                 () => this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom), kingdom));
             c.globalAlpha = 1;
@@ -293,15 +282,27 @@ export class Renderer {
             draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
                 () => draw_machine(c, machine, kingdom, now, technology_level(kingdom)));
         }
-        for (const animal of world.animals) draw_compact(c, animal.x * CELL, animal.y * CELL, 0.55,
-            () => this.animal(c, animal, now));
+        for (const animal of world.animals.filter(visible)) {
+            if (detail.people || animal.id === this.selected_unit_id) draw_compact(c, animal.x * CELL, animal.y * CELL, 0.55,
+                () => this.animal(c, animal, now));
+            else { c.fillStyle = '#bdc5a988'; c.fillRect(animal.x * CELL, animal.y * CELL, 1.5 / s, 1.5 / s); }
+        }
         const aboard = new Set(world.machines.filter(m => m.crew_aboard).map(m => m.crew_id));
         for (const p of world.people) {
-            if (p.voyage_id || aboard.has(p.id)) continue;
-            draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
+            if (p.voyage_id || aboard.has(p.id) || !visible(p)) continue;
+            const selected = p.id === this.selected_unit_id;
+            if (detail.people || selected) { counts.people++; draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
                 () => this.person(c, p, kingdoms.get(p.village_id), now));
-            if (this.zoom >= 8 || p.id === this.selected_unit_id) draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
+            } else {
+                counts.markers++;
+                c.fillStyle = kingdoms.get(p.village_id)?.king_id === p.id ? '#f0ca65'
+                    : kingdoms.get(p.village_id)?.color || '#d6dfb7';
+                c.fillRect(p.x * CELL, p.y * CELL, 1.7 / s, 2 / s);
+            }
+            if ((detail.activities && counts.activities < 24) || selected) { counts.activities++;
+                draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
                 () => draw_daily_activity(c, p, now));
+            }
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
             draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
@@ -340,6 +341,17 @@ export class Renderer {
             }
         }
         draw_map_layer(c, world, this.layer, CELL);
+        if (this.touch_preview?.length && this.tool !== 'inspect') {
+            c.strokeStyle = '#f2e5a6cc'; c.lineWidth = 2 / s;
+            c.setLineDash([4 / s, 4 / s]); c.beginPath();
+            for (const [index, point] of this.touch_preview.entries()) {
+                if (index) c.lineTo(point.x * CELL, point.y * CELL);
+                else c.moveTo(point.x * CELL, point.y * CELL);
+            }
+            c.stroke(); c.setLineDash([]);
+            const last = this.touch_preview.at(-1);
+            c.beginPath(); c.arc(last.x * CELL, last.y * CELL, this.brush * CELL, 0, Math.PI * 2); c.stroke();
+        }
         if (this.pointer) {
             const p = this.world_point(this.pointer.x, this.pointer.y);
             if (world.inside(p.x, p.y)) {
@@ -351,7 +363,7 @@ export class Renderer {
         c.restore();
         const label_boxes = [];
         const labeled_units = [...world.people, ...world.animals]
-            .filter(unit => this.zoom >= 9 || unit.id === this.selected_unit_id)
+            .filter(unit => detail.names || unit.id === this.selected_unit_id)
             .sort((a, b) => Number(b.id === this.selected_unit_id) - Number(a.id === this.selected_unit_id));
         for (const unit of labeled_units) {
             if (label_boxes.length >= 6) break;
@@ -363,6 +375,7 @@ export class Renderer {
                 && box.x + box.width + 4 > other.x && box.y < other.y + other.height + 4
                 && box.y + box.height + 4 > other.y)) continue;
             label_boxes.push(box);
+            counts.names++;
             const stats = creature_stats(unit, world.year_length);
             c.font = '600 10px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
             c.fillStyle = '#15251fdd'; c.fillRect(x - 48, y - 14, 96, unit.task ? 34 : 23);
@@ -400,6 +413,7 @@ export class Renderer {
             c.font = `${capital ? '600 11px' : '500 10px'} -apple-system, Segoe UI, sans-serif`;
             return c.measureText(name).width;
         })) {
+            counts.settlements++;
             const { x, y, width, height, site, capital, owner } = label;
             c.fillStyle = '#152d24e8'; c.beginPath(); c.roundRect(x, y, width, height, 5); c.fill();
             if (capital) draw_flag(c, x + 6, y + 7, kingdoms.get(owner), 14, 9);

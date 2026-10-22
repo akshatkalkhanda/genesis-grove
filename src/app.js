@@ -4,6 +4,10 @@ import { create_save_ui } from './save_ui.js';
 import { WEATHER } from './weather.js';
 import { World, WIDTH, HEIGHT, T, TERRAIN_NAMES, TECH_AGES, RESEARCH_COSTS, RESEARCH_BUILDINGS, RACES, ANIMALS, technology_level } from './simulation.js';
 import { Renderer } from './renderer.js';
+import { MIN_ZOOM, MAX_ZOOM } from './camera.js';
+import { TouchCamera } from './touch_camera.js';
+import { GameAudio, tool_sound } from './game_audio.js';
+import { bind_audio_ui } from './audio_ui.js';
 import { creature_stats } from './creatures.js';
 import { BUILDINGS } from './settlements.js';
 import { advance_daylight } from './daylight.js';
@@ -122,16 +126,20 @@ let inspected_unit = null;
 let followed_unit_id = null;
 let inspect_start = null;
 let pointer_down = false, panning = false, last_pointer = null, paint_elapsed = 0, last_paint = null;
-let toast_timer, audio_context, audio_gain, sound_on = false;
+let toast_timer, zoom_voice_timer, tool_voice_timer;
+const audio = new GameAudio();
 const saves = create_save_ui({
     get_world: () => world, is_started: () => world_started, replace: replace_world,
     after_load: () => { if (!$('start-screen').hidden) show_start_ready(); },
-    pause: set_pause, is_paused: () => paused, notify: toast
+    pause: set_pause, is_paused: () => paused, notify: toast,
+    feedback: (kind, text) => audio.feedback(kind, text)
 });
 let world_started = false;
 function toast(message) {
     $('toast').textContent = message; $('toast').hidden = false;
     clearTimeout(toast_timer); toast_timer = setTimeout(() => { $('toast').hidden = true; }, 3300);
+    audio.feedback(/^Saved /.test(message) ? 'save' : /^Restored/.test(message) ? 'load' : 'ui', message,
+        { key: 'notice', interval: 500 });
 }
 // Keep the map clear until the player explicitly chooses a creator tool.
 $('sandbox-dock').append(document.querySelector('.tabs'));
@@ -176,7 +184,7 @@ function select_tool(id) {
     const instruction = id === 'inspect' ? 'Click a creature for details' : id === 'lightning' ? 'Click once to strike' : LIFE_TOOLS.has(id) ? 'Click land to place' : 'Drag on the map to apply';
     $('interaction-hint').replaceChildren();
     const hint_name = document.createElement('b'); hint_name.textContent = `${tool_name} selected`;
-    const hint_action = document.createElement('span'); hint_action.textContent = `${instruction} · right-drag to move · scroll to zoom`;
+    const hint_action = document.createElement('span'); hint_action.textContent = `${instruction} · right-drag to move · scroll or pinch to zoom`;
     $('interaction-hint').append(hint_name, hint_action);
     $('footer-status').replaceChildren();
     const footer_icon = document.createElement('span'); footer_icon.textContent = $('selected-icon').textContent;
@@ -233,28 +241,45 @@ $('toggle-controls').onclick = () => {
 };
 $('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = tool === 'lightning' ? 2 : brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
 function set_pause(value) {
+    if (world_started && paused !== value) audio.feedback(value ? 'pause' : 'resume', value ? 'Time paused' : 'Time running');
     paused = value; $('pause').textContent = paused ? '▶ Resume' : 'Ⅱ Pause'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
     update_world_guidance();
 }
 $('pause').onclick = () => set_pause(!paused);
 function set_speed(value) {
     speed = value;
+    audio.feedback('resume', `Time speed ${value} times`, { key: 'speed', interval: 150 });
     for (const button of document.querySelectorAll('[data-speed]')) button.classList.toggle('active', Number(button.dataset.speed) === speed);
 }
 for (const button of document.querySelectorAll('[data-speed]')) button.onclick = () => { set_speed(Number(button.dataset.speed)); set_pause(false); };
-const MIN_ZOOM = 0.65, MAX_ZOOM = 24;
 function zoom_slider_value(zoom) { return Math.round(Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM) * 100); }
 function update_zoom() {
     $('zoom-reset').textContent = `${Math.round(renderer.zoom * 100)}%`;
     $('zoom-slider').value = String(zoom_slider_value(renderer.zoom));
 }
 $('zoom-slider').oninput = () => {
+    end_pointer(); followed_unit_id = null;
     const zoom = MIN_ZOOM * (MAX_ZOOM / MIN_ZOOM) ** (Number($('zoom-slider').value) / 100);
-    renderer.zoom_at(zoom / renderer.zoom); update_zoom();
+    renderer.stop_motion(); renderer.zoom_at(zoom / renderer.zoom, undefined, undefined, true); update_zoom();
+    zoom_feedback();
 };
-$('zoom-in').onclick = () => { renderer.zoom_at(1.15); update_zoom(); };
-$('zoom-out').onclick = () => { renderer.zoom_at(1 / 1.15); update_zoom(); };
-$('zoom-reset').onclick = $('fit').onclick = () => { followed_unit_id = null; renderer.fit(); update_zoom(); };
+function zoom_feedback() {
+    audio.play('zoom', { interval: 110 });
+    clearTimeout(zoom_voice_timer);
+    zoom_voice_timer = setTimeout(() => audio.speak(`Zoom ${Math.round(renderer.zoom_goal * 100)} percent`,
+        { key: 'camera', interval: 800 }), 220);
+}
+function manual_zoom(multiplier, x, y) {
+    end_pointer(); followed_unit_id = null; renderer.pointer = null;
+    renderer.zoom_at(multiplier, x, y); update_zoom();
+    zoom_feedback();
+}
+$('zoom-in').onclick = () => manual_zoom(1.15);
+$('zoom-out').onclick = () => manual_zoom(1 / 1.15);
+$('zoom-reset').onclick = $('fit').onclick = () => {
+    end_pointer(); followed_unit_id = null; renderer.fit(); update_zoom();
+    clearTimeout(zoom_voice_timer); audio.feedback('zoom', 'Whole world view');
+};
 $('borders').onclick = () => { renderer.borders = !renderer.borders; $('borders').classList.toggle('active', renderer.borders); };
 $('inspect').onclick = () => $('observe').click();
 for (const option of document.querySelectorAll('[name="map-layer"]')) option.onchange = () => {
@@ -310,9 +335,11 @@ function local_point(event) {
     const rect = $('world').getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 function paint(p, continuous = false) {
+    paint_tile(renderer.world_point(p.x, p.y), continuous);
+}
+function paint_tile(tile, continuous = false) {
     if (tool === 'inspect') return;
     if (continuous && (['meteor', 'nuke', 'lightning', ...Object.keys(WEATHER)].includes(tool) || LIFE_TOOLS.has(tool))) return;
-    const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) return;
     if (LIFE_TOOLS.has(tool) && !world.walkable(tile.x, tile.y)) { toast('Place life on walkable land.'); return; }
     if (last_paint && !['meteor', 'nuke', 'lightning', 'rain', 'bless', ...Object.keys(WEATHER)].includes(tool) && !LIFE_TOOLS.has(tool)) {
@@ -327,12 +354,39 @@ function paint(p, continuous = false) {
         const placed = world.people.length + world.animals.length - before_life;
         toast(placed ? `${placed} ${RACES[tool] ? 'settlers' : 'creature'} placed. Choose Inspect to follow their story.` : 'No life placed. This world may have reached its population limit.');
     }
-    if (['meteor', 'lightning'].includes(tool)) power_sound(tool);
+    if (outcome?.ok !== false) {
+        const screen_x = renderer.origin.x + tile.x * 6 * renderer.scale;
+        audio.play(tool_sound(tool), { key: 'brush', interval: 140, pan: screen_x / renderer.width * 2 - 1 });
+        clearTimeout(tool_voice_timer);
+        const name = $('selected-name').textContent;
+        tool_voice_timer = setTimeout(() => audio.speak(`${name} applied`, { key: 'brush', interval: 1800 }), 180);
+    }
 }
 const canvas = $('world');
+const touch_camera = new TouchCamera(renderer, {
+    inspect: point => inspect_click(point),
+    paint: points => {
+        last_paint = null;
+        for (const [index, point] of points.entries()) paint_tile(point, index > 0);
+        last_paint = null;
+    }
+});
+const motion_preference = matchMedia('(prefers-reduced-motion: reduce)');
+renderer.reduced_motion = motion_preference.matches;
+motion_preference.addEventListener('change', event => {
+    renderer.reduced_motion = event.matches;
+    if (event.matches) renderer.finish_motion();
+});
 canvas.oncontextmenu = event => event.preventDefault();
 canvas.onpointerdown = event => {
+    if (event.pointerType === 'touch') {
+        pointer_down = false; panning = false; inspect_start = null; last_paint = null;
+        event.preventDefault(); followed_unit_id = null; renderer.pointer = null;
+        $('world-tooltip').hidden = true; canvas.setPointerCapture(event.pointerId);
+        touch_camera.down(event.pointerId, local_point(event), tool !== 'inspect'); return;
+    }
     if (![0, 1, 2].includes(event.button)) return;
+    renderer.stop_motion();
     const p = local_point(event); last_pointer = p; renderer.pointer = p;
     if (event.button === 0 && !event.altKey && tool === 'inspect') {
         inspect_start = p; canvas.setPointerCapture(event.pointerId); return;
@@ -344,14 +398,27 @@ canvas.onpointerdown = event => {
     if (panning) { followed_unit_id = null; canvas.style.cursor = 'grabbing'; }
 };
 canvas.onpointermove = event => {
+    if (event.pointerType === 'touch') {
+        event.preventDefault(); touch_camera.move(event.pointerId, local_point(event)); return;
+    }
     const p = local_point(event);
     if (inspect_start && Math.hypot(p.x - inspect_start.x, p.y - inspect_start.y) > 4) { panning = true; inspect_start = null; followed_unit_id = null; }
-    if (panning && last_pointer) { renderer.pan_x += p.x - last_pointer.x; renderer.pan_y += p.y - last_pointer.y; }
+    if (panning && last_pointer) renderer.pan_by(p.x - last_pointer.x, p.y - last_pointer.y);
     last_pointer = p; renderer.pointer = p;
     if (tool === 'inspect') inspect(p);
 };
 function end_pointer(event) {
+    if (event?.pointerType === 'touch') {
+        const gesture_finished = touch_camera.gesture && touch_camera.points.size === 1;
+        if (event.type === 'pointerup') touch_camera.up(event.pointerId, local_point(event));
+        else touch_camera.cancel();
+        if (gesture_finished && event.type === 'pointerup') zoom_feedback();
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+        return;
+    }
+    touch_camera.cancel();
     if (inspect_start && event?.type === 'pointerup' && !panning) inspect_click(local_point(event));
+    if (panning && event?.type === 'pointerup') audio.feedback('pan', 'Camera moved', { interval: 1200 });
     inspect_start = null;
     pointer_down = false; panning = false; last_paint = null; canvas.style.cursor = tool === 'inspect' ? 'grab' : 'crosshair';
     if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -359,11 +426,15 @@ function end_pointer(event) {
 canvas.onpointerup = canvas.onpointercancel = end_pointer;
 canvas.onpointerleave = () => { if (!pointer_down && !panning) renderer.pointer = null; $('world-tooltip').hidden = true; };
 window.addEventListener('blur', () => end_pointer());
+window.addEventListener('resize', () => end_pointer());
+canvas.addEventListener('lostpointercapture', event => {
+    if (touch_camera.points.has(event.pointerId)) touch_camera.cancel();
+});
 canvas.onwheel = event => {
     event.preventDefault(); const p = local_point(event);
     const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? canvas.clientHeight : 1;
     const delta = Math.max(-120, Math.min(120, event.deltaY * unit));
-    renderer.zoom_at(Math.exp(-delta * 0.001), p.x, p.y); update_zoom();
+    manual_zoom(Math.exp(-delta * 0.001), p.x, p.y);
 };
 $('minimap').onclick = event => {
     followed_unit_id = null;
@@ -419,6 +490,8 @@ function inspect_click(p) {
     inspected_unit = army ? { kind: 'army', id: army.home_id, kingdom_id: army.kingdom_id }
         : found ? { kind: found.kind, id: found.unit.id } : null;
     renderer.selected_unit_id = found?.unit.id || null;
+    audio.feedback('inspect', army ? `Army, ${army.count} soldiers`
+        : found ? `${found.unit.name || found.unit.species}, selected` : 'Inspecting land');
     followed_unit_id = null;
     const card = $('entity-card'); card.hidden = !inspected_unit;
     if (!inspected_unit) {
@@ -965,6 +1038,7 @@ function update_ui() {
     if (!stats.villages) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Place people on land to begin a civilization.'; $('civilizations').append(p); }
     update_selected_kingdom();
     const signature = JSON.stringify(world.events);
+    audio.observe_events(world.events);
     if ($('chronicle').dataset.signature !== signature) {
         $('chronicle').dataset.signature = signature; $('chronicle').replaceChildren();
         $('chronicle').append(...world.events.slice(0, 6).map(event_row));
@@ -975,6 +1049,7 @@ function replace_world(next) {
     $('creation-guide').dataset.completed = 'false';
     $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;
+    audio.reset_events(world.events);
     rebuild_armies(world);
     renderer.last_revision = -1; renderer.territory_last = -Infinity; renderer.fit(); renderer.pointer = null;
     end_pointer(); select_tool('inspect'); update_zoom(); update_ui(); set_pause(false); $('world-tooltip').hidden = true;
@@ -1077,37 +1152,17 @@ window.addEventListener('keydown', event => {
         else if ($('map-layers').open) $('map-layers').open = false;
         else $('observe').click();
     }
-    if (event.key === '+' || event.key === '=') renderer.zoom_at(1.2);
-    if (event.key === '-') renderer.zoom_at(1 / 1.2);
+    if (event.key === '+' || event.key === '=') manual_zoom(1.2);
+    if (event.key === '-') manual_zoom(1 / 1.2);
     if (['[', ']'].includes(event.key)) { $('brush').value = Math.max(1, Math.min(12, brush + (event.key === ']' ? 1 : -1))); $('brush').oninput(); }
     const movement = { a: [45, 0], d: [-45, 0], w: [0, 45], s: [0, -45] }[event.key.toLowerCase()];
-    if (movement) { followed_unit_id = null; renderer.pan_x += movement[0]; renderer.pan_y += movement[1]; }
+    if (movement) {
+        followed_unit_id = null; renderer.pan_by(...movement);
+        audio.feedback('pan', 'Camera moved', { key: 'camera-pan', interval: 1200 });
+    }
     update_zoom();
 });
-async function toggle_sound() {
-    try {
-        if (!audio_context) {
-            audio_context = new AudioContext(); audio_gain = audio_context.createGain(); audio_gain.gain.value = 0; audio_gain.connect(audio_context.destination);
-            for (const [i, frequency] of [130.81, 196, 261.63, 329.63].entries()) {
-                const oscillator = audio_context.createOscillator(), gain = audio_context.createGain();
-                oscillator.type = 'sine'; oscillator.frequency.value = frequency;
-                gain.gain.value = 0.06 / (i + 1); oscillator.connect(gain); gain.connect(audio_gain); oscillator.start();
-                const lfo = audio_context.createOscillator(), depth = audio_context.createGain(); lfo.frequency.value = 0.08 + i * 0.023; depth.gain.value = 0.018 / (i + 1); lfo.connect(depth); depth.connect(gain.gain); lfo.start();
-            }
-        }
-        await audio_context.resume(); sound_on = !sound_on;
-        audio_gain.gain.setTargetAtTime(sound_on ? 0.3 : 0, audio_context.currentTime, 0.6);
-        $('sound').textContent = sound_on ? '♫ Sound on' : '♫ Sound off';
-    } catch { toast('Sound is unavailable in this browser.'); }
-}
-function power_sound(type) {
-    if (!sound_on || !audio_context) return;
-    const oscillator = audio_context.createOscillator(), gain = audio_context.createGain(), time = audio_context.currentTime;
-    oscillator.type = 'triangle'; oscillator.frequency.setValueAtTime(type === 'meteor' ? 100 : 260, time); oscillator.frequency.exponentialRampToValueAtTime(25, time + 0.35);
-    gain.gain.setValueAtTime(0.15, time); gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
-    oscillator.connect(gain); gain.connect(audio_gain); oscillator.start(); oscillator.stop(time + 0.5);
-}
-$('sound').onclick = toggle_sound;
+bind_audio_ui(audio);
 $('lighting').onclick = () => {
     $('day-length').value = String(world.lighting.cycle_seconds);
     $('lighting-dialog').showModal();
@@ -1144,6 +1199,8 @@ function frame(now) {
             : world.people.find(p => p.id === followed_unit_id) || world.animals.find(a => a.id === followed_unit_id);
         if (unit) renderer.center_on(unit.x, unit.y); else followed_unit_id = null;
     }
+    if (renderer.update_camera(dt)) update_zoom();
+    renderer.touch_preview = touch_camera.editing ? touch_camera.stroke : [];
     renderer.selected_army = inspected_unit?.kind === 'army'
         ? { home_id: inspected_unit.id, kingdom_id: inspected_unit.kingdom_id } : null;
     renderer.render(world, now);
@@ -1153,4 +1210,8 @@ function frame(now) {
 }
 show_tools(); select_tool('inspect'); update_ui(); show_start_home(); requestAnimationFrame(frame);
 // A narrow, read-only diagnostic hook for the desktop smoke test.
-window.genesis = Object.freeze({ snapshot: () => world.serialize(), stats: () => world.stats(), camera: () => ({ width: renderer.width, height: renderer.height, base: renderer.base, zoom: renderer.zoom, origin: renderer.origin }) });
+window.genesis = Object.freeze({ snapshot: () => world.serialize(), stats: () => world.stats(),
+    camera: () => ({ width: renderer.width, height: renderer.height, base: renderer.base,
+        zoom: renderer.zoom, origin: renderer.origin }), visibility: () => ({ ...renderer.visibility }),
+    audio: () => ({ ...audio.metrics, enabled: audio.settings.enabled, speaking: audio.speaking,
+        pending: Boolean(audio.pending), local_voices: audio.voices().length, speech_error: audio.speech_error }) });

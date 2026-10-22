@@ -37,7 +37,14 @@ scale measurement. Version 0.23.0 already bounds map labels and reduces sprite
 clutter. The current pointer handler tracks one pointer and applies zoom directly;
 it has no coordinated two-touch pinch recognizer or animated target scale.
 
-## Next camera implementation
+## Implemented first camera slice
+
+Version 0.25.0 implements coordinated pinch/pan, anchored eased wheel/button zoom,
+protected touch strokes and progressive map detail. See [controls and verification](../zoom-and-visibility.md).
+The reference timing and exact limits remain unmeasured. The list below records
+the implementation goals that informed this slice.
+
+## Camera implementation goals
 
 1. Add a coherent two-pointer camera gesture: pinch about the finger midpoint and
    pan with its movement. Cancel pending paint or inspection when it becomes a
@@ -62,6 +69,5 @@ it has no coordinated two-touch pinch recognizer or animated target scale.
 - Fit restores a usable world view at 1024×768 and 1366×768, with or without an inspector.
 - Controls and name cards stay legible without overlap at world, town and citizen scales.
 
-This document authorizes no new desktop behavior by itself. The requested study
-is the basis for the next camera change; kings and succession shipped separately
-in 0.24.0.
+The owner subsequently requested implementation of the camera slice. Kings and
+succession shipped separately in 0.24.0; the camera slice ships in 0.25.0.
