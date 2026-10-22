@@ -1,6 +1,6 @@
 {
   "name": "genesis-grove",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "An original living-world god sandbox for macOS and Windows",
   "author": "Genesis Grove",
   "license": "MIT",
@@ -17,6 +17,7 @@
     "dist:win": "electron-builder --win nsis portable --publish never",
     "smoke": "electron scripts/smoke.cjs",
     "smoke:army": "electron scripts/smoke-army.cjs",
+    "smoke:readability": "electron scripts/smoke-readability.cjs",
     "icon": "electron scripts/icon.cjs",
     "dist:win:zip": "electron-builder --win zip --x64 --config.win.signAndEditExecutable=false --publish never"
   },

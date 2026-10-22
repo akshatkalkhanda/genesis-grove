@@ -40,10 +40,20 @@ export function society_modifiers(kingdom, ruler) {
     };
 }
 
-function related(a, b) {
-    if (a.family_id === b.family_id) return true;
-    const parents = new Set((a.parents || []).map(p => p.id));
-    return parents.has(b.id) || (b.parents || []).some(p => p.id === a.id || parents.has(p.id));
+function known_ancestors(person, people) {
+    const ancestors = new Set();
+    for (const parent of person.parents || []) {
+        ancestors.add(parent.id);
+        for (const grandparent of people.get(parent.id)?.parents || []) ancestors.add(grandparent.id);
+    }
+    return ancestors;
+}
+
+function related(a, b, people) {
+    // A founding clan or inherited surname is not a permanent mating ban.
+    // Use the known parent/grandparent links rather than family identity.
+    const first = known_ancestors(a, people), second = known_ancestors(b, people);
+    return first.has(b.id) || second.has(a.id) || [...first].some(id => second.has(id));
 }
 
 function available(person, year_length) {
@@ -135,7 +145,7 @@ export function advance_society(world) {
                     - Math.hypot(p.x - b.x, p.y - b.y) || a.id - b.id).slice(0, 3);
             for (const neighbour of neighbours) socialize(p, neighbour, 5);
             if (p.partner_id) continue;
-            const candidate = neighbours.find(q => !q.partner_id && !related(p, q)
+            const candidate = neighbours.find(q => !q.partner_id && !related(p, q, people_by_id)
                 && p.relationships.some(r => r.id === q.id && r.affinity >= 10));
             if (!candidate) continue;
             p.partner_id = candidate.id;
@@ -154,7 +164,7 @@ export function select_parents(world, kingdom_id, home_id) {
     for (const p of candidates) {
         const q = by_id.get(p.partner_id);
         if (q && q.partner_id === p.id && q.village_id === kingdom_id && q.home_id === home_id
-            && available(q, world.year_length) && !related(p, q)
+            && available(q, world.year_length) && !related(p, q, by_id)
             && world.year - (q.last_child_year ?? -100) >= 2) return [p, q];
     }
     return null;

@@ -84,6 +84,39 @@ test('lost partners become available again while identity and memories survive',
     assert.equal(a.family_id, a.id);
 });
 
+test('distant descendants can form families within the same founding clan', () => {
+    const world = fixture(), [a, b] = world.people;
+    world.people = [a, b];
+    a.family_id = b.family_id = 99;
+    a.parents = [{ id: 90, name: 'Earlier generation A' }];
+    b.parents = [{ id: 91, name: 'Earlier generation B' }];
+    advance_society(world); world.year++; advance_society(world);
+    assert.deepEqual(select_parents(world, 1, 1).map(p => p.id), [a.id, b.id]);
+    assert.equal(a.family_id, 99); assert.equal(b.family_id, 99);
+});
+
+test('parent, grandparent, sibling and known first-cousin links still block births', () => {
+    for (const relation of ['parent', 'grandparent', 'sibling', 'cousin']) {
+        const world = fixture(), [a, b] = world.people;
+        a.partner_id = b.id; b.partner_id = a.id;
+        const parent = { id: 90, parents: [{ id: b.id, name: b.name }], health: 0 };
+        if (relation === 'parent') a.parents = [{ id: b.id, name: b.name }];
+        if (relation === 'grandparent') {
+            a.parents = [{ id: parent.id, name: 'Parent' }]; world.people.push(parent);
+        }
+        if (relation === 'sibling') {
+            a.parents = b.parents = [{ id: 90, name: 'Shared parent' }];
+        }
+        if (relation === 'cousin') {
+            parent.parents = [{ id: 99, name: 'Shared grandparent' }];
+            a.parents = [{ id: 90, name: 'Parent A' }];
+            b.parents = [{ id: 91, name: 'Parent B' }];
+            world.people.push(parent, { id: 91, parents: parent.parents, health: 0 });
+        }
+        assert.equal(select_parents(world, 1, 1), null, relation);
+    }
+});
+
 test('culture and ruler personality change research, production and war policy', () => {
     const kingdom = { id: 1, culture: { name: 'Readers', value: 'knowledge' } };
     assert.ok(society_modifiers(kingdom, { trait: 'curious' }).research > 1.3);

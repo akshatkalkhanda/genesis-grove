@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1370" viewBox="0 0 1600 1370" role="img">
 <title>Genesis Grove planning diagram</title>
-<desc>Ordered sandbox roadmap through 0.22.0: local disasters and repaired rebel homes; challenge survival balance precedes local conquest.</desc>
+<desc>Ordered sandbox roadmap through 0.23.0: continuing generations and readable dense cities; challenge economy balance precedes local conquest.</desc>
 <rect width="1600" height="1370" fill="#0d1720"/>
 <text x="54" y="52" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="700" fill="#a4c5b0">GENESIS GROVE / VIDEO-LED PLAN</text>
 <text x="54" y="117" font-family="Helvetica,Arial,sans-serif" font-size="45" font-weight="700" fill="#e8eee8">Build a world worth watching</text>
@@ -93,6 +93,6 @@
 <text x="918" y="1210" font-family="Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#d0dce2">Spatial queries, caches and both-platform QA.</text>
 <text x="278" y="1251" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#e2ce95">Gate: old saves load; larger-map input and frame budgets pass on named hardware.</text>
 <polyline points="54,1294 1540,1294" fill="none" stroke="#36515e" stroke-width="2"/>
-<text x="54" y="1328" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">0.22.0 bounds disasters and repairs rebel homes. Next: challenge survival balance, then local conquest. Audio excluded.</text>
+<text x="54" y="1328" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#a9bbc5">0.23.0 fixes clan births and clears crowded cities. Next: challenge economy balance, then local conquest. Audio excluded.</text>
 <text x="54" y="1354" font-family="Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#839ba9">M = medium, L = large effort; these are scope bands, not delivery dates. Later depth: traits, culture, religion, alliances.</text>
 </svg>

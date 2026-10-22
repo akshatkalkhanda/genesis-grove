@@ -384,47 +384,33 @@ function inspect(p) {
     const tile = renderer.world_point(p.x, p.y);
     if (!world.inside(tile.x, tile.y)) { $('world-tooltip').hidden = true; return; }
     const box = $('world-tooltip'); box.replaceChildren();
-    const heading = document.createElement('strong'); heading.textContent = TERRAIN_NAMES[world.tile(tile.x, tile.y)]; box.append(heading);
+    const heading = document.createElement('strong');
+    heading.textContent = TERRAIN_NAMES[world.tile(tile.x, tile.y)]; box.append(heading);
     const add = text => { const line = document.createElement('div'); line.textContent = text; box.append(line); };
-    add(`Position ${Math.floor(tile.x)}, ${Math.floor(tile.y)}`);
-    const people = world.people.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
-    const animals = world.animals.filter(u => Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
+    const people = world.people.filter(u => u.health > 0 && !u.voyage_id && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
+    const animals = world.animals.filter(u => u.health > 0 && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
-    const deposit = world.ores[world.index(tile.x, tile.y)];
-    if (deposit) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
-    const road = world.roads[world.index(tile.x, tile.y)];
-    if (road) add(`${['', 'Dirt road', 'Stone road', 'Paved road'][road]} · movement +${road * 15}%`);
+    const machine = world.machines.find(m => Math.hypot(m.x - tile.x, m.y - tile.y) < 2);
     const vehicle = world.vehicles.find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 2);
-    if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard · ${vehicle.deliveries} deliveries`);
-    const machine = world.machines.find(m => Math.hypot(m.x - tile.x, m.y - tile.y) < 3);
     if (machine) {
-        add(`${MACHINES[machine.kind].label} · ${Math.ceil(machine.health)} health · ${machine.cargo} food aboard`);
+        add(`${MACHINES[machine.kind].label} · ${Math.ceil(machine.health)} health`);
         const crew = world.people.find(p => p.id === machine.crew_id && p.health > 0);
-        add(crew ? `Crew: ${crew.name} · ${machine.crew_aboard ? 'Aboard · click to inspect' : 'Boarding vehicle'}` : 'Awaiting crew · not operating');
+        add(crew ? `Crew: ${crew.name} · ${machine.crew_aboard ? 'click to inspect' : 'boarding'}` : 'Awaiting crew');
+    } else if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard`);
+    else {
+        const owner = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
+        const building = owner?.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
+        if (building) add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crops ${Math.floor(building.growth * 100)}%` : ''}`);
+        if (owner) add(`${owner.name} territory`);
+        const deposit = world.ores[world.index(tile.x, tile.y)];
+        if (deposit && !building) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
     }
-    const site = [...world.colonies, ...world.villages.filter(v => v.alive)].find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 9);
-    const claimed_by = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
-    add(claimed_by ? `${claimed_by.name} territory` : 'Unclaimed land');
-    if (site) {
-        const kingdom = site.kingdom_id ? world.villages.find(v => v.id === site.kingdom_id) : site;
-        add(site.name); add(`${kingdom?.name || 'Lost kingdom'} · ${site.houses.length} homes`);
-        if (kingdom) {
-            add(`${Math.floor(kingdom.food)} food · ${Math.floor(kingdom.wood)} wood`);
-            const soldiers = world.people.filter(p => p.village_id === kingdom.id && p.role === 'soldier').length;
-            add(`${soldiers} soldiers${kingdom.barracks ? ' · barracks' : ''}`);
-        }
-    }
-    if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain to extinguish');
-    for (const kingdom of world.villages.filter(v => v.alive)) {
-        const building = kingdom.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
-        if (building && MEDICAL_BUILDINGS.has(building.type)) add(`${BUILDINGS[building.type].label} · ${(building.stock || 0).toFixed(1)} medicine · ${building.treatments || 0} completed treatments`);
-        else if (building) {
-            add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crop ${Math.floor(building.growth * 100)}% · ${building.harvests} harvests` : building.type === 'granary' ? ` · ${(building.stock || 0).toFixed(1)} grain stored` : ` · ${Math.ceil(building.integrity ?? 100)} integrity`}`);
-            if (CIVIC_DESCRIPTIONS[building.type]) add(CIVIC_DESCRIPTIONS[building.type]);
-        }
-    }
-    add('Click a person or animal to inspect it');
-    box.hidden = false; box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - 205))}px`; box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - 150))}px`;
+    if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain');
+    add('Click life to inspect · Kingdoms for town details');
+    box.hidden = false;
+    const bounds = box.getBoundingClientRect();
+    box.style.left = `${Math.max(5, Math.min(p.x + 18, renderer.width - bounds.width - 8))}px`;
+    box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - bounds.height - 96))}px`;
 }
 function inspect_click(p) {
     const tile = renderer.world_point(p.x, p.y);

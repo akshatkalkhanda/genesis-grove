@@ -1,4 +1,4 @@
-# Version 0.22.0 validation — 22 October 2026
+# Version 0.23.0 validation — 22 October 2026\n\nSee [generation survival and dense-map checks](generations-and-map-readability.md)\nand the [release verification](release-0.23.0.md).\n\n# Version 0.22.0 validation — 22 October 2026
 
 See the [survival and disaster investigation](survival-and-disasters.md) for measured
 regressions, save compatibility and remaining challenge balance work, and the

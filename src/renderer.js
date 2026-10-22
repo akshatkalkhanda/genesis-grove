@@ -1,3 +1,4 @@
+import { draw_compact, home_populations, settlement_labels } from './map_readability.js';
 import { draw_map_layer } from './map_layers.js';
 import { army_visible, army_badge_hit, army_target } from './army_inspector.js';
 import { draw_weather } from './weather_art.js';
@@ -73,57 +74,67 @@ export class Renderer {
     cache(world) {
         const c = this.tc;
         const mini_image = this.mini.createImageData(WIDTH, HEIGHT);
+        const clearings = new Uint8Array(WIDTH * HEIGHT);
+        for (const site of [...world.villages.filter(v => v.alive), ...world.colonies]) {
+            for (const place of [site, ...site.houses, ...(site.buildings || [])]) {
+                for (let dy = -3; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+                    if (world.inside(place.x + dx, place.y + dy)) clearings[world.index(place.x + dx, place.y + dy)] = 1;
+                }
+            }
+        }
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const t = world.tiles[y * WIDTH + x], h = tile_hash(x, y), px = x * CELL, py = y * CELL;
             c.fillStyle = PALETTE[t]; c.fillRect(px, py, CELL, CELL);
             c.fillStyle = h > 0.5 ? '#ffffff07' : '#00000008'; c.fillRect(px, py, CELL, CELL);
-            if (t === T.GRASS) {
-                if (h > 0.72) { c.fillStyle = '#a9c078'; c.fillRect(px + 1, py + 2, 1, 1); c.fillRect(px + 3, py + 4, 1, 1); }
-                if (h < 0.08) { c.fillStyle = '#c9cb93'; c.fillRect(px + 2, py + 3, 1, 1); }
-            } else if (t === T.FOREST) {
-                c.fillStyle = '#73864d'; c.fillRect(px + 1, py + 3, 1, 1);
-                c.fillStyle = '#354c37'; c.fillRect(px + 4, py + 1, 1, 2);
-            } else if (t === T.MOUNTAIN) {
-                c.fillStyle = '#657773'; c.fillRect(px, py + 4, 6, 2);
-                c.fillStyle = '#aab8a5'; c.fillRect(px + 2, py + 1, 3, 4);
-                c.fillStyle = '#d1d7c0'; c.fillRect(px + 2, py, 2, 2);
-                c.fillStyle = '#78908a'; c.fillRect(px + 4, py + 3, 2, 3);
-            } else if (t === T.HILL) {
-                c.fillStyle = '#a1a077'; c.fillRect(px + 1, py + 1, 3, 2);
-                c.fillStyle = '#747e5f'; c.fillRect(px + 3, py + 3, 3, 2);
-            } else if (t === T.SAND && h > 0.7) {
-                c.fillStyle = '#e4d5a0'; c.fillRect(px + 1, py + 2, 2, 1);
-            } else if (t === T.SHALLOW) {
-                c.fillStyle = '#5d999033'; c.fillRect(px + 1, py + 2, 3, 1);
-                if (world.tile(x + 1, y) >= T.SAND || world.tile(x, y + 1) >= T.SAND) { c.fillStyle = '#8bb8a5aa'; c.fillRect(px + 1, py + 4, 5, 1); }
-            } else if (t === T.OCEAN && h > 0.92) {
-                c.fillStyle = '#43808a45'; c.fillRect(px, py + 2, 3, 1);
-            } else if (t === T.LAVA) {
-                c.fillStyle = '#ee9c4a'; c.fillRect(px + 1, py + 2, 3, 2);
-                c.fillStyle = '#f4c66c'; c.fillRect(px + 2, py + 2, 1, 1);
-            } else if (t === T.JUNGLE) {
-                c.fillStyle = '#246b4b'; c.fillRect(px + 1, py + 1, 4, 4);
-                c.fillStyle = '#75ce82'; c.fillRect(px + 2, py, 2, 2); c.fillRect(px, py + 2, 2, 2);
-            } else if (t === T.SAVANNA) {
-                c.fillStyle = '#eed17b'; c.fillRect(px + 1, py + 1, 2, 1); c.fillRect(px + 4, py + 3, 1, 2);
-                if (h > 0.7) { c.fillStyle = '#6e834d'; c.fillRect(px + 2, py, 1, 4); }
-            } else if (t === T.SNOW) {
-                c.fillStyle = '#ecf8ee'; c.fillRect(px + 1, py + 1, 3, 2); c.fillRect(px + 4, py + 4, 2, 1);
-                c.fillStyle = '#8dbcc4'; c.fillRect(px, py + 4, 2, 1);
-            } else if (t === T.MAPLE) {
-                c.fillStyle = h > 0.5 ? '#e6915f' : '#e46a75'; c.fillRect(px + 1, py + 3, 2, 1);
-            } else if (t === T.MUSHROOM) {
-                c.fillStyle = '#d1a8d1'; c.fillRect(px + 2, py + 2, 1, 3);
-                c.fillStyle = '#dfa6ec'; c.fillRect(px + 1, py + 1, 4, 2);
-                c.fillStyle = '#e9d3b2'; c.fillRect(px + 2, py + 1, 1, 1);
-            } else if (t === T.CRYSTAL) {
-                c.fillStyle = '#a7eeee'; c.fillRect(px + 2, py, 1, 5); c.fillRect(px + 1, py + 2, 3, 2);
-                c.fillStyle = '#e1fbf6'; c.fillRect(px + 2, py + 1, 1, 2);
-            } else if (t === T.CELESTIAL) {
-                c.fillStyle = '#e7b8e8'; c.fillRect(px + 2, py + 1, 1, 4); c.fillRect(px, py + 3, 5, 1);
-                c.fillStyle = '#fff3c9'; c.fillRect(px + 2, py + 2, 1, 1);
-            } else if (t === T.DESERT) {
-                c.fillStyle = '#f1ce7f'; c.fillRect(px + 1, py + 1, 3, 1); c.fillRect(px + 3, py + 4, 3, 1);
+            if (!clearings[y * WIDTH + x] || t <= T.SHALLOW || t === T.HILL || t === T.MOUNTAIN || t === T.LAVA) {
+                if (t === T.GRASS) {
+                    if (h > 0.72) { c.fillStyle = '#a9c078'; c.fillRect(px + 1, py + 2, 1, 1); c.fillRect(px + 3, py + 4, 1, 1); }
+                    if (h < 0.08) { c.fillStyle = '#c9cb93'; c.fillRect(px + 2, py + 3, 1, 1); }
+                } else if (t === T.FOREST) {
+                    c.fillStyle = '#73864d'; c.fillRect(px + 1, py + 3, 1, 1);
+                    c.fillStyle = '#354c37'; c.fillRect(px + 4, py + 1, 1, 2);
+                } else if (t === T.MOUNTAIN) {
+                    c.fillStyle = '#657773'; c.fillRect(px, py + 4, 6, 2);
+                    c.fillStyle = '#aab8a5'; c.fillRect(px + 2, py + 1, 3, 4);
+                    c.fillStyle = '#d1d7c0'; c.fillRect(px + 2, py, 2, 2);
+                    c.fillStyle = '#78908a'; c.fillRect(px + 4, py + 3, 2, 3);
+                } else if (t === T.HILL) {
+                    c.fillStyle = '#a1a077'; c.fillRect(px + 1, py + 1, 3, 2);
+                    c.fillStyle = '#747e5f'; c.fillRect(px + 3, py + 3, 3, 2);
+                } else if (t === T.SAND && h > 0.7) {
+                    c.fillStyle = '#e4d5a0'; c.fillRect(px + 1, py + 2, 2, 1);
+                } else if (t === T.SHALLOW) {
+                    c.fillStyle = '#5d999033'; c.fillRect(px + 1, py + 2, 3, 1);
+                    if (world.tile(x + 1, y) >= T.SAND || world.tile(x, y + 1) >= T.SAND) { c.fillStyle = '#8bb8a5aa'; c.fillRect(px + 1, py + 4, 5, 1); }
+                } else if (t === T.OCEAN && h > 0.92) {
+                    c.fillStyle = '#43808a45'; c.fillRect(px, py + 2, 3, 1);
+                } else if (t === T.LAVA) {
+                    c.fillStyle = '#ee9c4a'; c.fillRect(px + 1, py + 2, 3, 2);
+                    c.fillStyle = '#f4c66c'; c.fillRect(px + 2, py + 2, 1, 1);
+                } else if (t === T.JUNGLE) {
+                    c.fillStyle = '#246b4b'; c.fillRect(px + 1, py + 1, 4, 4);
+                    c.fillStyle = '#75ce82'; c.fillRect(px + 2, py, 2, 2); c.fillRect(px, py + 2, 2, 2);
+                } else if (t === T.SAVANNA) {
+                    c.fillStyle = '#eed17b'; c.fillRect(px + 1, py + 1, 2, 1); c.fillRect(px + 4, py + 3, 1, 2);
+                    if (h > 0.7) { c.fillStyle = '#6e834d'; c.fillRect(px + 2, py, 1, 4); }
+                } else if (t === T.SNOW) {
+                    c.fillStyle = '#ecf8ee'; c.fillRect(px + 1, py + 1, 3, 2); c.fillRect(px + 4, py + 4, 2, 1);
+                    c.fillStyle = '#8dbcc4'; c.fillRect(px, py + 4, 2, 1);
+                } else if (t === T.MAPLE) {
+                    c.fillStyle = h > 0.5 ? '#e6915f' : '#e46a75'; c.fillRect(px + 1, py + 3, 2, 1);
+                } else if (t === T.MUSHROOM) {
+                    c.fillStyle = '#d1a8d1'; c.fillRect(px + 2, py + 2, 1, 3);
+                    c.fillStyle = '#dfa6ec'; c.fillRect(px + 1, py + 1, 4, 2);
+                    c.fillStyle = '#e9d3b2'; c.fillRect(px + 2, py + 1, 1, 1);
+                } else if (t === T.CRYSTAL) {
+                    c.fillStyle = '#a7eeee'; c.fillRect(px + 2, py, 1, 5); c.fillRect(px + 1, py + 2, 3, 2);
+                    c.fillStyle = '#e1fbf6'; c.fillRect(px + 2, py + 1, 1, 2);
+                } else if (t === T.CELESTIAL) {
+                    c.fillStyle = '#e7b8e8'; c.fillRect(px + 2, py + 1, 1, 4); c.fillRect(px, py + 3, 5, 1);
+                    c.fillStyle = '#fff3c9'; c.fillRect(px + 2, py + 2, 1, 1);
+                } else if (t === T.DESERT) {
+                    c.fillStyle = '#f1ce7f'; c.fillRect(px + 1, py + 1, 3, 1); c.fillRect(px + 3, py + 4, 3, 1);
+                }
             }
             const ore = world.ores?.[y * WIDTH + x] || 0;
             if (ore && (h > 0.38 || t >= T.MOUNTAIN)) {
@@ -142,14 +153,6 @@ export class Renderer {
             if (world.roads[i - WIDTH] || world.roads[i + WIDTH]) c.fillRect(x + 1, y, 4, CELL);
             c.fillStyle = grade === 3 ? '#dbc98a' : grade === 2 ? '#c5c8b0' : '#d6bc84';
             c.fillRect(x + 2, y + 2, grade === 3 ? 2 : 1, 1);
-        }
-        const clearings = new Uint8Array(WIDTH * HEIGHT);
-        for (const site of [...world.villages.filter(v => v.alive), ...world.colonies]) {
-            for (const place of [site, ...site.houses, ...(site.buildings || [])]) {
-                for (let dy = -3; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-                    if (world.inside(place.x + dx, place.y + dy)) clearings[world.index(place.x + dx, place.y + dy)] = 1;
-                }
-            }
         }
         const biomes = { [T.FOREST]: 'forest', [T.JUNGLE]: 'jungle', [T.MAPLE]: 'maple',
             [T.CELESTIAL]: 'celestial', [T.MUSHROOM]: 'mushroom', [T.SNOW]: 'snow', [T.SAVANNA]: 'savanna' };
@@ -174,6 +177,7 @@ export class Renderer {
         const sites = world.claim_sites();
         const owners = new Int32Array(WIDTH * HEIGHT).fill(-1);
         const image = this.territory_ctx.createImageData(WIDTH, HEIGHT);
+        const boundaries = new Map();
         const colors = new Map([...kingdoms].map(([id, kingdom]) => [id, [1, 3, 5].map(i => parseInt(kingdom.color.slice(i, i + 2), 16))]));
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x;
@@ -183,14 +187,20 @@ export class Renderer {
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const i = y * WIDTH + x, owner = owners[i];
             if (owner < 0) continue;
-            const edge = (x > 0 && owners[i - 1] !== owner) || (x < WIDTH - 1 && owners[i + 1] !== owner)
-                || (y > 0 && owners[i - WIDTH] !== owner) || (y < HEIGHT - 1 && owners[i + WIDTH] !== owner);
+            const lines = boundaries.get(owner) || [];
+            const px = x * CELL, py = y * CELL;
+            if (x === 0 || owners[i - 1] !== owner) lines.push([px, py, px, py + CELL]);
+            if (x === WIDTH - 1 || owners[i + 1] !== owner) lines.push([px + CELL, py, px + CELL, py + CELL]);
+            if (y === 0 || owners[i - WIDTH] !== owner) lines.push([px, py, px + CELL, py]);
+            if (y === HEIGHT - 1 || owners[i + WIDTH] !== owner) lines.push([px, py + CELL, px + CELL, py + CELL]);
+            boundaries.set(owner, lines);
             const j = i * 4;
             const color = colors.get(owner) || [215, 219, 196];
             image.data[j] = color[0]; image.data[j + 1] = color[1];
-            image.data[j + 2] = color[2]; image.data[j + 3] = edge ? 235 : 68;
+            image.data[j + 2] = color[2]; image.data[j + 3] = owner === this.selected_kingdom_id ? 30 : 16;
         }
         this.territory_ctx.putImageData(image, 0, 0);
+        this.boundaries = boundaries;
     }
     render(world, now) {
         if (this.last_revision !== world.revision && now - this.last_cache > 220) { this.cache(world); this.last_cache = now; }
@@ -202,8 +212,15 @@ export class Renderer {
         if (this.borders) {
             if (now - this.territory_last > 1500) { this.cache_territory(world); this.territory_last = now; }
             c.drawImage(this.territory, 0, 0, WIDTH * CELL, HEIGHT * CELL);
+            for (const [owner, lines] of this.boundaries || []) {
+                c.strokeStyle = `${world.villages.find(v => v.id === owner)?.color || '#d7dbc4'}bb`;
+                c.lineWidth = 1.25 / s; c.beginPath();
+                for (const [x1, y1, x2, y2] of lines) { c.moveTo(x1, y1); c.lineTo(x2, y2); }
+                c.stroke();
+            }
         }
         const kingdoms = new Map(world.villages.map(v => [v.id, v]));
+        const populations = home_populations(world);
         // Slow glints make the sea feel alive without moving the terrain itself.
         for (let i = 0; i < 85; i++) {
             const x = (i * 73 + 19) % WIDTH, y = (i * 31 + 9) % HEIGHT;
@@ -221,50 +238,74 @@ export class Renderer {
                     c.fillStyle = '#c2ad60'; for (let k = 1; k < 8; k += 2) c.fillRect(x + k, y + 1, 1, 5);
                 }
             }
-            for (const h of v.houses) this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v));
-            this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v), v);
-            this.industry(c, v.x * CELL, v.y * CELL, v);
-            for (const building of v.buildings || []) this.building(c, building, v.color, now, v);
+            for (const h of v.houses) draw_compact(c, h.x * CELL, h.y * CELL, 0.5,
+                () => this.house(c, h.x * CELL, h.y * CELL, v.color, false, technology_level(v)));
+            draw_compact(c, v.x * CELL, v.y * CELL, 0.5,
+                () => this.house(c, v.x * CELL, v.y * CELL, v.color, true, technology_level(v), v));
+            if (this.zoom >= 4) draw_compact(c, v.x * CELL, v.y * CELL, 0.45,
+                () => this.industry(c, v.x * CELL, v.y * CELL, v));
+            for (const building of v.buildings || []) draw_compact(c, building.x * CELL, building.y * CELL, 0.45,
+                () => this.building(c, building, v.color, now, v));
         }
         for (const colony of world.colonies) {
             const kingdom = kingdoms.get(colony.kingdom_id);
             if (!kingdom?.alive) continue;
-            for (const house of colony.houses) this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false, technology_level(kingdom));
-            this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom), kingdom);
+            const inhabited = (populations.get(colony.id) || 0) > 0;
+            if (!inhabited && this.selected_kingdom_id !== kingdom.id) {
+                c.fillStyle = '#9ca59b88';
+                c.fillRect(colony.x * CELL - 2, colony.y * CELL, 4, 2);
+                continue;
+            }
+            c.globalAlpha = inhabited ? 1 : 0.25;
+            for (const house of colony.houses) draw_compact(c, house.x * CELL, house.y * CELL, 0.5,
+                () => this.house(c, house.x * CELL, house.y * CELL, kingdom.color, false, technology_level(kingdom)));
+            if (inhabited) draw_compact(c, colony.x * CELL, colony.y * CELL, 0.5,
+                () => this.house(c, colony.x * CELL, colony.y * CELL, kingdom.color, true, technology_level(kingdom), kingdom));
+            c.globalAlpha = 1;
         }
         for (const voyage of world.voyages) {
             const x = (voyage.x + (voyage.target_x - voyage.x) * voyage.progress) * CELL;
             const y = (voyage.y + (voyage.target_y - voyage.y) * voyage.progress) * CELL;
+            draw_compact(c, x, y, 0.42, () => {
             c.fillStyle = '#352d26'; c.fillRect(x - 6, y + 2, 13, 3);
             c.fillStyle = voyage.kind === 'ship' ? '#e8e3c9' : '#bca87b';
             c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
             c.fillStyle = kingdoms.get(voyage.kingdom_id)?.color || '#e8e3c9'; c.fillRect(x - 5, y, 11, 2);
             draw_flag(c, x + 1, y - 12, kingdoms.get(voyage.kingdom_id) || {}, 8, 5);
+            });
         }
         for (const trade of world.trades || []) {
             const sender = kingdoms.get(trade.from_id), recipient = kingdoms.get(trade.to_id);
             if (!sender || !recipient) continue;
             const x = (sender.x + (recipient.x - sender.x) * trade.progress) * CELL;
             const y = (sender.y + (recipient.y - sender.y) * trade.progress) * CELL;
+            draw_compact(c, x, y, 0.42, () => {
             c.fillStyle = trade.kind === 'ship' ? '#735b45' : '#8e724e'; c.fillRect(x - 6, y, 12, 4);
             c.fillStyle = trade.good === 'food' ? '#c6bb6d' : trade.good === 'wood' ? '#7e9d59' : '#a9b8b8'; c.fillRect(x - 3, y - 4, 6, 4);
             if (trade.kind === 'ship') { c.fillStyle = '#e9dfb8'; c.fillRect(x, y - 10, 1, 8); c.fillRect(x + 1, y - 9, 5, 5); }
             else { c.fillStyle = '#3f3b32'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2); }
+            });
         }
-        for (const vehicle of world.vehicles) draw_vehicle(c, vehicle, kingdoms.get(vehicle.kingdom_id)?.color || '#b3c697', now);
+        for (const vehicle of world.vehicles) draw_compact(c, vehicle.x * CELL, vehicle.y * CELL, 0.42,
+            () => draw_vehicle(c, vehicle, kingdoms.get(vehicle.kingdom_id)?.color || '#b3c697', now));
         for (const machine of world.machines.filter(m => ['boat', 'artillery'].includes(m.kind))) {
             const kingdom = kingdoms.get(machine.kingdom_id);
-            draw_machine(c, machine, kingdom, now, technology_level(kingdom));
+            draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
+                () => draw_machine(c, machine, kingdom, now, technology_level(kingdom)));
         }
-        for (const animal of world.animals) this.animal(c, animal, now);
+        for (const animal of world.animals) draw_compact(c, animal.x * CELL, animal.y * CELL, 0.55,
+            () => this.animal(c, animal, now));
         const aboard = new Set(world.machines.filter(m => m.crew_aboard).map(m => m.crew_id));
         for (const p of world.people) {
             if (p.voyage_id || aboard.has(p.id)) continue;
-            this.person(c, p, kingdoms.get(p.village_id), now);
-            if (this.zoom >= 3) draw_daily_activity(c, p, now);
+            draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
+                () => this.person(c, p, kingdoms.get(p.village_id), now));
+            if (this.zoom >= 8 || p.id === this.selected_unit_id) draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
+                () => draw_daily_activity(c, p, now));
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
-            draw_machine(c, machine, kingdoms.get(machine.kingdom_id), now);
+            draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
+                () => draw_machine(c, machine, kingdoms.get(machine.kingdom_id), now));
         }
         if (this.selected_unit_id) {
             const selected = [...world.people, ...world.animals].find(unit => unit.id === this.selected_unit_id);
@@ -309,10 +350,11 @@ export class Renderer {
         }
         c.restore();
         const label_boxes = [];
-        const labeled_units = this.zoom >= 6 ? [...world.people, ...world.animals].sort((a, b) =>
-            Number(b.id === this.selected_unit_id) - Number(a.id === this.selected_unit_id)) : [];
+        const labeled_units = [...world.people, ...world.animals]
+            .filter(unit => this.zoom >= 9 || unit.id === this.selected_unit_id)
+            .sort((a, b) => Number(b.id === this.selected_unit_id) - Number(a.id === this.selected_unit_id));
         for (const unit of labeled_units) {
-            if (label_boxes.length >= 12) break;
+            if (label_boxes.length >= 6) break;
             if (unit.voyage_id || unit.health <= 0) continue;
             const x = o.x + unit.x * CELL * s, y = o.y + (unit.y * CELL - 17) * s;
             if (x < 48 || x > this.width - 48 || y < 105 || y > this.height - 30) continue;
@@ -349,24 +391,21 @@ export class Renderer {
             draw_flag(c, x - 6, y - 24, kingdom, 12, 8);
             c.fillStyle = '#eff4df'; c.font = 'bold 9px -apple-system, Segoe UI, sans-serif'; c.textAlign = 'center';
             c.fillText(String(army.count), x + 9, y - 15);
+            label_boxes.push({ x: x - 14, y: y - 29, width: 31, height: 22 });
         }
-        const show_labels = world.villages.length < 20 || this.zoom > 1.7;
-        if (this.borders && show_labels) for (const v of world.villages.filter(v => v.alive)) {
-            const x = o.x + v.x * CELL * s, y = o.y + (v.y * CELL - 38) * s;
-            if (x < -100 || x > this.width + 100 || y < -20 || y > this.height + 20) continue;
-            c.font = '600 9px -apple-system, Segoe UI, sans-serif';
-            const w = c.measureText(v.name).width + 43;
-            c.fillStyle = '#152d24df'; c.beginPath(); c.roundRect(x - w / 2, y - 9, w, 19, 4); c.fill();
-            draw_flag(c, x - w / 2 + 5, y - 5, v, 16, 10);
-            c.fillStyle = v.color; c.textAlign = 'center'; c.fillText(v.name, x + 10, y + 3);
-        }
-        if (this.borders && this.zoom > 2.4) for (const colony of world.colonies) {
-            const x = o.x + colony.x * CELL * s, y = o.y + (colony.y * CELL - 26) * s;
-            if (x < -90 || x > this.width + 90 || y < -20 || y > this.height + 20) continue;
-            c.font = '500 8px -apple-system, Segoe UI, sans-serif';
-            c.fillStyle = '#18291fdb'; c.fillRect(x - 38, y - 9, 76, 15);
-            c.fillStyle = kingdoms.get(colony.kingdom_id)?.color || '#e8e3c9'; c.textAlign = 'center';
-            c.fillText(colony.name.slice(0, 14), x, y + 2);
+        if (this.borders) for (const label of settlement_labels(world, {
+            zoom: this.zoom, selected: this.selected_kingdom_id, origin: o, scale: s,
+            width: this.width, height: this.height, reserved: label_boxes
+        }, populations, (name, capital) => {
+            c.font = `${capital ? '600 11px' : '500 10px'} -apple-system, Segoe UI, sans-serif`;
+            return c.measureText(name).width;
+        })) {
+            const { x, y, width, height, site, capital, owner } = label;
+            c.fillStyle = '#152d24e8'; c.beginPath(); c.roundRect(x, y, width, height, 5); c.fill();
+            if (capital) draw_flag(c, x + 6, y + 7, kingdoms.get(owner), 14, 9);
+            c.font = `${capital ? '600 11px' : '500 10px'} -apple-system, Segoe UI, sans-serif`;
+            c.fillStyle = kingdoms.get(owner)?.color || '#e8e3c9'; c.textAlign = 'left';
+            c.fillText(site.name, x + (capital ? 26 : 8), y + (capital ? 15 : 14));
         }
     }
     animal(c, animal, now = 0) {
@@ -476,14 +515,14 @@ export class Renderer {
         if (person.race === 'frogfolk') { c.fillStyle = '#e4f0af'; c.fillRect(x - 3, y - 9, 2, 2); c.fillRect(x + 2, y - 9, 2, 2); }
         if (person.race === 'beetlefolk') { c.fillStyle = '#477e83'; c.fillRect(x - 3, y - 10, 6, 3); c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         if (armor > 0) { c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
-        if (armor >= 9) {
+        if (armor >= 9 && (this.zoom >= 9 || person.id === this.selected_unit_id)) {
             c.strokeStyle = `${TECH_AGES[armor].color}70`; c.lineWidth = 1;
             c.beginPath(); c.ellipse(x, y - 4, 7, 12, 0, 0, Math.PI * 2); c.stroke();
             c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 3, y - 10, 6, 2);
         }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
-        if (person.role === 'soldier' || !stationary) draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
+        if (person.role === 'soldier' || (!stationary && (this.zoom >= 9 || person.id === this.selected_unit_id))) draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
             level >= 6 && person.attack_timer > (level === 6 ? 1.8 : 0.6));
         if (level < 5 && (level >= 2 || person.role === 'soldier')) {
             c.fillStyle = metal; c.fillRect(x - face * 5 - 2, y - 4, 4, 6);
