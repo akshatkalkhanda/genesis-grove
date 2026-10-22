@@ -38,6 +38,10 @@ records the observed causes, measured checks and remaining challenge balance iss
 Version 0.23.0 fixes generation-wide clan pairing bans and clears dense-map clutter.
 [Evidence, map rules and limitations](../generations-and-map-readability.md).
 
+Version 0.24.0 adds [kings, heirs and succession](../kings-and-succession.md).
+A live Android [zoom study](phone-zoom-study.md) records confirmed camera behavior
+and the next camera acceptance checks.
+
 ## Read this first
 
 - [Visual roadmap](roadmap.svg): implementation order and completion gates.
