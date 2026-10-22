@@ -1,3 +1,4 @@
+import { ignite_fire } from './wildfire.js';
 import { creature_stats, develop_creature } from './creatures.js';
 import { apply_damage } from './health.js';
 
@@ -43,7 +44,7 @@ export function advance_mythic(world, unit, dt) {
             }
         } else {
             const index = world.index(unit.x, unit.y);
-            if ([3, 4, 9, 10, 12, 13, 15].includes(world.tiles[index])) world.fire[index] = 8;
+            if ([3, 4, 9, 10, 12, 13, 15].includes(world.tiles[index])) ignite_fire(world, index, 8);
         }
     }
     const speed = MYTHIC[unit.species].speed;

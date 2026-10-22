@@ -52,6 +52,39 @@ function available(person, year_length) {
         && years >= 18 && years <= 70;
 }
 
+export function rebellion_cohort(world, kingdom_id) {
+    const crew = new Set(world.machines.map(machine => machine.crew_id));
+    const adults = world.people.filter(p => p.village_id === kingdom_id
+        && available(p, world.year_length) && p.health >= 60 && !p.recovering
+        && !p.medical_role && p.role !== 'soldier' && !crew.has(p.id))
+        .sort((a, b) => a.age - b.age || a.id - b.id);
+    const eligible = new Map(adults.map(p => [p.id, p]));
+    const selected = new Set();
+    for (const person of adults) {
+        if (selected.has(person)) continue;
+        const partner = eligible.get(person.partner_id);
+        // Keep established households together instead of stranding a partner.
+        if (person.partner_id && (!partner || partner.partner_id !== person.id)) continue;
+        if (selected.size + (partner ? 2 : 1) > 4) continue;
+        selected.add(person);
+        if (partner) selected.add(partner);
+        if (selected.size === 4) break;
+    }
+    return [...selected];
+}
+
+export function rehome_person(world, person, kingdom_id, home_id) {
+    const previous = world.villages.find(v => v.id === person.village_id);
+    const next = world.villages.find(v => v.id === kingdom_id);
+    if (previous) delete previous.social_year;
+    if (next) delete next.social_year;
+    person.village_id = kingdom_id;
+    person.home_id = home_id;
+    delete person.work_target;
+    if (person.daily_life) Object.assign(person.daily_life,
+        { phase: 'return', timer: 0, site: null, partner_id: null });
+}
+
 function remember(person, other, amount) {
     let record = person.relationships.find(r => r.id === other.id);
     if (!record) {
@@ -79,6 +112,15 @@ export function socialize(a, b, amount = 5) {
 export function advance_society(world) {
     if (world.villages.every(v => v.social_year === world.year)) return;
     const people_by_id = new Map(world.people.map(p => [p.id, p]));
+    // Do this before pairing anyone, so iteration order cannot leave the former
+    // partner unavailable after a move, capture or rebellion.
+    for (const p of world.people) {
+        const partner = people_by_id.get(p.partner_id);
+        if (!partner || partner.health <= 0 || partner.partner_id !== p.id
+            || partner.village_id !== p.village_id || partner.home_id !== p.home_id) {
+            p.partner_id = null;
+        }
+    }
     for (const kingdom of world.villages) {
         initialize_culture(kingdom);
         if (kingdom.social_year === world.year) continue;
@@ -86,8 +128,6 @@ export function advance_society(world) {
         const citizens = world.people.filter(p => p.village_id === kingdom.id && p.health > 0);
         for (const p of citizens) initialize_society_person(p, kingdom);
         for (const p of citizens) {
-            const partner = people_by_id.get(p.partner_id);
-            if (!partner || partner.health <= 0 || partner.partner_id !== p.id) p.partner_id = null;
             if (!available(p, world.year_length)) continue;
             const neighbours = citizens.filter(q => q.id !== p.id && available(q, world.year_length)
                 && q.home_id === p.home_id && Math.hypot(p.x - q.x, p.y - q.y) <= 8)

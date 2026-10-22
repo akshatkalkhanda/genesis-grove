@@ -85,8 +85,8 @@ const TOOLS = {
         ['coal', 'Coal seam', '⬢', '#9a9d91', 'Place coal to fuel advanced research and forge work.'],
         ['stardust', 'Stardust deposit', '✧', '#e8b8f5', 'Place cosmic dust for advanced research and energy weapons. Observatories also collect it slowly from the sky.'],
         ['rain', 'Rain', '☂', '#9ecde0', 'Quench fire, cool lava, and turn ash back into fertile meadow.'],
-        ['fire', 'Fire', '♨', '#e3a16a', 'Spark a wildfire. Flames spread through meadows and forests.'],
-        ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike the earth with thunder. Nearby creatures and forests feel its power.'],
+        ['fire', 'Fire', '♨', '#e3a16a', 'Spark a local wildfire. Flames spread up to six tiles beyond the ignited patch.'],
+        ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike a small area with thunder. Nearby vegetation can catch a local fire.'],
         ['meteor', 'Meteor', '☄', '#e7a288', 'Bring down a star. Leave a crater of ash and molten rock.'],
         ['nuke', 'Nuclear bomb', '☢', '#d99175', 'A devastating blast that scorches a wide crater and sets the land ablaze.'],
         ['plague', 'Plague', '☣', '#a4bd83', 'Infect nearby creatures. The sickness spreads until they recover or perish.'],
@@ -98,11 +98,11 @@ const TOOLS = {
 TOOLS.nature = [
     ['raincloud', 'Rain cloud', '☂', '#9ecde0', 'A drifting rain cloud quenches fires and restores soil for 24 simulation seconds.'],
     ['storm', 'Thunderstorm', 'ϟ', '#89afc4', 'A moving storm brings heavy rain and repeated lightning strikes.'],
-    ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike once: damages nearby life and can ignite vegetation.'],
-    ['tsunami', 'Tsunami', '≈', '#9edddc', 'Start in deep ocean near a coast. The wave damages boats, buildings and low coastal land; high ground blocks it.'],
+    ['lightning', 'Lightning', 'ϟ', '#eee1a3', 'Strike a small area once. Fire can spread up to six tiles beyond the ignited patch.'],
+    ['tsunami', 'Tsunami', '≈', '#9edddc', 'Start one wave in deep ocean near a coast. It damages low coastal land; high ground blocks it. Wait for it to recede before placing another.'],
     ['drought', 'Drought', '☀', '#e2c26b', 'Dry the soil and damage crop growth for 30 simulation seconds.'],
     ['blizzard', 'Blizzard', '❄', '#cfe8eb', 'A drifting snowstorm damages crops and exposed life. Nearby homes reduce cold damage.'],
-    ['fire', 'Wildfire', '♨', '#e3a16a', 'Ignite vegetation. Rain clouds and thunderstorms can extinguish fire.']
+    ['fire', 'Wildfire', '♨', '#e3a16a', 'Ignite a local patch. Fire spreads up to six tiles farther; water and snow stop it, and rain quenches it.']
 ];
 TOOLS.plants = TOOLS.terrain.filter(item => ['forest', 'jungle', 'maple', 'mushroom', 'celestial'].includes(item[0]));
 const CATALOG_INFO = {
@@ -154,7 +154,7 @@ function inspector_details(container, children, title, key) {
     return details;
 }
 function select_tool(id) {
-    tool = id; renderer.tool = id; end_pointer();
+    tool = id; renderer.tool = id; renderer.brush = id === 'lightning' ? 2 : brush; end_pointer();
     $('observe').setAttribute('aria-pressed', String(id === 'inspect'));
     document.body.classList.toggle('catalog-open', id !== 'inspect');
     if (id === 'inspect') document.body.classList.add('controls-collapsed');
@@ -170,10 +170,10 @@ function select_tool(id) {
         previous_tool = id;
         const item = Object.values(TOOLS).flat().find(t => t[0] === id);
         $('selected-icon').textContent = item[2]; $('selected-name').textContent = item[1]; $('selected-description').textContent = item[4];
-        $('selected-action').textContent = LIFE_TOOLS.has(id) ? 'CLICK WALKABLE LAND TO PLACE' : 'DRAG ON THE MAP TO APPLY';
+        $('selected-action').textContent = id === 'lightning' ? 'CLICK ONCE TO STRIKE' : LIFE_TOOLS.has(id) ? 'CLICK WALKABLE LAND TO PLACE' : 'DRAG ON THE MAP TO APPLY';
     }
     const tool_name = $('selected-name').textContent;
-    const instruction = id === 'inspect' ? 'Click a creature for details' : LIFE_TOOLS.has(id) ? 'Click land to place' : 'Drag on the map to apply';
+    const instruction = id === 'inspect' ? 'Click a creature for details' : id === 'lightning' ? 'Click once to strike' : LIFE_TOOLS.has(id) ? 'Click land to place' : 'Drag on the map to apply';
     $('interaction-hint').replaceChildren();
     const hint_name = document.createElement('b'); hint_name.textContent = `${tool_name} selected`;
     const hint_action = document.createElement('span'); hint_action.textContent = `${instruction} · right-drag to move · scroll to zoom`;
@@ -181,7 +181,7 @@ function select_tool(id) {
     $('footer-status').replaceChildren();
     const footer_icon = document.createElement('span'); footer_icon.textContent = $('selected-icon').textContent;
     $('footer-status').append(footer_icon, `${tool_name} · ${instruction.toLowerCase()}`);
-    $('brush').closest('.brush-section').hidden = id === 'inspect' || LIFE_TOOLS.has(id);
+    $('brush').closest('.brush-section').hidden = id === 'inspect' || id === 'lightning' || LIFE_TOOLS.has(id);
     for (const button of $('tools').children) {
         button.classList.toggle('active', button.dataset.tool === id);
         button.setAttribute('aria-pressed', String(button.dataset.tool === id));
@@ -231,7 +231,7 @@ $('toggle-controls').onclick = () => {
     button.title = collapsed ? 'Show creator controls' : 'Collapse creator controls';
     button.textContent = collapsed ? '›' : '‹';
 };
-$('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
+$('brush').oninput = () => { brush = Number($('brush').value); renderer.brush = tool === 'lightning' ? 2 : brush; $('brush-value').textContent = `${brush} ${brush === 1 ? 'tile' : 'tiles'}`; };
 function set_pause(value) {
     paused = value; $('pause').textContent = paused ? '▶ Resume' : 'Ⅱ Pause'; $('pause').setAttribute('aria-label', paused ? 'Resume time' : 'Pause time'); $('paused-banner').hidden = !paused;
     update_world_guidance();

@@ -309,15 +309,27 @@ app.whenReady().then(async () => {
         const { World: SmokeWorld } = await import_src('simulation.js');
         const coast_fixture = new SmokeWorld({ seed: 'nature-coast-smoke', preset: 'empty', inhabited: false, name: 'Nature Coast Test' });
         for (let y = 42; y <= 77; y++) for (let x = 75; x <= 110; x++) coast_fixture.set_tile(x, y, 3);
+        const former_home = coast_fixture.found_village(85, 55);
+        const rebel_home = coast_fixture.found_village(95, 55);
+        coast_fixture.add_person(95, 55, former_home.id);
+        coast_fixture.people[0].village_id = rebel_home.id;
         const coast_save = coast_fixture.serialize();
+        delete coast_save.fire_spread; delete coast_save.tsunami_clock;
         await click('#load');
         await js(`(()=>{const input=document.getElementById('import'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(JSON.stringify(coast_save))}],'nature-coast.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change'))})()`);
         await wait_for(`!document.querySelector('#load-dialog').open && genesis.snapshot().name==='Nature Coast Test'`, 'coastal showcase import');
+        assert.equal(await js('genesis.snapshot().people[0].home_id'), rebel_home.id,
+            'Legacy rebellion citizen should import with a home in the current kingdom');
+        assert.equal(coast_save.people[0].home_id, former_home.id, 'Import does not mutate the supplied save');
+        checks.push('Legacy foreign-home recovery imports without losing its citizen');
         assert.ok((await library_records()).some(record => record.type === 'recovery' && record.reason === 'before-import' && record.world_name === 'Smoke Ocean'), 'Import should protect the outgoing world first');
         assert.equal(await js('genesis.snapshot().laws.natural_events'), false, 'Natural events remain opt-in');
         if (await js('document.getElementById("pause").getAttribute("aria-label") === "Resume time"')) await click('#pause');
         await click('[data-category="nature"]');
         assert.equal(await js('document.querySelectorAll("#tools button").length'), 7);
+        await click('[data-tool="lightning"]');
+        assert.equal(await js('document.querySelector(".brush-section").hidden'), true);
+        assert.equal(await js('document.getElementById("selected-action").textContent'), 'CLICK ONCE TO STRIKE');
         await click('[data-tool="tsunami"]');
         const invalid_tsunami = await visible_tile('w.tiles[y*192+x] > 1');
         assert.ok(invalid_tsunami, 'A visible land tile must exist for invalid tsunami placement');
@@ -333,6 +345,11 @@ app.whenReady().then(async () => {
         await delay(100);
         assert.equal(await js('genesis.snapshot().weather.length'), 1);
         assert.equal(await js('genesis.snapshot().weather[0].kind'), 'tsunami');
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: valid_tsunami.x, y: valid_tsunami.y, button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: valid_tsunami.x, y: valid_tsunami.y, button: 'left', clickCount: 1 });
+        await delay(80);
+        assert.equal(await js('genesis.snapshot().weather.filter(event=>event.kind==="tsunami").length'), 1);
+        assert.ok(await js('document.getElementById("toast").textContent.includes("already active")'));
         await click('[data-tool="storm"]');
         const storm_source = await visible_tile('w.tiles[y*192+x] === 3');
         assert.ok(storm_source, 'A visible coastal land point must exist for the storm showcase');
@@ -369,7 +386,7 @@ app.whenReady().then(async () => {
         await click('#restore');
         await wait_for(`genesis.snapshot().weather.length===2`, 'Continue restoration of coastal hazards');
         assert.deepEqual(await js('genesis.snapshot().weather.map(event=>event.kind)'), ['tsunami', 'storm'], 'Saved natural events must restore with the world');
-        checks.push('Nature tools reject tsunamis on land and save and restore valid coastal events');
+        checks.push('Nature tools reject land and stacked tsunamis, and save and restore valid coastal events');
         const smoke_recovery = (await library_records()).find(record => record.type === 'recovery' && record.reason === 'before-import' && record.world_name === 'Smoke Ocean');
         assert.ok(smoke_recovery, 'A prior world recovery should be available');
         await load_record(smoke_recovery, '#recovery-list');

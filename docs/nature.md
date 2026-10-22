@@ -8,11 +8,11 @@ instant rain, lightning, fire and other powers remain available under Events.
 | --- | --- | --- |
 | Rain cloud | Drifts east, extinguishes fires and restores local soil fertility. | 24 simulation seconds |
 | Thunderstorm | Moving rain, with an actual lightning strike every six seconds; lightning can hurt creatures and ignite vegetation. | 24 seconds |
-| Lightning | Existing single strike damages nearby life and can start fire; no persistent weather event. | Instant |
+| Lightning | Single two-tile-radius strike damages nearby life and can start a bounded local fire. | Instant |
 | Drought | Reduces soil fertility and the current growth of farms in range. | 30 seconds |
 | Blizzard | Drifts east, harms farm growth and damages exposed people/animals. Homes within three tiles reduce cold damage by 90%. | 24 seconds |
 | Tsunami | Expanding wave damages coastal boats, people/animals, low coastal homes, building integrity, crop growth, roads and fertility. | 20 seconds / 40-tile maximum travel |
-| Wildfire | Existing vegetation fire; moving rain and storms can quench it. | Until extinguished or fuel burns out |
+| Wildfire | Vegetation fire spreads at most six adjacent tiles beyond its ignition patch; water/snow break the front and rain quenches it. | Until extinguished or fuel burns out |
 
 These are intentionally simplified game mechanics. Weather does not permanently
 change biomes. Rain is not a finite water budget, and tsunami flooding is not a
@@ -33,14 +33,23 @@ fluid solver. Blizzard cold does not yet make people evacuate or change jobs.
    Trade shipments, settler voyages, aircraft, passenger rescue and evacuation are
    outside this first wave model. Those need later transport work.
 
+Only one new tsunami can be active at a time; wait for it to recede before placing another. Older saves with multiple waves finish those waves without adding more.
+
 Wave events, progress, pulse timers and weather scheduling are saved and validated.
-Old worlds load with no active events and automatic natural events off.
+Worlds without saved weather fields load with no active events and automatic natural
+events off.
 
 ## Optional automatic events
 
 Enable **Natural weather and disasters** in setup or Kingdoms. Every 90 simulation
 seconds the scheduler attempts one event at a valid location, with rain more common
-than each destructive event. Six concurrent events is the hard limit. The setting
+than each destructive event. The lottery has six rain entries, two storms, one drought,
+one blizzard and one tsunami. Automatic tsunamis also wait at least 100 game years
+(minimum 600 simulation seconds) of enabled natural-event time since world load
+without saved cooldown state or the last wave placement. A new normal world therefore
+waits at least 100 years before its first automatic wave. Cooldown progress survives
+save/load; turning automatic events off pauses it. A blocked tsunami roll becomes
+rain. Six concurrent events is the hard limit. The setting
 is saved. Turning it off stops future automatic events; existing events finish.
 Manual tools work regardless of the setting. The Nature badge lists remaining
 durations in its tooltip and opens the Nature tools.
@@ -63,3 +72,13 @@ malformed imports, event limits, optional scheduling and continuation through a
 mid-event save. Native desktop checks exercise tool selection, rejected/accepted
 tsunami placement and restoring active events. Build success alone is not Windows
 gameplay verification.
+
+## Local fires, 0.22.0
+
+Each new ignition starts with six remaining spread steps. A neighboring burning tile
+inherits one fewer step, so fire cannot renew its own reach indefinitely. A lightning
+strike ignites a radius-two patch and can affect at most the radius-eight Manhattan
+area around that strike (145 tiles on continuous fuel). Multiple player ignitions or
+storm strikes create separate local patches. Remaining spread is saved; old active
+fires receive a bounded front when resumed. This is a gameplay limit rather than a
+physical wind, moisture or fuel simulation. See the [measured survival checks](survival-and-disasters.md).

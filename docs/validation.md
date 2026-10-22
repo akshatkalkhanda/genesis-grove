@@ -1,3 +1,9 @@
+# Version 0.22.0 validation — 22 October 2026
+
+See the [survival and disaster investigation](survival-and-disasters.md) for measured
+regressions, save compatibility and remaining challenge balance work, and the
+[release checks](release-0.22.0.md) for packaging and native desktop coverage.
+
 # Version 0.17.0 validation — 21 October 2026
 
 - Food shortage was traced to farms yielding only 18 food per 30 simulation

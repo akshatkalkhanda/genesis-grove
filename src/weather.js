@@ -9,6 +9,9 @@ export const WEATHER = Object.freeze({
 });
 export const MAX_WEATHER = 6;
 const PULSE = 0.5;
+export const tsunami_cooldown = world => Math.max(600, (world.year_length || 20) * 100);
+const AUTOMATIC_WEATHER = ['raincloud', 'raincloud', 'raincloud', 'raincloud',
+    'raincloud', 'raincloud', 'storm', 'storm', 'drought', 'blizzard', 'tsunami'];
 
 export function deep_ocean(world, x, y) {
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
@@ -42,6 +45,9 @@ export function spawn_weather(world, kind, x, y, radius = 8) {
     if (world.weather.length >= MAX_WEATHER) return { ok: false, message: 'Six natural events are already active. Wait for one to pass.' };
     x = Math.floor(x); y = Math.floor(y);
     if (kind === 'tsunami') {
+        if (world.weather.some(event => event.kind === 'tsunami')) {
+            return { ok: false, message: 'A tsunami is already active. Wait for the wave to recede.' };
+        }
         if (!deep_ocean(world, x, y)) return { ok: false, message: 'Start a tsunami in deep ocean, at least three tiles from land or shallows.' };
         let coast = false;
         for (let dy = -40; dy <= 40 && !coast; dy++) for (let dx = -40; dx <= 40; dx++) {
@@ -53,6 +59,7 @@ export function spawn_weather(world, kind, x, y, radius = 8) {
     }
     const event = { kind, x, y, radius: Math.max(4, Math.min(12, Math.round(radius))), age: 0, timer: 0, travel: 0 };
     world.weather.push(event);
+    if (kind === 'tsunami') world.tsunami_clock = 0;
     world.log(`${WEATHER[kind].label}${kind === 'tsunami' ? ' begins in deep ocean; nearby low coasts are threatened.' : ' begins.'}`, 'disaster', event);
     return { ok: true, message: kind === 'tsunami' ? 'Tsunami forming. Resume time to watch it reach the coast.' : `${WEATHER[kind].label} placed. It develops while time runs.` };
 }
@@ -123,12 +130,16 @@ function advance_cloud(world, event) {
 }
 
 export function advance_weather(world, dt) {
+    if (world.laws.natural_events) {
+        world.tsunami_clock = Math.min(tsunami_cooldown(world), world.tsunami_clock + dt);
+    }
     world.weather_clock += dt;
     if (world.weather_clock >= 90) {
         world.weather_clock %= 90;
         if (world.laws.natural_events && world.weather.length < MAX_WEATHER) {
-            const kinds = ['raincloud', 'raincloud', 'storm', 'drought', 'blizzard', 'tsunami'];
-            const kind = kinds[Math.floor(world.random() * kinds.length)];
+            let kind = AUTOMATIC_WEATHER[Math.floor(world.random() * AUTOMATIC_WEATHER.length)];
+            if (kind === 'tsunami' && (world.tsunami_clock < tsunami_cooldown(world)
+                || world.weather.some(event => event.kind === 'tsunami'))) kind = 'raincloud';
             for (let attempt = 0; attempt < 24; attempt++) {
                 const x = Math.floor(world.random() * world.width), y = Math.floor(world.random() * world.tiles.length / world.width);
                 if (kind !== 'tsunami' && world.tile(x, y) <= 1) continue;
@@ -147,6 +158,8 @@ export function advance_weather(world, dt) {
 }
 
 export function valid_weather(data, width, height) {
+    if (data.tsunami_clock !== undefined && (!Number.isFinite(data.tsunami_clock)
+        || data.tsunami_clock < 0 || data.tsunami_clock > tsunami_cooldown(data))) return false;
     if (data.weather_clock !== undefined && (!Number.isFinite(data.weather_clock) || data.weather_clock < 0 || data.weather_clock >= 90)) return false;
     if (data.weather === undefined) return true;
     return Array.isArray(data.weather) && data.weather.length <= MAX_WEATHER && data.weather.every(event =>

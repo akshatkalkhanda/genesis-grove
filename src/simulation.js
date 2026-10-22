@@ -1,3 +1,4 @@
+import { advance_fire, ignite_fire, FIRE_FUELS, MAX_FIRE_SPREAD } from './wildfire.js';
 import { WEATHER, spawn_weather, advance_weather, valid_weather } from './weather.js';
 import { initialize_creature, creature_stats, develop_creature, TRAITS } from './creatures.js';
 import { find_path } from './pathfinding.js';
@@ -12,7 +13,8 @@ import { advance_detention, advance_defenses } from './defenses.js';
 import { MACHINES, MAX_MACHINES, advance_machines } from './machines.js';
 import { advance_daily_life, collect_daily_goods, valid_daily_life } from './daily_life.js';
 import { initialize_society_person, initialize_culture, advance_society, select_parents,
-    initialize_child, society_modifiers, validate_society_person, validate_culture } from './society.js';
+    initialize_child, society_modifiers, validate_society_person, validate_culture,
+    rebellion_cohort, rehome_person } from './society.js';
 import { apply_damage, valid_health_history } from './health.js';
 import { prepare_medicine, medical_intent, advance_medicine, valid_medicine } from './medicine.js';
 import { MAX_BUILDINGS, advance_civic, farm_target, food_reserve } from './civic.js';
@@ -69,8 +71,7 @@ export const RACES = Object.freeze({ human: { label: 'Human', color: '#e9c87b' }
 export const ANIMALS = Object.freeze(['sheep', 'wolf', 'deer', 'bear', 'rabbit', 'chicken', 'fox', 'cat', 'frog', 'beetle', 'hyena', 'owl', 'boar', 'turtle', 'buffalo', 'butterfly', 'moth', 'lizard', 'angel', 'demon']);
 const PREDATORS = new Set(['wolf', 'bear', 'fox', 'cat', 'hyena', 'owl']);
 const GRAZERS = new Set(['sheep', 'deer', 'rabbit', 'chicken', 'boar', 'buffalo', 'turtle', 'lizard']);
-const FLAMMABLE = new Set([T.GRASS, T.FOREST, T.JUNGLE, T.SAVANNA, T.MAPLE,
-    T.MUSHROOM, T.CELESTIAL]);
+const FLAMMABLE = FIRE_FUELS;
 const DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function kingdom_color(index) {
@@ -115,6 +116,7 @@ export class World {
         this.strata = new Uint8Array(WIDTH * HEIGHT);
         this.roads = new Uint8Array(WIDTH * HEIGHT);
         this.fire = new Float32Array(WIDTH * HEIGHT);
+        this.fire_spread = new Int8Array(WIDTH * HEIGHT).fill(-1);
         this.fertility = new Float32Array(WIDTH * HEIGHT).fill(0.8);
         this.people = [];
         this.animals = [];
@@ -135,6 +137,7 @@ export class World {
         this.effects = [];
         this.weather = [];
         this.weather_clock = 0;
+        this.tsunami_clock = 0;
         this.revision = 1;
         this.navigation_revision = 1;
         this.lighting = { phase: 0.35, cycle_seconds: 600 };
@@ -631,12 +634,13 @@ export class World {
             } else this.add_animal(x + 0.5, y + 0.5, tool);
             return;
         }
-        const r = ['meteor', 'nuke'].includes(tool) ? radius + (tool === 'nuke' ? 8 : 2) : radius;
+        const r = tool === 'lightning' ? 2 : ['meteor', 'nuke'].includes(tool)
+            ? radius + (tool === 'nuke' ? 8 : 2) : radius;
         for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
             if (dx * dx + dy * dy > r * r || !this.inside(x + dx, y + dy)) continue;
             const i = this.index(x + dx, y + dy), t = this.tiles[i];
             if (tool in terrain) this.set_tile(x + dx, y + dy, terrain[tool]);
-            if (tool === 'fire' && FLAMMABLE.has(t)) this.fire[i] = 10 + this.random() * 10;
+            if (tool === 'fire' && FLAMMABLE.has(t)) ignite_fire(this, i, 10 + this.random() * 10);
             if (tool === 'rain') {
                 this.fire[i] = 0;
                 this.fertility[i] = 1;
@@ -651,9 +655,10 @@ export class World {
             }
             if (tool === 'nuke' && t > T.SHALLOW) {
                 this.set_tile(x + dx, y + dy, dx * dx + dy * dy < r * r * 0.3 ? T.LAVA : T.ASH);
-                this.fire[i] = dx * dx + dy * dy > r * r * 0.55 ? 12 + this.random() * 10 : 0;
+                if (dx * dx + dy * dy > r * r * 0.55) ignite_fire(this, i, 12 + this.random() * 10);
+                else this.fire[i] = 0;
             }
-            if (tool === 'lightning' && Math.abs(dx) + Math.abs(dy) < 3 && FLAMMABLE.has(t)) this.fire[i] = 12;
+            if (tool === 'lightning' && Math.abs(dx) + Math.abs(dy) < 3 && FLAMMABLE.has(t)) ignite_fire(this, i, 12);
         }
         if (['meteor', 'nuke', 'lightning', 'rain', 'bless', 'acid'].includes(tool)) {
             this.effects.push({ type: tool, x, y, radius: r, life: 1, duration: tool === 'rain' ? 1.5 : 0.8 });
@@ -849,9 +854,9 @@ export class World {
             const candidates = this.villages.filter(v => v.alive && v.age > 40 && (populations.get(v.id) || 0) >= 14);
             const parent = candidates.length ? candidates[Math.floor(this.random() * candidates.length)] : null;
             if (parent && this.random() < 0.15) {
-                const rebels = this.people.filter(p => p.village_id === parent.id).slice(0, 4);
+                const rebels = rebellion_cohort(this, parent.id);
                 let place = null;
-                for (let attempt = 0; attempt < 20 && !place; attempt++) {
+                for (let attempt = 0; rebels.length === 4 && attempt < 20 && !place; attempt++) {
                     const candidate = this.land_near(parent.x, parent.y, 10);
                     if (candidate && this.villages.every(v => !v.alive || Math.hypot(v.x - candidate.x, v.y - candidate.y) > 5)) place = candidate;
                 }
@@ -859,7 +864,7 @@ export class World {
                     const child = this.found_village(place.x, place.y, parent.race);
                     child.research_level = parent.research_level;
                     child.tech_points = parent.tech_points;
-                    for (const person of rebels) person.village_id = child.id;
+                    for (const person of rebels) rehome_person(this, person, child.id, child.id);
                     this.set_relation(parent.id, child.id, 'war');
                     this.log(`${child.name} breaks away from ${parent.name}.`, 'disaster', child);
                 }
@@ -1264,19 +1269,7 @@ export class World {
             if (t === T.ASH && this.random() < dt * 0.07) { this.tiles[i] = T.GRASS; this.revision++; this.navigation_revision++; }
             if (t === T.LAVA && this.random() < dt * 0.14) { this.tiles[i] = T.ASH; this.revision++; }
         }
-        const ignite = [];
-        for (let i = 0; i < this.fire.length; i++) {
-            if (this.fire[i] <= 0) continue;
-            this.fire[i] -= dt;
-            if (this.fire[i] <= 0) { this.set_tile(i % WIDTH, Math.floor(i / WIDTH), T.ASH); continue; }
-            if (this.random() < dt * 0.45) {
-                const [dx, dy] = DIRECTIONS[Math.floor(this.random() * 4)];
-                const x = i % WIDTH + dx, y = Math.floor(i / WIDTH) + dy;
-                const t = this.tile(x, y), j = this.index(x, y);
-                if (this.inside(x, y) && FLAMMABLE.has(t) && !this.fire[j]) ignite.push(j);
-            }
-        }
-        for (const i of ignite) this.fire[i] = 8 + this.random() * 8;
+        advance_fire(this, dt);
         if (this.tick % 20 === 0) {
             this.clean_up();
             if (this.animals.length < 240 && this.random() < 0.25) {
@@ -1294,7 +1287,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1315,6 +1308,9 @@ export class World {
         if (data.vehicles !== undefined && !array(data.vehicles, MAX_VEHICLES)) invalid();
         if (data.machines !== undefined && !array(data.machines, MAX_MACHINES)) invalid();
         if (!array(data.fire, size) || data.fire.length !== size || !data.fire.every(n => num(n, -0.25, 60))) invalid();
+        if (data.fire_spread !== undefined && (!array(data.fire_spread, size)
+            || data.fire_spread.length !== size
+            || !data.fire_spread.every(n => integer(n, -1, MAX_FIRE_SPREAD)))) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
         if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 200) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
@@ -1413,7 +1409,9 @@ export class World {
             if (!villages.has(p.village_id) || !num(p.gather, 0, 10) || (p.race !== undefined && !RACES[p.race]) || (p.infection !== undefined && !num(p.infection, 0, 1))) invalid();
             if ((p.weapon_level !== undefined && !integer(p.weapon_level, 0, TECH_AGES.length - 1)) || (p.armor_level !== undefined && !integer(p.armor_level, 0, TECH_AGES.length - 1))) invalid();
             if ((p.job !== undefined && !JOBS.includes(p.job)) || (p.role !== undefined && !['civilian','soldier'].includes(p.role))) invalid();
-            if (p.home_id !== undefined && p.home_id !== p.village_id && colonies.get(p.home_id) !== p.village_id) invalid();
+            // Older rebellions retained a known home belonging to their previous kingdom.
+            // Unknown references still fail; known foreign homes are repaired on the clone below.
+            if (p.home_id !== undefined && !villages.has(p.home_id) && !colonies.has(p.home_id)) invalid();
             if (p.voyage_id !== undefined && p.voyage_id !== null && (!voyages.has(p.voyage_id) || !voyages.get(p.voyage_id).crew_ids.includes(p.id))) invalid();
         }
         const assigned_crew = new Set();
@@ -1446,6 +1444,7 @@ export class World {
         w.machines = structuredClone(data.machines || []);
         w.weather = structuredClone(data.weather || []);
         w.weather_clock = data.weather_clock ?? 0;
+        w.tsunami_clock = data.tsunami_clock ?? 0;
         w.scenario = data.scenario || 'sandbox';
         w.year_length = data.year_length || 20;
         w.lighting = structuredClone(data.lighting || { phase: 0.35, cycle_seconds: 600 });
@@ -1463,9 +1462,12 @@ export class World {
         w.milestone = data.milestone || 0;
         const legacy_jobs = new Map();
         for (const p of w.people) { p.race ||= 'human'; p.infection ||= 0; p.home_id ||= p.village_id; p.voyage_id ||= null; p.weapon_level ||= 0; p.armor_level ||= 0; p.job ||= JOBS[(legacy_jobs.get(p.village_id) || 0) % JOBS.length]; p.role ||= 'civilian'; legacy_jobs.set(p.village_id, (legacy_jobs.get(p.village_id) || 0) + 1); }
+        for (const p of w.people) if (p.home_id !== p.village_id
+            && colonies.get(p.home_id) !== p.village_id) rehome_person(w, p, p.village_id, p.village_id);
         for (const a of w.animals) a.infection ||= 0;
         for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); v.research_level ??= (() => { let level = 0; for (let i = 1; i < TECH_AGES.length; i++) if (v.tech_points >= TECH_AGES[i].threshold) level = i; return level; })(); v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0; v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer ||= 0; v.forge_timer ||= 0; v.training_timer ||= 0; v.barracks ||= 0; v.mine_level ||= 0; v.forge_level ||= 0; }
         w.tiles = Uint8Array.from(data.tiles); w.ores = data.ores ? Uint8Array.from(data.ores) : new Uint8Array(size); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
+        w.fire_spread = data.fire_spread ? Int8Array.from(data.fire_spread) : new Int8Array(size).fill(-1);
         w.roads = data.roads ? Uint8Array.from(data.roads) : new Uint8Array(size);
         w.strata = data.strata ? Uint8Array.from(data.strata) : new Uint8Array(size);
         if (!data.ores) for (let i = 0; i < size; i++) {

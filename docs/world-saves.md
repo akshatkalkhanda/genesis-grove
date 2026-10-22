@@ -56,3 +56,12 @@ explain what each overlay represents.
 View or F8 hides the regular HUD for observation. Pause and Exit stay available;
 F8 or Escape returns to the regular view. Entering it cancels any brush. It changes
 the view without changing world laws, simulation speed or the paused/running state.
+
+## Rebellion recovery compatibility, 0.22.0
+
+An older rebellion could leave a citizen with a home in another kingdom. Loading
+now assigns that citizen to their current capital on the loaded copy and resets
+their work destination. Age, health, identity and population are retained; the
+stored input is not rewritten by validation. Unknown home references still fail.
+See the [survival investigation](survival-and-disasters.md) before continuing an
+already-empty late recovery.

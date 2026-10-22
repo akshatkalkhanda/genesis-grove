@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T } from '../src/simulation.js';
-import { advance_weather, spawn_weather, wave_reaches, MAX_WEATHER } from '../src/weather.js';
+import { advance_weather, spawn_weather, wave_reaches, MAX_WEATHER,
+    tsunami_cooldown } from '../src/weather.js';
 
 function coast() {
     const world = new World({ preset: 'empty', inhabited: false, seed: 'weather-coast' });
@@ -115,4 +116,48 @@ test('a live world with mixed hazards can be saved and resumed through the norma
     for (let i = 0; i < 80; i++) { world.step(0.125); restored.step(0.125); }
     assert.deepEqual(restored.serialize(), world.serialize());
     assert.doesNotThrow(() => World.deserialize(world.serialize()));
+});
+
+test('automatic tsunami cooldown survives reload and common weather continues while it waits', () => {
+    let world = coast(); world.laws.natural_events = true;
+    const force_roll = (x, y) => {
+        const values = [0.999, x / world.width, y / 128]; let index = 0;
+        world.random = () => values[index++ % values.length];
+        world.weather_clock = 89.875;
+        advance(world, 0.125);
+    };
+    force_roll(50, 35);
+    assert.equal(world.weather[0].kind, 'raincloud');
+    assert.equal(tsunami_cooldown(world), world.year_length * 100);
+    world.weather = []; world.tsunami_clock = tsunami_cooldown(world) - 1;
+    world = World.deserialize(world.serialize());
+    force_roll(50, 35);
+    assert.equal(world.weather[0].kind, 'raincloud');
+    world.weather = []; world.tsunami_clock = tsunami_cooldown(world);
+    force_roll(30, 35);
+    assert.equal(world.weather[0].kind, 'tsunami');
+    assert.equal(world.tsunami_clock, 0);
+    world = World.deserialize(world.serialize()); world.weather = [];
+    force_roll(50, 35);
+    assert.equal(world.weather[0].kind, 'raincloud');
+    const legacy = world.serialize(); delete legacy.tsunami_clock;
+    assert.equal(World.deserialize(legacy).tsunami_clock, 0);
+    for (const value of [-1, Infinity, tsunami_cooldown(world) + 1]) {
+        const bad = world.serialize(); bad.tsunami_clock = value;
+        assert.throws(() => World.deserialize(bad));
+    }
+});
+
+test('only one new tsunami can be active and manual placement remains available after it recedes', () => {
+    const world = coast();
+    assert.equal(world.apply('tsunami', 30, 35).ok, true);
+    const saved = world.serialize();
+    assert.equal(world.apply('tsunami', 29, 35).ok, false);
+    assert.deepEqual(world.serialize(), saved);
+    advance(world, 20);
+    assert.equal(world.apply('tsunami', 29, 35).ok, true);
+    world.laws.natural_events = false;
+    advance(world, 40); assert.equal(world.tsunami_clock, 0);
+    world.year_length = 2;
+    assert.equal(tsunami_cooldown(world), 600);
 });

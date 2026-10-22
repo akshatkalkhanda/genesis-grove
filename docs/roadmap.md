@@ -1,6 +1,6 @@
 # Gameplay priorities
 
-## Current planning path, 21 October 2026
+## Current planning path, 22 October 2026
 
 The [sandbox mechanics and UI plan](video-analysis/README.md) updates the order
 below for the current workstream: map-first UI, named saves and automatic
@@ -16,7 +16,9 @@ storms, lightning, drought, blizzards and deep-ocean coastal tsunamis, with opti
 automatic events and saved state. Version 0.19.0 adds named saves/recovery, map
 layers and presentation view. Version 0.20.0 adds compact army inspection and
 focus/follow. Version 0.21.0 persists autonomous orders, explains their reasons and
-uses actual health, food, strength and land reachability. Ship inspection remains future work.
+uses actual health, food, strength and land reachability. Version 0.22.0 fixes local fire bounds, tsunami frequency and rebellion household/home
+consistency after investigating a real population collapse. [Evidence and remaining
+balance work](survival-and-disasters.md). Ship inspection remains future work.
 The four kingdoms are only the video example; no dedicated setup is planned.
 Next: local town conquest and explicit capital-surrender rules, followed by
 detailed ship inspection and military transport.

@@ -31,6 +31,10 @@ attack and retreat. The inspector explains health, food, strength and target
 decisions; legacy worlds remain readable. Local capital conquest, dedicated supply
 inventory/routes and naval army transport remain future work.
 
+Version 0.22.0 addresses survival before further conquest: bounded local fires, rare
+automatic tsunamis and consistent rebellion homes/households. The [survival report](../survival-and-disasters.md)
+records the observed causes, measured checks and remaining challenge balance issue.
+
 ## Read this first
 
 - [Visual roadmap](roadmap.svg): implementation order and completion gates.
