@@ -1061,7 +1061,7 @@ export class World {
             p.attack_timer = Math.max(0, (p.attack_timer || 0) - dt);
             if (p.voyage_id || p.prisoner_of) continue;
             p.decision -= dt;
-            p.gather += dt;
+            p.gather = p.age / this.year_length < 18 ? 0 : p.gather + dt;
             const enemies = war_targets.get(p.village_id);
             if (p.decision <= 0) {
                 let a = this.random() * Math.PI * 2;
@@ -1075,11 +1075,14 @@ export class World {
             let march_target = order && home ? offensive && p.age > 5
                 ? { x: order.target_x, y: order.target_y, route: true, army: true }
                 : { x: home.x, y: home.y, route: true, army: true } : null;
-            if (order?.reason === 'home_blocked') march_target = { x: p.x, y: p.y };
+            const can_return_home = order?.reason === 'home_blocked' && home && army_reachable(this, p, home);
+            if (order?.reason === 'home_blocked') march_target = can_return_home
+                ? { x: home.x, y: home.y, route: true, army: true } : { x: p.x, y: p.y };
             if (p.role !== 'soldier') march_target = p.work_target || null;
             p.task = p.role !== 'soldier' ? march_target?.task || 'Exploring'
                 : order?.state === 'assemble' ? 'Assembling' : order?.state === 'retreat' ? 'Retreating'
-                    : offensive ? 'Marching' : 'Guarding';
+                    : offensive ? 'Marching' : can_return_home
+                        && Math.hypot(p.x - home.x, p.y - home.y) > 2 ? 'Retreating' : 'Guarding';
             if (order && march_target && Math.hypot(p.x - march_target.x, p.y - march_target.y) <= 2) holding_position = true;
             const crew = crew_intent(this, p);
             const aboard = this._crew_assignments?.get(p.id)?.crew_aboard;
@@ -1162,7 +1165,7 @@ export class World {
             if (this.fire[i] > 0) apply_damage(this, p, dt * 38, 'fire');
             if (p.age / this.year_length > 85 * modifiers.lifespan) apply_damage(this, p, dt / this.year_length * 30, 'aging');
             if (p.health <= 0) continue;
-            if (v && p.gather >= 3) {
+            if (v && p.gather >= 3 && p.age / this.year_length >= 18) {
                 p.gather = 0;
                 const terrain = this.tiles[i];
                 let food = [T.GRASS, T.FOREST, T.JUNGLE, T.SAVANNA, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(terrain) ? this.fertility[i] * 2.4 : 0.4;

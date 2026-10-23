@@ -53,7 +53,7 @@ test('rest recovers energy and health at home and children do not operate indust
     advance_daily_life(world, person, home, home, 0.1, 100);
     assert.equal(state.site.kind, 'home'); assert.equal(person.task, 'Learning and playing');
     const subsistence = collect_daily_goods(world, person, home, 3, 2);
-    assert.ok(Math.abs(subsistence.food - 1.8) < 1e-9); assert.equal(subsistence.wood, 0);
+    assert.equal(subsistence.food, 0); assert.equal(subsistence.wood, 0);
 });
 
 test('unsafe sites and blocked deliveries cannot remotely deposit cargo', () => {

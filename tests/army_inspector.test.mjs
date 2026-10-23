@@ -4,6 +4,7 @@ import { World, T } from '../src/simulation.js';
 import { creature_stats } from '../src/creatures.js';
 import { army_members, army_summary, army_visible, army_badge_hit, army_target,
     rebuild_armies, siege_markers, siege_badge_layout } from '../src/army_inspector.js';
+import { army_route_issue } from '../src/army_orders.js';
 
 function fixture() {
     const world = new World({ preset: 'empty', inhabited: false, seed: 'army-inspection' });
@@ -153,4 +154,45 @@ test('siege badge dimensions remain fixed at every zoom and avoid occupied label
         assert.equal(siege_badge_layout(marker, camera,
             [{ x: 0, y: 0, width: 1024, height: 650 }]), null);
     }
+});
+
+test('route diagnostics distinguish confirmed landmass separation from bounded-search ambiguity without caching', () => {
+    const { world, home } = fixture();
+    for (let y = 0; y < world.tiles.length / world.width; y++) world.set_tile(70, y, T.OCEAN);
+    world._army_masses = world.landmasses();
+    world._army_masses_revision = world.navigation_revision;
+    const local = world.people[0], isolated = { x: 90, y: 55 };
+    const route_cache = world._army_routes;
+    assert.equal(army_route_issue(world, local, home), null);
+    assert.equal(army_route_issue(world, isolated, home), 'different_landmass');
+    assert.equal(army_route_issue(world, { x: -1, y: 55 }, home), 'unwalkable_endpoint');
+    assert.equal(world._army_routes, route_cache, 'diagnostic search must not populate planner cache');
+
+    world._army_masses_revision = -1;
+    assert.equal(army_route_issue(world, isolated, home), 'bounded_search_no_route',
+        'without current landmass labels, an empty bounded search is deliberately ambiguous');
+    assert.equal(world._army_routes, route_cache);
+});
+
+test('home-blocked summary identifies only unreachable members in a mixed garrison', () => {
+    const { world, home, selection } = fixture();
+    for (let y = 0; y < world.tiles.length / world.width; y++) world.set_tile(70, y, T.OCEAN);
+    const stranded = world.people[0];
+    stranded.x = 90; stranded.y = 55;
+    const masses = world.landmasses();
+    world._army_masses = masses; world._army_masses_revision = world.navigation_revision;
+    world.armies[0].reason = 'home_blocked'; world.armies[0].state = 'defend';
+    const before = world.serialize();
+    const planner_routes = world._army_routes;
+    const summary = army_summary(world, selection);
+    assert.equal(summary.blocked_count, 1);
+    assert.deepEqual(summary.blocked_members, [{ id: stranded.id, name: stranded.name,
+        reason: 'different_landmass' }]);
+    assert.match(summary.order_reason, /1 garrison member cannot confirm a route home/);
+    assert.match(summary.order_reason, new RegExp(stranded.name));
+    assert.match(summary.order_reason, /different landmass/);
+    assert.deepEqual(world.serialize(), before, 'inspection keeps saved state unchanged');
+    assert.equal(world._army_routes, planner_routes, 'inspection does not cache routes');
+    assert.ok(summary.members.some(person => person.id !== stranded.id
+        && army_route_issue(world, person, home) === null), 'other members still have a route home');
 });

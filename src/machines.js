@@ -2,6 +2,7 @@ import { defense_hit } from './defenses.js';
 import { sync_crews } from './crews.js';
 import { food_reserve } from './civic.js';
 import { pack_food, receive_food } from './diets.js';
+import { water_return_plan, water_segment } from './water_navigation.js';
 
 export const MACHINES = Object.freeze({
     boat: { label: 'Coastal boat', domain: 'water', age: 2, building: 'dock', wood: 18, speed: 1.6, health: 180 },
@@ -92,34 +93,43 @@ export function advance_machines(world, dt, level_of, research_costs) {
             const enemy = world.villages.find(v => v.alive && world.relation_status(v.id, kingdom.id) === 'war');
             if (enemy) world.march(machine, { x: enemy.x, y: enemy.y, route: true }, dt, recipe.speed);
         } else {
-            machine.fishing_timer = Math.min(20, (machine.fishing_timer || 0) + dt);
+            if (!machine.cargo) machine.fishing_timer = Math.min(20, (machine.fishing_timer || 0) + dt);
             if (machine.fishing_timer >= 20 && !machine.cargo) {
                 if (!foe) machine.cargo = 6;
                 machine.fishing_timer = 0;
             }
-            const dock = kingdom.buildings.find(b => b.type === 'dock');
-            const harbor = machine.cargo && dock ? water_near(world, dock) : null;
-            if (harbor && Math.hypot(machine.x - harbor.x, machine.y - harbor.y) <= 2) {
-                kingdom.food += machine.cargo; machine.cargo = 0;
-                machine.delivered = Math.min(1e6, machine.delivered + 1);
-            }
-            if (harbor) {
-                const angle = Math.atan2(harbor.y - machine.y, harbor.x - machine.x);
-                for (const offset of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
-                    const dx = Math.cos(angle + offset), dy = Math.sin(angle + offset);
-                    const x = machine.x + dx * dt * recipe.speed, y = machine.y + dy * dt * recipe.speed;
-                    if (world.inside(x, y) && world.tile(x, y) <= 1) {
-                        machine.dx = dx; machine.dy = dy; break;
+            if (machine.cargo) {
+                machine.decision = 0; // Flow routing has no wandering decision timer.
+                const docks = kingdom.buildings.filter(building => building.type === 'dock');
+                let travel = Math.max(0, dt * recipe.speed);
+                for (let step = 0; step < world.tiles.length && travel > 0; step++) {
+                    const plan = water_return_plan(world, machine, docks);
+                    if (!plan.harbor) break; // Keep the catch aboard until a route exists.
+                    if (Math.hypot(machine.x - plan.harbor.x, machine.y - plan.harbor.y) <= 0.2) {
+                        const cargo = { amount: machine.cargo, food_stores: { fish: machine.cargo } };
+                        if (receive_food(kingdom, cargo)) {
+                            machine.cargo = 0;
+                            machine.fishing_timer = 0;
+                            machine.delivered = Math.min(1e6, machine.delivered + 1);
+                        }
+                        break;
                     }
+                    const distance = Math.hypot(plan.waypoint.x - machine.x, plan.waypoint.y - machine.y);
+                    if (!distance) break;
+                    const amount = Math.min(distance, travel);
+                    machine.dx = (plan.waypoint.x - machine.x) / distance;
+                    machine.dy = (plan.waypoint.y - machine.y) / distance;
+                    machine.x += machine.dx * amount; machine.y += machine.dy * amount;
+                    travel -= amount;
                 }
-                machine.decision = 3;
+                continue;
             }
             if (machine.decision <= 0) {
                 const angle = world.random() * Math.PI * 2;
                 machine.dx = Math.cos(angle); machine.dy = Math.sin(angle); machine.decision = 3;
             }
             const nx = machine.x + machine.dx * dt * recipe.speed, ny = machine.y + machine.dy * dt * recipe.speed;
-            if (world.inside(nx, ny) && world.tile(nx, ny) <= 1) { machine.x = nx; machine.y = ny; }
+            if (water_segment(world, machine, { x: nx, y: ny })) { machine.x = nx; machine.y = ny; }
             else machine.decision = 0;
         }
     }

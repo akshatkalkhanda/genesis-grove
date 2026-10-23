@@ -58,6 +58,10 @@ Current parent records and personality traits are intentionally simpler.
 
 Cosmic follow-up: orbital maps, star-system travel, off-world colonies, and distinct alien civilizations. Current stargates and hover transports support towns on the existing map.
 
+Version 0.28.0 addresses the [native play-review findings](play-review-fixes.md)
+before military transport: real water return routes, inspector clarity, child
+routines and individual garrison recovery.
+
 ## Naval milestones
 
 ### N1 — Ship Inspector

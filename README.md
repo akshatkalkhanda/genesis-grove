@@ -23,6 +23,10 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
+Version 0.28.0 refreshes the main menu, repairs coastal catch delivery, and exposes creature needs near Health,
+keeps inspector headings visible, corrects child work and clarifies blocked
+garrisons. Extreme zoom retains map anchors while capping moving artwork. See
+[the play-review fixes](docs/play-review-fixes.md).
 Version 0.27.0 adds individual traits, three diets, nutrition and energy, survival
 decisions, and a compact trait/diet editor in the creature inspector. See the
 [simulation roadmap and Phase 1 walkthrough](docs/simulation-roadmap.md).

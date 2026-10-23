@@ -97,8 +97,8 @@ app.whenReady().then(async () => {
         await click('[name="character-diet"][value="herbivore"]'); await escape();
         assert.equal(await js('JSON.stringify(genesis.snapshot())'), before, 'Open/cancel and an unapplied diet choice must be read-only');
         assert.equal(await js('document.querySelector("#entity-card").getBoundingClientRect().height'), closed_height);
-        assert.ok(await js('document.querySelector(".character-profile").textContent.includes("Hunger · 20/100")'));
-        assert.ok(await js('document.querySelector(".character-profile").textContent.includes("Energy · 70/100")'));
+        assert.ok(await js('document.querySelector(".entity-needs").textContent.includes("Hunger · 20/100")'));
+        assert.ok(await js('document.querySelector(".entity-needs").textContent.includes("Energy · 70/100")'));
         assert.ok(await js('document.querySelector(".character-events").textContent.includes("Entered the world.")'));
         checks.push('Existing primary trait, current action/reason, needs/history details,14traits/3diets and read-only opening/cancel');
         const strength = () => js(`Number([...document.querySelectorAll('#entity-card .entity-row')].find(row=>row.firstElementChild.textContent==='Strength / Intelligence').lastElementChild.textContent.split('/')[0])`);

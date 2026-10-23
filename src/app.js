@@ -23,6 +23,7 @@ import { DAMAGE_CAUSES, health_risks } from './health.js';
 import { MEDICAL_BUILDINGS } from './medicine.js';
 import { bind_character_ui } from './character_ui.js';
 import { life_stage } from './needs.js';
+import { DIET_CATALOG } from './diets.js';
 const $ = id => document.getElementById(id);
 function kingdom_flag(kingdom) {
     const flag = document.createElement('canvas'); flag.width = 40; flag.height = 28;
@@ -502,6 +503,7 @@ function inspect(p) {
     box.style.top = `${Math.max(70, Math.min(p.y + 18, renderer.height - bounds.height - 96))}px`;
 }
 function inspect_click(p) {
+    if ($('entity-card').hidden) delete $('entity-card').dataset.inspectorKey;
     const tile = renderer.world_point(p.x, p.y);
     const ship = renderer.ship_at(world, p);
     const army = ship ? null : renderer.army_at(world, p);
@@ -730,12 +732,19 @@ function update_army_card() {
 }
 function update_entity_card() {
     if (!inspected_unit) return;
+    const card_identity = `${inspected_unit.kind}:${inspected_unit.collection || inspected_unit.kingdom_id || ''}:${inspected_unit.id}`;
+    const current_card = $('entity-card');
+    if (current_card.dataset.inspectorKey !== card_identity) {
+        current_card.replaceChildren(); current_card.scrollTop = 0;
+        current_card.dataset.inspectorKey = card_identity;
+    }
     if (inspected_unit.kind === 'ship') { update_ship_card(); return; }
     $('entity-card').classList.remove('ship-card'); delete $('entity-card').dataset.shipKey;
     if (inspected_unit.kind === 'army') { update_army_card(); return; }
     const unit = (inspected_unit.kind === 'person' ? world.people : world.animals).find(u => u.id === inspected_unit.id);
     if (!unit) { inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; toast('This creature has left the world. Its story has ended.'); return; }
     const attributes = creature_stats(unit, world.year_length);
+    const child = inspected_unit.kind === 'person' && unit.age < world.year_length * 18;
     const card = $('entity-card');
     card.classList.remove('has-siege');
     card.setAttribute('aria-label', 'Selected creature details');
@@ -752,7 +761,7 @@ function update_entity_card() {
     heading.append(name, close); card.append(heading);
     const portrait = document.createElement('canvas'); portrait.width = 64; portrait.height = 64; portrait.className = 'entity-portrait';
     const art = portrait.getContext('2d'); art.imageSmoothingEnabled = false; art.setTransform(3, 0, 0, 3, 32, 47);
-    if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now());
+    if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now(), world.year_length);
     else renderer.animal(art, { ...unit, x: 0, y: 0 });
     card.append(portrait);
     const activity = document.createElement('div'); activity.className = 'entity-activity';
@@ -768,6 +777,24 @@ function update_entity_card() {
     health.setAttribute('role', 'meter'); health.setAttribute('aria-label', 'Health');
     health.setAttribute('aria-valuemin', '0'); health.setAttribute('aria-valuemax', String(attributes.max_health)); health.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(unit.health))));
     const meter = document.createElement('span'); meter.style.width = `${Math.max(0, Math.min(100, unit.health / attributes.max_health * 100))}%`; health.append(meter); card.append(health);
+    const needs = document.createElement('section'); needs.className = 'entity-needs';
+    needs.setAttribute('aria-label', 'Hunger, energy and diet');
+    const supernatural = ['angel', 'demon'].includes(unit.species);
+    for (const [label, raw] of [['Hunger', Number.isFinite(unit.needs?.nutrition) ? 100 - unit.needs.nutrition : null], ['Energy', unit.needs?.energy]]) {
+        if (supernatural || !Number.isFinite(raw)) continue;
+        const value = Math.max(0, Math.min(100, raw));
+        const field = document.createElement('label'); field.className = 'character-need';
+        const text = document.createElement('span'); text.textContent = `${label} · ${Math.round(value)}/100`;
+        const gauge = document.createElement('meter'); gauge.min = 0; gauge.max = 100; gauge.value = value;
+        gauge.setAttribute('aria-label', label); gauge.setAttribute('aria-valuetext', label === 'Hunger'
+            ? `${Math.round(value)} out of 100; higher means hungrier` : `${Math.round(value)} out of 100 energy remaining`);
+        gauge.low = label === 'Hunger' ? 25 : 30; gauge.high = 65; gauge.optimum = label === 'Hunger' ? 0 : 100;
+        field.append(text, gauge); needs.append(field);
+    }
+    const diet = document.createElement('span'); diet.className = 'entity-diet';
+    diet.textContent = supernatural ? 'Supernatural · ordinary hunger does not apply'
+        : `Diet · ${DIET_CATALOG.find(diet => diet.id === (unit.diet_id || 'omnivore'))?.label || 'Omnivore'}`;
+    needs.append(diet); card.append(needs);
     const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
     line('Species', `${inspected_unit.kind === 'person' ? RACES[unit.race]?.label || 'Human' : unit.species} · #${unit.id}`);
     line('Health', `${Math.ceil(unit.health)} / ${attributes.max_health}`);
@@ -793,7 +820,9 @@ function update_entity_card() {
     line('Level / XP', `${attributes.level} · ${Math.floor(unit.xp || 0)} / ${attributes.next_xp ?? 'Master'}`);
     line('Strength / Intelligence', `${attributes.strength} / ${attributes.intelligence}`);
     line('Trait', unit.trait || 'Unknown');
-    card.append(character_editor.profile(unit, inspected_unit.kind, expanded));
+    const profile = character_editor.profile(unit, inspected_unit.kind, expanded);
+    for (const gauge of profile.querySelectorAll('.character-need')) gauge.remove();
+    card.append(profile);
     line('Kills', unit.kills || 0);
     line('Terrain', TERRAIN_NAMES[world.tile(unit.x, unit.y)]);
     if (inspected_unit.kind === 'person') {
@@ -815,7 +844,8 @@ function update_entity_card() {
             line('Royal policy', `${policy} · ${effect}`);
         }
         const vessel = world.machines.find(m => m.crew_id === unit.id);
-        line('Role', vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        line('Role', child ? 'Child' : vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        if (child && unit.job) line('Future aptitude', `${unit.job} · adult work begins at 18`);
         if (unit.recovering || unit.medical_role) {
             const clinics = kingdom?.buildings?.filter(b => MEDICAL_BUILDINGS.has(b.type)) || [];
             const doctors = world.people.filter(p => p.village_id === kingdom?.id && p.medical_role === 'doctor' && p.health > 0);
@@ -833,7 +863,7 @@ function update_entity_card() {
         line('Culture', culture ? `${culture.name} · ${culture.value}` : 'Local traditions');
         if (unit.heritage_trait) line('Inherited aptitude', unit.heritage_trait);
         const routine = unit.daily_life;
-        if (routine && unit.role !== 'soldier' && !unit.prisoner_of && !unit.voyage_id && !unit.medical_role && !unit.recovering) {
+        if (routine && !child && unit.role !== 'soldier' && !unit.prisoner_of && !unit.voyage_id && !unit.medical_role && !unit.recovering) {
             if (!Number.isFinite(unit.needs?.energy)) line('Routine energy', `${Math.round(routine.energy)} / 100`);
             line('Carrying', `${routine.cargo.food.toFixed(1)} food · ${routine.cargo.wood.toFixed(1)} timber`);
             line('Delivered supplies', Math.floor(routine.delivered));
@@ -1211,6 +1241,7 @@ function update_ui() {
 }
 function replace_world(next) {
     character_editor.close();
+    delete $('entity-card').dataset.inspectorKey;
     $('creation-guide').dataset.completed = 'false';
     $('creation-guide').open = true;
     world = next; focused_village_id = null; inspected_unit = null; followed_unit_id = null; renderer.selected_unit_id = null; $('entity-card').hidden = true; renderer.selected_kingdom_id = null;

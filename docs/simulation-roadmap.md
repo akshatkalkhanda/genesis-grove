@@ -25,7 +25,8 @@ this phase implements the focused initial set below with real effects.
 
 ## Phase1 — traits, diets, needs and decisions
 
-Status: implemented and verified in the 0.27.0 development checkpoint.
+Status: implemented and verified in 0.27.0; 0.28.0 addresses native play-review
+findings in [the follow-up report](play-review-fixes.md).
 
 - Stable configurable trait IDs, categories, descriptions, effects, inheritance
   probabilities and incompatibilities. Keep existing primary traits and ancestry.

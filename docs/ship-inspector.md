@@ -57,6 +57,10 @@ The military transport follow-up is scoped in [the gameplay roadmap](roadmap.md#
 assemble → embark → sail → land → attack/return. A dedicated occupant and transport
 order model is needed before soldiers can board; ship combat is separate work.
 
+In 0.28.0, coastal return information is backed by actual connected-water routes.
+A boat with catch reports an unreachable harbor or full stores honestly; the
+catch stays aboard. See [play-review fixes](play-review-fixes.md).
+
 ## Verification
 
 Eight new projection tests passed. The focused batch passed 21/21 including

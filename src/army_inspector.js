@@ -1,6 +1,6 @@
 import { creature_stats } from './creatures.js';
 
-import { refresh_armies, ARMY_REASONS } from './army_orders.js';
+import { refresh_armies, ARMY_REASONS, army_route_issue } from './army_orders.js';
 import { siege_summary } from './sieges.js';
 
 // Rebuild markers from saved orders only, including while paused.
@@ -93,11 +93,36 @@ export function army_summary(world, selection) {
     const strength = members.reduce((sum, person) => sum
         + creature_stats(person, world.year_length).strength, 0);
     const pending = army.target_id && !target;
+    const blocked_members = [];
+    const route_causes = new Set();
+    const route_issues = new Map();
+    let blocked_count = 0;
+    if (army.reason === 'home_blocked' && home) {
+        for (const person of members) {
+            const key = `${Math.floor(person.x)},${Math.floor(person.y)}`;
+            if (!route_issues.has(key)) route_issues.set(key, army_route_issue(world, person, home));
+            const reason = route_issues.get(key);
+            if (!reason) continue;
+            blocked_count++;
+            route_causes.add(reason);
+            if (blocked_members.length < 3) blocked_members.push({
+                id: person.id, name: person.name || `Citizen #${person.id}`, reason
+            });
+        }
+    }
+    const blocked_names = blocked_members.map(person => person.name).join(', ');
+    const route_caveats = [];
+    if (route_causes.has('different_landmass')) route_caveats.push('some are on a different landmass');
+    if (route_causes.has('unwalkable_endpoint')) route_caveats.push('some member or home locations are not walkable');
+    if (route_causes.has('bounded_search_no_route')) route_caveats.push('an unsuccessful bounded search may mean a blocked route or search limit');
+    const route_reason = blocked_count ? `${blocked_count} garrison member${blocked_count === 1 ? '' : 's'} cannot confirm a route home${blocked_names ? `: ${blocked_names}` : ''}${route_caveats.length ? `; ${route_caveats.join('; ')}.` : '.'}`
+        : ARMY_REASONS[army.reason];
     return { army, kingdom, home, target, members, strength,
         siege: target ? siege_summary(world, target) : null,
         order_label: `${army.state[0].toUpperCase()}${army.state.slice(1)}${pending ? ' · awaiting review' : ''}`,
         order_reason: pending ? 'The former target is no longer an enemy town. The saved order will be reviewed when time runs.'
-            : ARMY_REASONS[army.reason],
+            : army.reason === 'home_blocked' ? route_reason : ARMY_REASONS[army.reason],
+        blocked_members, blocked_count,
         activity: tally(person => person.task || 'Awaiting activity'),
         weapons: tally(person => person.weapon_level || 0),
         armor: tally(person => person.armor_level || 0) };

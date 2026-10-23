@@ -50,6 +50,11 @@ export class Renderer extends Camera {
             && army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)
             && army_badge_hit(army, point, this.origin, this.scale));
     }
+    sprite_factor(factor) {
+        // Grow detail at town zoom, then stop artwork growth at four screen pixels
+        // per artwork pixel. Saved anchors and the camera scale stay unchanged.
+        return factor * Math.min(1, 4 / this.scale);
+    }
     ship_at(world, point) {
         // Match the compact hull/sail extents rather than a broad world-radius.
         // A small screen-space minimum keeps tiny zoomed-out vessels clickable.
@@ -61,7 +66,7 @@ export class Renderer extends Camera {
             if (!anchor) continue;
             const x = this.origin.x + anchor.x * CELL * this.scale;
             const y = this.origin.y + anchor.y * CELL * this.scale;
-            const factor = 0.42 * this.scale;
+            const factor = this.sprite_factor(0.42) * this.scale;
             const [left, right, top, bottom] = collection === 'machines' ? [15, 17, 28, 9]
                 : collection === 'voyages' ? [6, 9, 12, 5] : [6, 6, 10, 4];
             if (point.x < x - Math.max(12, left * factor) || point.x > x + Math.max(12, right * factor)
@@ -207,7 +212,9 @@ export class Renderer extends Camera {
         const c = this.ctx, o = this.origin, s = this.scale;
         const detail = map_detail(s);
         const counts = { level: detail.level, houses: 0, facilities: 0, people: 0,
-            markers: 0, activities: 0, names: 0, settlements: 0, sieges: 0 };
+            markers: 0, activities: 0, names: 0, settlements: 0, sieges: 0,
+            creature_pixel_scale: this.sprite_factor(0.55) * s,
+            vehicle_pixel_scale: this.sprite_factor(0.42) * s };
         this.visibility = counts;
         const visible = unit => {
             const x = o.x + unit.x * CELL * s, y = o.y + unit.y * CELL * s;
@@ -280,7 +287,7 @@ export class Renderer extends Camera {
                     y: voyage.y + (voyage.target_y - voyage.y) * voyage.progress };
             if (!point) continue;
             const x = point.x * CELL, y = point.y * CELL;
-            draw_compact(c, x, y, 0.42, () => {
+            draw_compact(c, x, y, this.sprite_factor(0.42), () => {
             c.fillStyle = '#352d26'; c.fillRect(x - 6, y + 2, 13, 3);
             c.fillStyle = voyage.kind === 'ship' ? '#e8e3c9' : '#bca87b';
             c.fillRect(x - 1, y - 8, 2, 10); c.fillRect(x + 1, y - 7, 5, 6);
@@ -296,22 +303,22 @@ export class Renderer extends Camera {
                     y: sender.y + (recipient.y - sender.y) * trade.progress };
             if (!point) continue;
             const x = point.x * CELL, y = point.y * CELL;
-            draw_compact(c, x, y, 0.42, () => {
+            draw_compact(c, x, y, this.sprite_factor(0.42), () => {
             c.fillStyle = trade.kind === 'ship' ? '#735b45' : '#8e724e'; c.fillRect(x - 6, y, 12, 4);
             c.fillStyle = trade.good === 'food' ? '#c6bb6d' : trade.good === 'wood' ? '#7e9d59' : '#a9b8b8'; c.fillRect(x - 3, y - 4, 6, 4);
             if (trade.kind === 'ship') { c.fillStyle = '#e9dfb8'; c.fillRect(x, y - 10, 1, 8); c.fillRect(x + 1, y - 9, 5, 5); }
             else { c.fillStyle = '#3f3b32'; c.fillRect(x - 4, y + 3, 2, 2); c.fillRect(x + 3, y + 3, 2, 2); }
             });
         }
-        for (const vehicle of world.vehicles) draw_compact(c, vehicle.x * CELL, vehicle.y * CELL, 0.42,
+        for (const vehicle of world.vehicles) draw_compact(c, vehicle.x * CELL, vehicle.y * CELL, this.sprite_factor(0.42),
             () => draw_vehicle(c, vehicle, kingdoms.get(vehicle.kingdom_id)?.color || '#b3c697', now));
         for (const machine of world.machines.filter(m => ['boat', 'artillery'].includes(m.kind))) {
             const kingdom = kingdoms.get(machine.kingdom_id);
-            draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
+            draw_compact(c, machine.x * CELL, machine.y * CELL, this.sprite_factor(0.42),
                 () => draw_machine(c, machine, kingdom, now, technology_level(kingdom)));
         }
         for (const animal of world.animals.filter(visible)) {
-            if (detail.people || animal.id === this.selected_unit_id) draw_compact(c, animal.x * CELL, animal.y * CELL, 0.55,
+            if (detail.people || animal.id === this.selected_unit_id) draw_compact(c, animal.x * CELL, animal.y * CELL, this.sprite_factor(0.55),
                 () => this.animal(c, animal, now));
             else { c.fillStyle = '#bdc5a988'; c.fillRect(animal.x * CELL, animal.y * CELL, 1.5 / s, 1.5 / s); }
         }
@@ -319,36 +326,38 @@ export class Renderer extends Camera {
         for (const p of world.people) {
             if (p.voyage_id || aboard.has(p.id) || !visible(p)) continue;
             const selected = p.id === this.selected_unit_id;
-            if (detail.people || selected) { counts.people++; draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
-                () => this.person(c, p, kingdoms.get(p.village_id), now));
+            if (detail.people || selected) { counts.people++; draw_compact(c, p.x * CELL, p.y * CELL, this.sprite_factor(0.55),
+                () => this.person(c, p, kingdoms.get(p.village_id), now, world.year_length));
             } else {
                 counts.markers++;
                 c.fillStyle = kingdoms.get(p.village_id)?.king_id === p.id ? '#f0ca65'
                     : kingdoms.get(p.village_id)?.color || '#d6dfb7';
                 c.fillRect(p.x * CELL, p.y * CELL, 1.7 / s, 2 / s);
             }
-            if ((detail.activities && counts.activities < 24) || selected) { counts.activities++;
-                draw_compact(c, p.x * CELL, p.y * CELL, 0.55,
+            if (p.age >= world.year_length * 18 && ((detail.activities && counts.activities < 24) || selected)) { counts.activities++;
+                draw_compact(c, p.x * CELL, p.y * CELL, this.sprite_factor(0.55),
                 () => draw_daily_activity(c, p, now));
             }
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
-            draw_compact(c, machine.x * CELL, machine.y * CELL, 0.42,
+            draw_compact(c, machine.x * CELL, machine.y * CELL, this.sprite_factor(0.42),
                 () => draw_machine(c, machine, kingdoms.get(machine.kingdom_id), now));
         }
         if (this.selected_unit_id) {
             const selected = [...world.people, ...world.animals].find(unit => unit.id === this.selected_unit_id);
             if (selected) {
                 c.strokeStyle = '#f5e8a8'; c.lineWidth = 1 / s;
-                c.beginPath(); c.ellipse(selected.x * CELL, selected.y * CELL + 3, 7, 4, 0, 0, Math.PI * 2); c.stroke();
+                c.beginPath(); c.ellipse(selected.x * CELL, selected.y * CELL + Math.min(3, 6 / s),
+                    Math.min(7, 13 / s), Math.min(4, 7 / s), 0, 0, Math.PI * 2); c.stroke();
             }
         }
         if (this.selected_ship) {
             const point = ship_position(world, this.selected_ship);
             if (point) {
                 c.strokeStyle = '#f5e8a8'; c.lineWidth = 1.5 / s;
-                c.beginPath(); c.ellipse(point.x * CELL, point.y * CELL + 2,
-                    Math.max(8, 10 / s), Math.max(4, 5 / s), 0, 0, Math.PI * 2); c.stroke();
+                c.beginPath(); c.ellipse(point.x * CELL, point.y * CELL + Math.min(2, 4 / s),
+                    Math.max(10, Math.min(8 * s, 18)) / s,
+                    Math.max(5, Math.min(4 * s, 9)) / s, 0, 0, Math.PI * 2); c.stroke();
             }
         }
         for (let i = 0; i < world.fire.length; i++) if (world.fire[i] > 0) {
@@ -392,19 +401,24 @@ export class Renderer extends Camera {
             const p = this.world_point(this.pointer.x, this.pointer.y);
             if (world.inside(p.x, p.y)) {
                 c.strokeStyle = '#f0f5d6dc'; c.fillStyle = '#edfad40e'; c.lineWidth = 1.2 / s;
-                c.beginPath(); c.arc((Math.floor(p.x) + 0.5) * CELL, (Math.floor(p.y) + 0.5) * CELL, (this.tool === 'inspect' ? 0.7 : this.brush) * CELL, 0, Math.PI * 2); c.fill(); c.stroke();
-                c.fillStyle = '#eff7d8'; c.fillRect(p.x * CELL - 1, p.y * CELL - 1, 2, 2);
+                c.beginPath(); c.arc((Math.floor(p.x) + 0.5) * CELL, (Math.floor(p.y) + 0.5) * CELL,
+                    this.tool === 'inspect' ? Math.min(0.7 * CELL, 12 / s) : this.brush * CELL, 0, Math.PI * 2); c.fill(); c.stroke();
+                const dot = this.tool === 'inspect' ? Math.min(1, 2 / s) : 1;
+                c.fillStyle = '#eff7d8'; c.fillRect(p.x * CELL - dot, p.y * CELL - dot, dot * 2, dot * 2);
             }
         }
         c.restore();
-        const label_boxes = [];
+        const label_boxes = (world.armies || []).filter(army =>
+            army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army))
+            .map(army => ({ x: o.x + army.x * CELL * s - 14,
+                y: o.y + army.y * CELL * s - 29, width: 31, height: 22 }));
         const labeled_units = [...world.people, ...world.animals]
             .filter(unit => detail.names || unit.id === this.selected_unit_id)
             .sort((a, b) => Number(b.id === this.selected_unit_id) - Number(a.id === this.selected_unit_id));
         for (const unit of labeled_units) {
-            if (label_boxes.length >= 6) break;
+            if (counts.names >= 6) break;
             if (unit.voyage_id || unit.health <= 0) continue;
-            const x = o.x + unit.x * CELL * s, y = o.y + (unit.y * CELL - 17) * s;
+            const x = o.x + unit.x * CELL * s, y = o.y + unit.y * CELL * s - Math.min(76, 17 * s) - 8;
             if (x < 48 || x > this.width - 48 || y < 105 || y > this.height - 30) continue;
             const box = { x: x - 48, y: y - 14, width: 96, height: unit.task ? 34 : 23 };
             if (label_boxes.some(other => box.x < other.x + other.width + 4
@@ -418,7 +432,12 @@ export class Renderer extends Camera {
             c.fillStyle = '#e9efd3'; c.fillText(`${unit.name?.split(' ')[0] || unit.species} · Lv ${stats.level}`, x, y - 3);
             c.fillStyle = '#385041'; c.fillRect(x - 28, y + 2, 56, 3);
             c.fillStyle = '#a7d479'; c.fillRect(x - 28, y + 2, 56 * Math.max(0, unit.health / stats.max_health), 3);
-            if (unit.task) { c.font = '9px -apple-system, Segoe UI, sans-serif'; c.fillStyle = '#b8c8b1'; c.fillText(unit.task, x, y + 15); }
+            if (unit.task) {
+                c.font = '9px -apple-system, Segoe UI, sans-serif'; c.fillStyle = '#b8c8b1';
+                let task = unit.task;
+                while (task.length > 1 && c.measureText(task).width > 84) task = task.slice(0, -1);
+                c.fillText(task === unit.task ? task : `${task.slice(0, -1)}…`, x, y + 15);
+            }
         }
         for (const army of world.armies || []) {
             if (!army_visible(army, this.layer, this.selected_kingdom_id, this.selected_army)) continue;
@@ -553,7 +572,7 @@ export class Renderer extends Camera {
         c.fillStyle = '#2e302b'; c.fillRect(x + face * 6 - 1, y - 4, 1, 1);
         c.fillStyle = '#473b2e'; c.fillRect(x - 3, y + 2, 1, 3); c.fillRect(x + 2, y + 2, 1, 3);
     }
-    person(c, person, kingdom, now) {
+    person(c, person, kingdom, now, year_length = 20) {
         const x = Math.round(person.x * CELL), y = Math.round(person.y * CELL);
         const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
         const skin = { orc: '#8fbc6c', dwarf: '#d69b75', foxfolk: '#d88953', harefolk: '#e7d6be', catfolk: '#d5b078', frogfolk: '#78c991', wolfkin: '#aab9c4', hyenafolk: '#b99566', beetlefolk: '#68aaa1' }[person.race] || '#f0c9a0';
@@ -581,13 +600,12 @@ export class Renderer extends Camera {
         if (person.race === 'beetlefolk') { c.fillStyle = '#477e83'; c.fillRect(x - 3, y - 10, 6, 3); c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         if (armor > 0) { c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 4, y - 3, 2, 4); c.fillRect(x + 2, y - 3, 2, 4); }
         if (armor >= 9 && (this.zoom >= 9 || person.id === this.selected_unit_id)) {
-            c.strokeStyle = `${TECH_AGES[armor].color}70`; c.lineWidth = 1;
-            c.beginPath(); c.ellipse(x, y - 4, 7, 12, 0, 0, Math.PI * 2); c.stroke();
+            // The armor silhouette carries the tier; a permanent aura obscures neighbors.
             c.fillStyle = TECH_AGES[armor].color; c.fillRect(x - 3, y - 10, 6, 2);
         }
         c.fillStyle = '#e3d4bd'; c.fillRect(x - 1, y - 2, 2, 2);
         const metal = TECH_AGES[level].color;
-        if (person.role === 'soldier' || (!stationary && (this.zoom >= 9 || person.id === this.selected_unit_id))) draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
+        if (person.age >= year_length * 18 && (person.role === 'soldier' || (!stationary && (this.zoom >= 9 || person.id === this.selected_unit_id)))) draw_weapon(c, x, y + Math.round(Math.sin(now / 250 + person.id)), level, face, metal,
             level >= 6 && person.attack_timer > (level === 6 ? 1.8 : 0.6));
         if (level < 5 && (level >= 2 || person.role === 'soldier')) {
             c.fillStyle = metal; c.fillRect(x - face * 5 - 2, y - 4, 4, 6);
@@ -716,43 +734,46 @@ export class Renderer extends Camera {
         }
     }
     effect(c, e, now) {
-        const x = e.x * CELL, y = e.y * CELL, r = e.radius * CELL;
+        const x = e.x * CELL, y = e.y * CELL, r = Math.min(e.radius * CELL, 48 / this.scale);
         c.save(); c.globalAlpha = e.life;
         if (e.type === 'shell') {
             const progress = 1 - e.life;
             const px = x + (e.target_x * CELL - x) * progress;
-            const py = y + (e.target_y * CELL - y) * progress - Math.sin(progress * Math.PI) * 26;
-            c.fillStyle = '#292d2b'; c.beginPath(); c.arc(px, py, 2.5, 0, Math.PI * 2); c.fill();
+            const py = y + (e.target_y * CELL - y) * progress - Math.sin(progress * Math.PI) * Math.min(26, 42 / this.scale);
+            c.fillStyle = '#292d2b'; c.beginPath(); c.arc(px, py, Math.min(2.5, 4 / this.scale), 0, Math.PI * 2); c.fill();
             if (progress > 0.8) {
-                c.fillStyle = '#edb56d99'; c.beginPath(); c.arc(e.target_x * CELL, e.target_y * CELL, 9 * progress, 0, Math.PI * 2); c.fill();
+                c.fillStyle = '#edb56d99'; c.beginPath(); c.arc(e.target_x * CELL, e.target_y * CELL, Math.min(9, 24 / this.scale) * progress, 0, Math.PI * 2); c.fill();
             }
         } else if (e.type === 'beam') {
-            c.strokeStyle = e.color || '#c3f4f0'; c.lineWidth = 3 * e.life;
+            c.strokeStyle = e.color || '#c3f4f0'; c.lineWidth = Math.min(3, 3 / this.scale) * e.life;
             c.beginPath(); c.moveTo(x, y - 8); c.lineTo(e.target_x * CELL, e.target_y * CELL - 6); c.stroke();
-            c.strokeStyle = '#edfff8'; c.lineWidth = Math.max(0.4, e.life); c.stroke();
+            c.strokeStyle = '#edfff8'; c.lineWidth = Math.min(1, 1 / this.scale) * e.life; c.stroke();
         } else if (e.type === 'shot' || e.type === 'bolt') {
             const progress = 1 - e.life;
             const tx = e.target_x * CELL, ty = e.target_y * CELL - 6;
-            c.strokeStyle = e.type === 'bolt' ? '#dfc89a' : '#ffeda0'; c.lineWidth = e.type === 'bolt' ? 1 : 1.5;
+            c.strokeStyle = e.type === 'bolt' ? '#dfc89a' : '#ffeda0'; c.lineWidth = Math.min(e.type === 'bolt' ? 1 : 1.5, 2 / this.scale);
             c.beginPath(); c.moveTo(x + (tx - x) * Math.max(0, progress - 0.25), y - 6 + (ty - y + 6) * Math.max(0, progress - 0.25));
             c.lineTo(x + (tx - x) * progress, y - 6 + (ty - y + 6) * progress); c.stroke();
         } else if (e.type === 'lightning') {
-            c.strokeStyle = '#f7f8c0'; c.lineWidth = 3;
-            c.beginPath(); c.moveTo(x + 20, y - 140); c.lineTo(x - 6, y - 70); c.lineTo(x + 9, y - 72); c.lineTo(x, y); c.stroke();
+            const footprint = Math.min(1, 160 / (140 * this.scale));
+            c.strokeStyle = '#f7f8c0'; c.lineWidth = Math.min(3, 3 / this.scale);
+            c.beginPath(); c.moveTo(x + 20 * footprint, y - 140 * footprint);
+            c.lineTo(x - 6 * footprint, y - 70 * footprint); c.lineTo(x + 9 * footprint, y - 72 * footprint); c.lineTo(x, y); c.stroke();
             c.fillStyle = '#ffffc433'; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
         } else if (e.type === 'meteor') {
             const progress = 1 - e.life;
-            c.strokeStyle = '#fdba69'; c.lineWidth = 4;
+            c.strokeStyle = '#fdba69'; c.lineWidth = Math.min(4, 3 / this.scale);
             c.beginPath(); c.arc(x, y, r * (0.5 + progress * 2), 0, Math.PI * 2); c.stroke();
             c.fillStyle = '#ffe6a866'; c.beginPath(); c.arc(x, y, r * (1 - progress), 0, Math.PI * 2); c.fill();
-            for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; c.fillStyle = '#ffd68d'; c.fillRect(x + Math.cos(a) * r * progress * 2, y + Math.sin(a) * r * progress * 2, 3, 3); }
+            for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; c.fillStyle = '#ffd68d'; c.fillRect(x + Math.cos(a) * r * progress * 2, y + Math.sin(a) * r * progress * 2, Math.min(3, 3 / this.scale), Math.min(3, 3 / this.scale)); }
         } else if (e.type === 'rain') {
-            c.strokeStyle = '#9dd9e4'; c.lineWidth = 1;
-            for (let i = 0; i < 23; i++) { const dx = Math.sin(i * 17) * r, dy = ((i * 13 + now / 25) % (r * 2)) - r; c.beginPath(); c.moveTo(x + dx, y + dy - 5); c.lineTo(x + dx - 2, y + dy + 2); c.stroke(); }
+            c.strokeStyle = '#9dd9e4'; c.lineWidth = Math.min(1, 1 / this.scale);
+            for (let i = 0; i < 23; i++) { const dx = Math.sin(i * 17) * r, dy = ((i * 13 + now / 25) % (r * 2)) - r; c.beginPath(); c.moveTo(x + dx, y + dy - Math.min(5, 7 / this.scale)); c.lineTo(x + dx - Math.min(2, 3 / this.scale), y + dy + Math.min(2, 3 / this.scale)); c.stroke(); }
         } else {
-            c.strokeStyle = '#e1ed95'; c.lineWidth = 1.5;
+            c.globalAlpha *= 0.6;
+            c.strokeStyle = '#e1ed95'; c.lineWidth = Math.min(1.5, 2 / this.scale);
             c.beginPath(); c.arc(x, y, r * (1.2 - e.life * 0.4), 0, Math.PI * 2); c.stroke();
-            for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + now / 1500; c.fillStyle = '#efffc6'; c.fillRect(x + Math.cos(a) * r / 2, y + Math.sin(a) * r / 2 - (1 - e.life) * 15, 2, 2); }
+            for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + now / 1500; c.fillStyle = '#efffc6'; c.fillRect(x + Math.cos(a) * r / 2, y + Math.sin(a) * r / 2 - (1 - e.life) * Math.min(15, 16 / this.scale), Math.min(2, 2 / this.scale), Math.min(2, 2 / this.scale)); }
         }
         c.restore();
     }

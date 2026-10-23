@@ -55,6 +55,20 @@ export function army_reachable(world, from, to) {
     return world._army_routes.get(key);
 }
 
+// Diagnostic projection: never populates route or landmass caches. If the caller
+// lacks a current landmass map, an unsuccessful bounded search stays ambiguous.
+export function army_route_issue(world, from, to) {
+    if (!world.walkable(from?.x, from?.y) || !world.walkable(to?.x, to?.y)) {
+        return 'unwalkable_endpoint';
+    }
+    const from_index = world.index(from.x, from.y), to_index = world.index(to.x, to.y);
+    if (world._army_masses_revision === world.navigation_revision && world._army_masses) {
+        if (world._army_masses[from_index] !== world._army_masses[to_index]) return 'different_landmass';
+    }
+    if (Math.floor(from.x) === Math.floor(to.x) && Math.floor(from.y) === Math.floor(to.y)) return null;
+    return find_path(world, from, to).length ? null : 'bounded_search_no_route';
+}
+
 // Projection only: selection/load must neither issue orders nor consume time/randomness.
 export function refresh_armies(world) {
     const saved = new Map(world.army_orders.map(order => [order.id, order]));

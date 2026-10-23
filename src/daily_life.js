@@ -24,7 +24,8 @@ function select_site(world, person, home, kingdom) {
     const reachable = site => world.walkable(site.x, site.y)
         && (mass === undefined || world._army_masses[world.index(site.x, site.y)] === mass);
     if (person.age / world.year_length < 18) {
-        const school = kingdom.buildings?.find(b => b.type === 'school' && reachable(b));
+        const school = person.age / world.year_length >= 6
+            && kingdom.buildings?.find(b => b.type === 'school' && reachable(b));
         return school ? point(school, 'school') : point(home, 'home');
     }
     for (const type of JOB_BUILDINGS[person.job] || []) {
@@ -54,6 +55,11 @@ function select_site(world, person, home, kingdom) {
 export function advance_daily_life(world, person, home, kingdom, dt, max_health) {
     if (!home || !kingdom || person.role === 'soldier' || person.prisoner_of || person.voyage_id) return null;
     const state = initialize_daily_life(person);
+    const child = person.age / world.year_length < 18;
+    // Old saves may retain an adult work site after a creature's age is edited.
+    if (child && state.site && !['school', 'home'].includes(state.site.kind)) {
+        state.site = null; state.phase = 'travel'; state.timer = 0;
+    }
     const house = home.houses?.[person.id % Math.max(1, home.houses.length)] || home;
     state.timer = Math.min(120, state.timer + dt);
     const vanished_building = state.site && WORK_BUILDINGS.has(state.site.kind)
@@ -113,10 +119,12 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
             state.phase = 'travel'; state.timer = 0; state.partner_id = null;
         }
     }
-    const task = state.phase === 'travel' ? `Going to ${state.site?.kind || 'work'}`
+    const task = state.phase === 'travel' ? child
+        ? state.site?.kind === 'school' ? 'Going to school' : 'Returning home'
+        : `Going to ${state.site?.kind || 'work'}`
         : state.phase === 'work' ? person.age / world.year_length < 18 ? state.site?.kind === 'school' ? 'Learning at school' : 'Learning and playing'
             : state.site?.kind === 'home' ? 'Helping at home' : JOB_LABELS[person.job] || 'Working'
-            : state.phase === 'return' ? 'Delivering supplies'
+            : state.phase === 'return' ? child ? 'Returning home' : 'Delivering supplies'
                 : state.phase === 'rest' ? 'Resting at home' : 'Socializing';
     person.task = task;
     const target = state.phase === 'travel' ? state.site : state.phase === 'return' ? house : null;
@@ -162,8 +170,9 @@ export function attempt_theft(world, person, companion) {
 // only the additional harvest is carried. Farm stock is debited, never recreated here.
 export function collect_daily_goods(world, person, kingdom, food, wood) {
     const state = initialize_daily_life(person);
+    if (person.age / world.year_length < 18) return { food: 0, wood: 0 };
     const result = { food: food * 0.6, wood: 0 };
-    if (person.age / world.year_length < 18 || state.phase !== 'work'
+    if (state.phase !== 'work'
         || !state.site || !near(person, state.site)) return result;
     const i = world.index(state.site.x, state.site.y);
     const farm = state.site.kind === 'farm' && kingdom.buildings?.find(building => building.type === 'farm'

@@ -1,5 +1,7 @@
 import { MACHINES } from './machines.js';
 import { technology_level } from './simulation.js';
+import { water_return_plan } from './water_navigation.js';
+import { MAX_FOOD_STORES } from './diets.js';
 
 const COLLECTIONS = ['voyages', 'trades', 'machines'];
 const selection_for = (collection, id) => ({ kind: 'ship', collection, id });
@@ -46,18 +48,6 @@ const endpoint = (point, label, kingdom_id = undefined) => point
 const at_war = (world, first, second) => world.relations.some(relation => relation.status === 'war'
     && (relation.a === first && relation.b === second || relation.a === second && relation.b === first));
 
-// Match machines.js's bounded harbor lookup, including its deterministic scan order.
-function harbor_near(world, dock) {
-    for (let radius = 1; radius <= 4; radius++) {
-        for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
-            if (world.inside(dock.x + dx, dock.y + dy) && world.tile(dock.x + dx, dock.y + dy) <= 1) {
-                return { x: Math.floor(dock.x + dx) + 0.5, y: Math.floor(dock.y + dy) + 0.5 };
-            }
-        }
-    }
-    return null;
-}
-
 function boat_activity(world, boat, owner, crew) {
     if (boat.health <= 0 || !owner?.alive) return { activity: 'Awaiting removal',
         reason: 'The boat or its kingdom is no longer active.' };
@@ -72,12 +62,17 @@ function boat_activity(world, boat, owner, crew) {
         : owner.food > 2 ? 'Engaging nearby enemies' : 'Holding fire',
     reason: owner.food > 2 ? 'An enemy citizen is within the existing coastal cannon range.'
         : 'The coastal cannon requires more shared kingdom food to fire.' };
-    const dock = owner.buildings?.find(building => building.type === 'dock');
-    const harbor = boat.cargo > 0 && dock ? harbor_near(world, dock) : null;
-    if (boat.cargo > 0) return { activity: harbor ? 'Returning catch' : 'Carrying catch',
-        reason: harbor ? 'Carrying collected food toward the kingdom dock.'
-            : 'Food is aboard, but no usable dock harbor is currently available.',
-        destination: endpoint(harbor, `${owner.name} dock`, owner.id) };
+    if (boat.cargo > 0) {
+        const plan = water_return_plan(world, boat, owner.buildings?.filter(building => building.type === 'dock') || []);
+        const full = plan.harbor && Math.hypot(boat.x - plan.harbor.x, boat.y - plan.harbor.y) <= 0.2
+            && owner.food + boat.cargo > MAX_FOOD_STORES;
+        return { activity: full ? 'Waiting to unload' : plan.harbor ? 'Returning catch' : 'Carrying catch',
+            reason: full ? 'Shared food stores are full; the catch remains aboard.'
+                : plan.harbor ? 'Following a water route to a reachable kingdom dock.'
+                    : plan.status === 'unreachable' ? 'No dock harbor is connected to this boat by water; the catch remains aboard.'
+                        : 'No usable dock harbor is available; the catch remains aboard.',
+            destination: endpoint(plan.harbor, `${owner.name} dock`, owner.id) };
+    }
     return { activity: 'Fishing', reason: 'A crewed boat collects food on a bounded fishing timer.' };
 }
 
