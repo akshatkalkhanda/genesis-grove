@@ -33,6 +33,9 @@ test('a field needs an adult farmer and a harvest creates one conserved crop yie
     advance_buildings(world, kingdom, 1, 20, 0);
     assert.equal(kingdom.food, before); assert.equal(kingdom.buildings[0].growth, 0.99);
     world.people[0].age = world.year_length * 20; world.people[0].job = 'farmer';
+    world.people[0].x = 55.5; world.people[0].y = 50.5;
+    world.people[0].daily_life = { phase: 'work', timer: 0, energy: 80,
+        site: { kind: 'farm', x: 55, y: 50 }, cargo: { food: 0, wood: 0 } };
     advance_buildings(world, kingdom, 1, 20, 0);
     assert.equal(kingdom.food - before + kingdom.buildings[0].stock, 120);
 });

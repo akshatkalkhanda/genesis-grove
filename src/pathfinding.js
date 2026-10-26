@@ -55,3 +55,10 @@ export function find_path(world, start, target, budget = 4096) {
     }
     return [];
 }
+
+// Match the four-connected route graph: do not slip diagonally through a blocked corner.
+export function can_step(world, from, x, y) {
+    if (!world.walkable(x, y)) return false;
+    const sx = Math.floor(from.x), sy = Math.floor(from.y), tx = Math.floor(x), ty = Math.floor(y);
+    return sx === tx || sy === ty || world.walkable(tx, sy) && world.walkable(sx, ty);
+}

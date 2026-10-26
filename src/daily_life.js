@@ -1,3 +1,5 @@
+import { farm_operational, local_farms } from './settlement_land.js';
+import { mining_site, mine_resource } from './mining.js';
 import { harvest_tree, is_tree_site } from './forestry.js';
 import { has_trait } from './character_traits.js';
 import { find_path } from './pathfinding.js';
@@ -29,7 +31,16 @@ function select_site(world, person, home, kingdom) {
             && kingdom.buildings?.find(b => b.type === 'school' && reachable(b));
         return school ? point(school, 'school') : point(home, 'home');
     }
-    for (const type of JOB_BUILDINGS[person.job] || []) {
+    if (person.job === 'miner') return mining_site(world, person, home, kingdom) || point(home, 'home');
+    if (person.job === 'farmer') {
+        const fields = local_farms(world, kingdom, home).filter(reachable);
+        if (fields.length) {
+            const nearest = Math.hypot(fields[0].x - home.x, fields[0].y - home.y);
+            const nearby = fields.filter(b => Math.hypot(b.x - home.x, b.y - home.y) <= nearest + 3);
+            return point(nearby[person.id % nearby.length], 'farm');
+        }
+    }
+    for (const type of (person.job === 'farmer' ? [] : JOB_BUILDINGS[person.job] || [])) {
         const sites = (kingdom.buildings || []).filter(site => site.type === type
             && reachable(site));
         sites.sort((a, b) => Math.hypot(a.x - home.x, a.y - home.y)
@@ -66,8 +77,11 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
     const vanished_building = state.site && WORK_BUILDINGS.has(state.site.kind)
         && !(kingdom.buildings || []).some(building => building.type === state.site.kind
             && building.x === state.site.x && building.y === state.site.y);
+    const invalid_farm = state.site?.kind === 'farm' && !kingdom.buildings?.some(b => b.type === 'farm'
+        && b.x === state.site.x && b.y === state.site.y && farm_operational(world, kingdom, b));
+    const exhausted_mine = state.site?.kind === 'mine' && !mine_resource(world, state.site, kingdom.research_level || 0);
     const vanished_tree = state.site?.kind === 'forest' && !is_tree_site(world, state.site.x, state.site.y);
-    if (state.site && (vanished_building || vanished_tree || !world.walkable(state.site.x, state.site.y)
+    if (state.site && (vanished_building || vanished_tree || invalid_farm || exhausted_mine || !world.walkable(state.site.x, state.site.y)
         || world.fire[world.index(state.site.x, state.site.y)] > 0)) {
         state.phase = 'return'; state.timer = 0; state.site = null;
     }
@@ -203,5 +217,8 @@ export function valid_daily_life(state, width, height) {
         && !!state.cargo && number(state.cargo.food, 12) && number(state.cargo.wood, 8)
         && (state.partner_id === null || Number.isSafeInteger(state.partner_id) && state.partner_id > 0)
         && (state.site === null || !!state.site && number(state.site.x, width - 0.001)
-            && number(state.site.y, height - 0.001) && SITE_KINDS.has(state.site.kind));
+            && number(state.site.y, height - 0.001) && SITE_KINDS.has(state.site.kind)
+            && (state.site.ore_x === undefined && state.site.ore_y === undefined
+                || state.site.kind === 'mine' && Number.isInteger(state.site.ore_x) && Number.isInteger(state.site.ore_y)
+                && number(state.site.ore_x, width - 1) && number(state.site.ore_y, height - 1)));
 }

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T, TECH_AGES, technology_level } from '../src/simulation.js';
 import { advance_buildings } from '../src/settlements.js';
+import { mining_site } from '../src/mining.js';
+import { initialize_daily_life } from '../src/daily_life.js';
 
 function developed_town() {
     const world = new World({ preset: 'empty', inhabited: false }); world.tiles.fill(T.GRASS);
@@ -11,6 +13,18 @@ function developed_town() {
     for (let person = 0; person < 30; person++) world.add_person(50, 50, kingdom.id);
     kingdom.houses = [{ x: 48, y: 50 }, { x: 52, y: 50 }, { x: 50, y: 53 }];
     return { world, kingdom };
+}
+
+function assign_miner(world, kingdom, ore_x, ore_y, home = kingdom) {
+    const person = world.people.find(p => p.village_id === kingdom.id);
+    person.job = 'miner'; person.age = world.year_length * 24; person.home_id = home.id;
+    const site = mining_site(world, person, home, kingdom);
+    assert.ok(site, 'an adult worker can reach the owned deposit');
+    assert.equal(site.ore_x, ore_x); assert.equal(site.ore_y, ore_y);
+    person.x = site.x; person.y = site.y;
+    const routine = initialize_daily_life(person);
+    Object.assign(routine, { phase: 'work', timer: 2, energy: 100, site });
+    return person;
 }
 
 test('research advances beyond steel through all four later ages and equips a carbine', () => {
@@ -52,12 +66,15 @@ test('firearms damage enemies at range and create a visible projectile', () => {
     assert.equal(soldier.x, 50);
 });
 
-test('settlement prospecting reaches ore beyond the old twelve-tile limit', () => {
+test('an adult miner at a remote colony works its nearby owned mountain deposit', () => {
     const { world, kingdom } = developed_town();
     for (const ore of Object.keys(kingdom.ore)) kingdom.ore[ore] = 0;
-    kingdom.age = 40 * world.year_length;
-    kingdom.mine_timer = 8;
+    const colony = world.found_colony(kingdom.id, 73, 50);
+    assert.ok(colony);
+    world.set_tile(78, 50, T.MOUNTAIN);
     world.ores[world.index(78, 50)] = 1;
+    assign_miner(world, kingdom, 78, 50, colony);
+    kingdom.mine_timer = 7.875;
     world.step(0.125);
     assert.equal(kingdom.ore.copper, 4);
     assert.equal(world.ores[world.index(78, 50)], 0);
@@ -136,12 +153,13 @@ test('iron-age miners uncover bounded underground seams and preserve their deple
     kingdom.research_level = 3; kingdom.tech_points = 50;
     world.set_tile(52, 50, T.HILL);
     for (const ore of Object.keys(kingdom.ore)) kingdom.ore[ore] = 0;
-    for (let cycle = 0; cycle < 3; cycle++) { kingdom.mine_timer = 8; world.step(0.125); }
     const index = world.index(52, 50);
+    assign_miner(world, kingdom, 52, 50);
+    for (let cycle = 0; cycle < 3; cycle++) { kingdom.mine_timer = 7.875; world.step(0.125); }
     assert.equal(world.strata[index], 3);
     const material_count = Object.values(kingdom.ore).reduce((sum, amount) => sum + amount, 0);
     assert.equal(material_count, 12);
-    kingdom.mine_timer = 8; world.step(0.125);
+    kingdom.mine_timer = 7.875; world.step(0.125);
     assert.equal(Object.values(kingdom.ore).reduce((sum, amount) => sum + amount, 0), material_count);
     assert.equal(World.deserialize(world.serialize()).strata[index], 3);
     const corrupt = world.serialize(); corrupt.strata[index] = 4;

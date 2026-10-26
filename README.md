@@ -23,6 +23,8 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
+Version 0.32.0 fixes [owned building plots, local farms/windmills and mountain-face mining](docs/settlement-land.md).
+
 Version 0.31.0 adds [drinking water, thirst, finite wells/ponds and water-service statistics](docs/drinking-water.md).
 
 Version 0.30.0 adds [cemeteries, burial/cremation and a kingdom wellbeing overview](docs/kingdom-life-roadmap.md).

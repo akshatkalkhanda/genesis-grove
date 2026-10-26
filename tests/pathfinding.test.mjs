@@ -22,3 +22,28 @@ test('unreachable water-separated destinations do not produce a land route', () 
     for (let y = 0; y < HEIGHT; y++) world.set_tile(40, y, T.OCEAN);
     assert.deepEqual(find_path(world, { x: 35, y: 40 }, { x: 45, y: 40 }), []);
 });
+
+test('movement rejects blocked-corner diagonals while A* marching uses a legal detour', () => {
+    const world = new World({ preset: 'empty', inhabited: false });
+    world.tiles.fill(T.GRASS);
+    world.set_tile(2, 1, T.MOUNTAIN);
+    world.set_tile(1, 2, T.MOUNTAIN);
+    const unit = { id: 99, x: 1.5, y: 1.5, dx: 1, dy: 1 };
+    const target = { x: 2.5, y: 2.5, route: true };
+
+    world.move(unit, 1, 1);
+    assert.deepEqual([unit.x, unit.y], [1.5, 1.5],
+        'a diagonal move cannot squeeze between two blocked orthogonal tiles');
+    const path = find_path(world, unit, target);
+    assert.ok(path.length > 1, 'A* finds a walkable detour around the blocked corner');
+    for (let step = 0; step < 80; step++) world.march(unit, target, 0.125, 1.5);
+    assert.ok(Math.hypot(unit.x - target.x, unit.y - target.y) < 1,
+        'marching completes the valid routed approach');
+
+    world.set_tile(2, 1, T.GRASS);
+    world.set_tile(1, 2, T.GRASS);
+    unit.x = 1.5; unit.y = 1.5; unit.dx = 1; unit.dy = 1;
+    world.move(unit, 1, 1);
+    assert.deepEqual([unit.x, unit.y], [2.5, 2.5],
+        'diagonal movement remains available when both orthogonal side tiles are open');
+});

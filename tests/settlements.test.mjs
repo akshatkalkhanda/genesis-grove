@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T } from '../src/simulation.js';
 import { advance_buildings } from '../src/settlements.js';
+import { initialize_daily_life } from '../src/daily_life.js';
 
 test('growing settlements build working farms, windmills, armories, and camps', () => {
     const world = new World({ preset: 'empty', inhabited: false }); world.tiles.fill(T.GRASS);
@@ -14,9 +15,14 @@ test('growing settlements build working farms, windmills, armories, and camps', 
     }
     assert.equal(kingdom.buildings.filter(b => b.type === 'farm').length, 2);
     const farm = kingdom.buildings.find(b => b.type === 'farm'); farm.growth = 0.99;
+    const farmer = world.people.find(person => person.job === 'farmer');
+    farmer.age = world.year_length * 20; farmer.x = farm.x + 0.5; farmer.y = farm.y + 0.5;
+    Object.assign(initialize_daily_life(farmer), { phase: 'work', timer: 0, energy: 80,
+        site: { kind: 'farm', x: farm.x, y: farm.y } });
     const before = kingdom.food;
     advance_buildings(world, kingdom, 1, 30, 2);
-    assert.ok(kingdom.food >= before + 148);
+    assert.equal(kingdom.food - before + farm.stock, 176,
+        'the active local field receives one finite windmill-boosted harvest');
     assert.ok(farm.harvests > 0);
     assert.deepEqual(World.deserialize(world.serialize()).villages[0].buildings, kingdom.buildings);
 });

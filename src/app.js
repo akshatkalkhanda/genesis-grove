@@ -1,3 +1,5 @@
+import { farm_operational, local_mill } from './settlement_land.js';
+import { deposit_at, mine_resource } from './mining.js';
 import { WATER, water_topology } from './drinking_water.js';
 import { kingdom_services_panel } from './kingdom_services_ui.js';
 import { FORESTRY, is_tree_site } from './forestry.js';
@@ -504,14 +506,19 @@ function inspect(p) {
     } else if (vehicle) add(`${VEHICLES[vehicle.kind].label} · ${vehicle.cargo} food aboard`);
     else {
         const owner = world.villages.find(v => v.id === world.territory_at(tile.x, tile.y));
-        const building = owner?.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
+        const building_owner = world.villages.find(k => k.buildings?.some(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2));
+        const building = building_owner?.buildings?.find(b => Math.hypot(b.x - tile.x, b.y - tile.y) < 2);
         if (building) add(`${BUILDINGS[building.type].label}${building.type === 'farm' ? ` · crops ${Math.floor(building.growth * 100)}%` : ''}`);
+        if (building?.type === 'farm') add(farm_operational(world, building_owner, building)
+            ? `Local field · ${local_mill(world, building_owner, building) ? 'nearby windmill' : 'no nearby windmill'}` : 'Inactive field · needs owned, reachable cultivable ground');
+        if (building_owner && building_owner.id !== owner?.id) add(`Building owner: ${building_owner.name} · outside its current territory`);
         if (owner) add(`${owner.name} territory`);
         const deposit = world.ores[world.index(tile.x, tile.y)];
         if (deposit && !building) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
     }
     const well = world.villages.flatMap(k => k.buildings || []).find(b => b.type === 'well' && Math.hypot(b.x - tile.x, b.y - tile.y) < 1.5);
     if (well) add(`Drinking water · ${(well.water_stock ?? 0).toFixed(1)}/${WATER.well_capacity} rations`);
+    if (world.tile(tile.x, tile.y) === T.MOUNTAIN) add('Impassable peak · miners work deposits from reachable foothills');
     if (world.tile(tile.x, tile.y) <= T.SHALLOW) {
         const lake = water_topology(world).find(l => l.cells.has(world.index(tile.x, tile.y)));
         const stock = lake && world.water_sources.find(s => s.anchor === lake.anchor);
@@ -825,6 +832,12 @@ function update_entity_card() {
     const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
     line('Species', `${inspected_unit.kind === 'person' ? RACES[unit.race]?.label || 'Human' : unit.species} · #${unit.id}`);
     line('Health', `${Math.ceil(unit.health)} / ${attributes.max_health}`);
+    if (unit.daily_life?.site?.kind === 'mine') {
+        const kingdom = world.villages.find(k => k.id === unit.village_id);
+        const face = mine_resource(world, unit.daily_life.site, kingdom?.research_level || 0);
+        const ore = face && deposit_at(world, face.x, face.y, kingdom?.research_level || 0);
+        line('Mining face', face ? `${face.x}, ${face.y} · ${['', 'Copper', 'Tin', 'Iron', 'Coal', 'Stardust'][ore]}` : 'Deposit exhausted');
+    }
     const condition = unit.infection > 0 ? 'Infected' : unit.health < attributes.max_health * 0.35
         ? 'Badly hurt' : unit.health < attributes.max_health * 0.9 ? 'Wounded' : 'Healthy';
     line('Condition', condition);

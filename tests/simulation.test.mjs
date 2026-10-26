@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T, WIDTH, HEIGHT, TECH_AGES, RACES, ANIMALS, technology_level } from '../src/simulation.js';
 import { creature_stats } from '../src/creatures.js';
+import { mining_site } from '../src/mining.js';
+import { initialize_daily_life } from '../src/daily_life.js';
 const blank = () => new World({ preset: 'empty', inhabited: false });
 test('generated wildlands contain colorful biomes and preserve them through saves', () => {
     const world = new World({ seed: 'color-world', preset: 'wildlands' });
@@ -196,8 +198,15 @@ test('miners exhaust deposits and peaceful kingdoms deliver real supplies by shi
     const first = world.found_village(30, 40), second = world.found_village(70, 40);
     for (let i = 0; i < 3; i++) world.add_person(30, 40, first.id);
     world.add_person(70, 40, second.id);
-    world.ores.fill(0); world.ores[world.index(31, 40)] = 1;
-    first.mine_timer = 7.9; world.step(0.125);
+    world.ores.fill(0); world.set_tile(31, 40, T.MOUNTAIN); world.ores[world.index(31, 40)] = 1;
+    const miner = world.people.find(person => person.village_id === first.id);
+    miner.job = 'miner'; miner.age = world.year_length * 24;
+    const site = mining_site(world, miner, first, first);
+    assert.ok(site); assert.equal(site.ore_x, 31); assert.equal(site.ore_y, 40);
+    miner.x = site.x; miner.y = site.y;
+    const routine = initialize_daily_life(miner);
+    Object.assign(routine, { phase: 'work', timer: 2, energy: 100, site });
+    first.mine_timer = 7.875; world.step(0.125);
     assert.equal(first.ore.copper, 4);
     assert.equal(world.ores[world.index(31, 40)], 0);
     first.food = 80; second.food = 5;

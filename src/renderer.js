@@ -1,3 +1,4 @@
+import { draw_mine_face } from './mining_art.js';
 import { draw_cemetery, draw_remains } from './funeral_art.js';
 import { FORESTRY, tree_clearings, tree_variation, TREE_BIOMES } from './forestry.js';
 import { draw_compact, home_populations, settlement_labels, map_detail } from './map_readability.js';
@@ -329,6 +330,16 @@ export class Renderer extends Camera {
                 () => this.animal(c, animal, now));
             else { c.fillStyle = '#bdc5a988'; c.fillRect(animal.x * CELL, animal.y * CELL, 1.5 / s, 1.5 / s); }
         }
+        const mining_faces = new Map();
+        for (const p of world.people) {
+            const site = p.daily_life?.site;
+            if (p.health > 0 && p.job === 'miner' && site?.kind === 'mine') {
+                const key = site.ore_x === undefined ? `${site.x},${site.y}` : `${site.ore_x},${site.ore_y}`;
+                if (!mining_faces.has(key)) mining_faces.set(key, site);
+            }
+        }
+        for (const site of mining_faces.values()) draw_compact(c, site.x * CELL, site.y * CELL,
+            this.sprite_factor(0.75), () => draw_mine_face(c, site));
         for (const cemetery of world.cemeteries) if (world.walkable(cemetery.x, cemetery.y)) draw_cemetery(c, cemetery);
         const aboard = new Set(world.machines.filter(m => m.crew_aboard).map(m => m.crew_id));
         for (const p of world.people) {
@@ -725,12 +736,6 @@ export class Renderer extends Camera {
         } else draw_landmark(c, building, color, now);
     }
     industry(c, x, y, kingdom) {
-        if (kingdom.mine_level) {
-            c.fillStyle = '#463d32'; c.fillRect(x - 19, y - 7, 11, 7);
-            c.fillStyle = '#7c6750'; c.fillRect(x - 20, y - 10, 13, 4);
-            c.fillStyle = '#b4a080'; c.fillRect(x - 17, y - 6, 2, 6); c.fillRect(x - 12, y - 6, 2, 6);
-            c.fillStyle = '#d7b76b'; c.fillRect(x - 15, y - 4, 3, 2);
-        }
         if (kingdom.forge_level) {
             c.fillStyle = '#544538'; c.fillRect(x + 9, y - 8, 12, 8);
             c.fillStyle = '#98634a'; c.fillRect(x + 8, y - 11, 14, 4);
@@ -748,7 +753,10 @@ export class Renderer extends Camera {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = Math.min(e.radius * CELL, 48 / this.scale);
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'drink') {
+        if (e.type === 'mine') {
+            c.fillStyle = '#d5d4bf';
+            for (let n = 0; n < 3; n++) c.fillRect(x - 3 + n * 3, y - 2 - (1 - e.life) * (n + 1), 1, 1);
+        } else if (e.type === 'drink') {
             c.fillStyle = '#a5e3e7'; c.fillRect(x, y - 7 - (1 - e.life) * 3, 2, 3);
         } else if (e.type === 'funeral') {
             c.fillStyle = '#d8d4ae';

@@ -126,3 +126,6 @@ The requested needs-to-justice progression is scoped in [kingdom life](kingdom-l
 
 Version 0.31.0 implements [drinking-water needs](drinking-water.md). Clothing and
 individual household assignments are the next living-needs priorities.
+
+Version 0.32.0 aligns [construction and resource work](settlement-land.md) with
+owned land: local staffed fields, nearby windmills, and actual mountain-face miners.

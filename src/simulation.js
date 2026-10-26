@@ -1,3 +1,5 @@
+import { migrate_farmland, valid_land } from './settlement_land.js';
+import { MINING, extract_mineral } from './mining.js';
 import { WATER, advance_water, initialize_water_world, invalidate_water, valid_water } from './drinking_water.js';
 import { record_death, advance_funerals, prepare_funerals, funeral_intent, valid_funerals } from './funerals.js';
 import { advance_forestry, valid_stumps, is_tree_site } from './forestry.js';
@@ -7,7 +9,7 @@ import { initialize_needs, needs_intent, decision_context, neighbors, set_action
 import { advance_fire, ignite_fire, FIRE_FUELS, MAX_FIRE_SPREAD } from './wildfire.js';
 import { WEATHER, spawn_weather, advance_weather, valid_weather } from './weather.js';
 import { initialize_creature, creature_stats, develop_creature, TRAITS } from './creatures.js';
-import { find_path } from './pathfinding.js';
+import { find_path, can_step } from './pathfinding.js';
 import { advance_sieges, valid_siege_state } from './sieges.js';
 import { plan_armies, army_identity, army_reachable, prune_army_orders, refresh_armies, valid_army_orders } from './army_orders.js';
 import { kingdom_plan, diplomatic_choice } from './strategy.js';
@@ -153,6 +155,7 @@ export class World {
         this.remains = [];
         this.cemeteries = [];
         this.water_sources = [];
+        this.land_rules = 1;
         this.weather = [];
         this.weather_clock = 0;
         this.tsunami_clock = 0;
@@ -413,7 +416,7 @@ export class World {
                 radius: Math.min(17, (site.kingdom_id ? 6 : 9) + site.houses.length * 0.65) }));
     }
     territory_at(x, y, sites = null) {
-        if (!this.walkable(x, y)) return null;
+        if (!this.inside(x, y) || this.tile(x, y) <= T.SHALLOW || [T.LAVA, T.ASH].includes(this.tile(x, y))) return null;
         let owner = null, nearest = Infinity;
         for (const site of sites || this.claim_sites()) {
             const distance = (site.x - x) ** 2 + (site.y - y) ** 2;
@@ -876,7 +879,7 @@ export class World {
         speed *= 1 + (this.roads[this.index(unit.x, unit.y)] || 0) * 0.15;
         const nx = clamp(unit.x + unit.dx * dt * speed, 0.5, WIDTH - 0.5);
         const ny = clamp(unit.y + unit.dy * dt * speed, 0.5, HEIGHT - 0.5);
-        if (this.walkable(nx, ny)) { unit.x = nx; unit.y = ny; }
+        if (can_step(this, unit, nx, ny)) { unit.x = nx; unit.y = ny; }
         else unit.decision = 0;
     }
     work_target(person, home, kingdom) {
@@ -917,7 +920,7 @@ export class World {
         for (const offset of [0, side * 0.55, side * 1.1, side * 1.65, -side * 0.55, -side * 1.1, -side * 1.65]) {
             const dx = Math.cos(angle + offset), dy = Math.sin(angle + offset);
             const nx = unit.x + dx * dt * travel_speed, ny = unit.y + dy * dt * travel_speed;
-            if (!this.walkable(nx, ny)) continue;
+            if (!can_step(this, unit, nx, ny)) continue;
             unit.dx = dx; unit.dy = dy; this.move(unit, dt, speed); return;
         }
         unit.decision = 0;
@@ -1169,7 +1172,8 @@ export class World {
             }
             if (survival && !care) p.task = survival.action;
             set_action(this, p, p.task || 'Exploring', survival && !care ? survival.reason
-                : funeral ? funeral.reason : care ? 'Following a crew or medical assignment.' : p.task === 'Fighting' ? 'An enemy is within fighting range.'
+                : funeral ? funeral.reason : care ? 'Following a crew or medical assignment.'
+                    : p.task === 'Mining' ? 'Working an owned mineral deposit from a reachable mining face.' : p.task === 'Fighting' ? 'An enemy is within fighting range.'
                     : order ? 'Following the current garrison order.' : 'Following the civilian daily routine.');
             if (p.daily_life && !survival) p.needs.energy = p.daily_life.energy;
             if (p.task === 'Retreating') holding_position = Math.hypot(p.x - home.x, p.y - home.y) <= 2;
@@ -1275,34 +1279,17 @@ export class World {
             if (v.buildings.some(building => building.type === 'workshop')) v.forge_timer += dt;
             if (v.buildings.some(building => building.type === 'factory')) v.forge_timer += dt * 2;
             if (v.buildings.some(building => building.type === 'astral_forge')) v.forge_timer += dt * 3;
-            v.mine_level = jobs.miner > 0 ? 1 : 0;
-            if (jobs.miner > 0 && v.mine_timer >= 8) {
+            const active_miners = this.people.filter(p => p.village_id === v.id && p.job === 'miner'
+                && p.health > 0 && p.role !== 'soldier' && p.age / this.year_length >= 18
+                && !p.prisoner_of && !p.voyage_id && !p.recovering && !p.medical_role
+                && !this._crew_assignments?.has(p.id) && !this._funeral_assignments?.has(p.id)
+                && !p.needs?.intent && p.daily_life?.phase === 'work' && p.daily_life.site?.kind === 'mine'
+                && p.daily_life.timer >= MINING.minimum_work
+                && Math.hypot(p.x - p.daily_life.site.x, p.y - p.daily_life.site.y) < 1.25);
+            v.mine_level = active_miners.length ? 1 : 0;
+            if (v.mine_timer >= 8) {
                 v.mine_timer = 0;
-                let mined = 0;
-                const mining_radius = Math.min(64, 12 + Math.floor(v.age / this.year_length / 2)
-                    + Math.floor(pop / 5) + (before_technology >= 5 ? 12 : 0));
-                for (const site of sites) {
-                    const landmass = this._army_masses[this.index(site.x, site.y)];
-                    for (let dy = -mining_radius; dy <= mining_radius && mined < Math.min(3, jobs.miner); dy++) for (let dx = -mining_radius; dx <= mining_radius && mined < Math.min(3, jobs.miner); dx++) {
-                        if (dx * dx + dy * dy > mining_radius * mining_radius) continue;
-                        const x = Math.floor(site.x) + dx, y = Math.floor(site.y) + dy;
-                        if (!this.inside(x, y)) continue;
-                        const index = this.index(x, y);
-                        const underground = before_technology >= 3 && this.strata[index] < 3
-                            && [T.HILL, T.MOUNTAIN, T.CRYSTAL].includes(this.tiles[index]);
-                        const ore = this.ores[index] || (underground
-                            ? 1 + ((Math.imul(x + 1, 73856093) ^ Math.imul(y + 1, 19349663)
-                                ^ Math.imul(this.strata[index] + 1, 83492791)) >>> 0) % 4 : 0);
-                        const reachable = ore && [[0, 0], ...DIRECTIONS].some(([mx, my]) =>
-                            this.inside(x + mx, y + my) && this._army_masses[this.index(x + mx, y + my)] === landmass);
-                        if (reachable && landmass >= 0) {
-                            const material = ['','copper','tin','iron','coal','stardust'][ore];
-                            v.ore[material] += v.race === 'beetlefolk' ? 6 : 4;
-                            this.ores[index] = 0; this.strata[index] = Math.min(3, this.strata[index] + 1);
-                            mined++; this.revision++;
-                        }
-                    }
-                }
+                for (const person of active_miners.slice(0, 3)) extract_mineral(this, v, person.daily_life.site);
             }
             const research_cost = RESEARCH_COSTS;
             const next_level = before_technology + 1;
@@ -1435,7 +1422,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), stumps: [...this.stumps].map(([i, s]) => [i, s.biome, s.age]), remains: structuredClone(this.remains), cemeteries: structuredClone(this.cemeteries), water_sources: structuredClone(this.water_sources), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, land_rules: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), stumps: [...this.stumps].map(([i, s]) => [i, s.biome, s.age]), remains: structuredClone(this.remains), cemeteries: structuredClone(this.cemeteries), water_sources: structuredClone(this.water_sources), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1469,6 +1456,7 @@ export class World {
             || !DAY_LENGTHS.includes(data.lighting.cycle_seconds))) invalid();
         if (data.laws !== undefined && (!data.laws || typeof data.laws.rebellions !== 'boolean' || typeof data.laws.diplomacy !== 'boolean' || (data.laws.expansion !== undefined && typeof data.laws.expansion !== 'boolean'))) invalid();
         if (data.milestone !== undefined && !integer(data.milestone, 0, 4)) invalid();
+        if (!valid_land(data)) invalid();
         if (!valid_water(data, size)) invalid();
         if (!valid_funerals(data, WIDTH, HEIGHT)) invalid();
         const ids = new Set();
@@ -1679,6 +1667,7 @@ export class World {
         }
         for (const kingdom of w.villages) initialize_culture(kingdom);
         for (const person of w.people) initialize_society_person(person, w.villages.find(v => v.id === person.village_id));
+        if (data.land_rules === undefined) migrate_farmland(w);
         return w;
     }
 }

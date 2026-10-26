@@ -1,5 +1,5 @@
+import { construction_home, find_building_plot, farm_operational, local_mill } from './settlement_land.js';
 import { WATER, well_construction } from './drinking_water.js';
-import { find_path } from './pathfinding.js';
 import { MAX_BUILDINGS, farm_target, food_reserve } from './civic.js';
 
 export const BUILDINGS = Object.freeze({
@@ -34,23 +34,24 @@ export function advance_buildings(world, kingdom, dt, population, age) {
     kingdom.buildings ||= [];
     kingdom.build_timer = Math.min(60, (kingdom.build_timer || 0) + dt);
     const buildings = kingdom.buildings;
-    const mill = buildings.some(building => building.type === 'windmill');
     const farmers = world.people.filter(p => p.village_id === kingdom.id && p.job === 'farmer'
         && p.role !== 'soldier' && !world._crew_assignments?.has(p.id) && !p.medical_role && !p.recovering && !p.prisoner_of
-        && !world._funeral_assignments?.has(p.id) && !p.voyage_id && p.health > 0 && p.age / world.year_length >= 18).length;
-    let staffed = farmers;
+        && !world._funeral_assignments?.has(p.id) && !p.voyage_id && p.health > 0 && p.age / world.year_length >= 18
+        && !p.needs?.intent && p.daily_life?.phase === 'work' && p.daily_life.site?.kind === 'farm');
     const dust_rate = buildings.reduce((rate, building) => rate
         + ({ observatory: 1, stargate: 3, condenser: 8 }[building.type] || 0), 0);
     if (dust_rate) kingdom.ore.stardust = Math.min(1e6, (kingdom.ore.stardust || 0)
         + dt / world.year_length * dust_rate);
     for (const building of buildings) {
         if (building.type !== 'farm') continue;
-        if (staffed-- <= 0 || world.fire[world.index(building.x, building.y)] > 0) continue;
+        if (!farm_operational(world, kingdom, building) || !farmers.some(p =>
+            p.daily_life.site.x === building.x && p.daily_life.site.y === building.y
+            && Math.hypot(p.x - building.x, p.y - building.y) < 1.25)) continue;
         building.growth = Math.min(1, building.growth + dt / 30);
         if (building.growth >= 1) {
             const watered = buildings.some(b => b.type === 'well'
                 && Math.hypot(b.x - building.x, b.y - building.y) <= 8);
-            const yield_food = (mill ? 160 : 120) * (watered ? 1.1 : 1);
+            const yield_food = (local_mill(world, kingdom, building) ? 160 : 120) * (watered ? 1.1 : 1);
             const surplus = Math.min(12, 120 - (building.stock || 0));
             kingdom.food += yield_food - surplus;
             building.stock = (building.stock || 0) + surplus;
@@ -59,31 +60,22 @@ export function advance_buildings(world, kingdom, dt, population, age) {
         }
     }
     if (kingdom.build_timer < 12 || buildings.length >= MAX_BUILDINGS) return;
-    const farms = buildings.filter(b => b.type === 'farm').length;
+    kingdom.build_timer = 0; // Planning has a simulation-time cooldown even when no legal plot exists.
+    const farms = buildings.filter(b => b.type === 'farm' && farm_operational(world, kingdom, b)).length;
     const water_plan = well_construction(world, kingdom);
     for (const [type, recipe] of Object.entries(BUILDINGS)) {
         const limit = type === 'farm' ? farm_target(population) : type === 'well' ? water_plan.limit : 1;
         const essential = ['farm', 'well', 'granary', 'clinic'].includes(type);
         if (!essential && (farms < farm_target(population) || kingdom.food < food_reserve(population))) continue;
-        if (buildings.filter(building => building.type === type).length >= limit
+        if (buildings.filter(building => building.type === type && (type !== 'farm' || farm_operational(world, kingdom, building))).length >= limit
             || population < recipe.population || age < recipe.age
             || (type !== 'well' && kingdom.houses.length < 2)
             || (!(type === 'well' && water_plan.prepaid)
                 && kingdom.wood < recipe.wood + (type === 'well' && water_plan.unserved ? 0 : essential ? 4 : 10))) continue;
-        let place = null;
-        for (let attempt = 0; attempt < 30; attempt++) {
-            const origin = type === 'well' ? water_plan.origin : kingdom;
-            const point = world.land_near(origin.x, origin.y, type === 'well' ? 8 : Math.min(40, 12 + Math.sqrt(population) * 2));
-            if (!point || Math.hypot(point.x - origin.x, point.y - origin.y) < 3
-                || buildings.some(b => Math.hypot(b.x - point.x, b.y - point.y) < (type === 'castle' || b.type === 'castle' ? 5 : 3))
-                || (type === 'well' ? water_plan.houses : kingdom.houses).some(h => Math.hypot(h.x - point.x, h.y - point.y) < (type === 'castle' ? 4 : 2))) continue;
-            if (type === 'well' && !find_path(world, water_plan.origin, point, 768).length) continue;
-            if (type === 'dock' && ![[2, 0], [-2, 0], [0, 2], [0, -2], [1, 0], [-1, 0], [0, 1], [0, -1]]
-                .some(([dx, dy]) => world.inside(point.x + dx, point.y + dy) && world.tile(point.x + dx, point.y + dy) <= 1)) continue;
-            place = point; break;
-        }
+        const origin = type === 'well' ? water_plan.origin : construction_home(world, kingdom, type);
+        const place = find_building_plot(world, kingdom, type, origin);
         if (!place) continue;
-        buildings.push({ type, x: Math.floor(place.x), y: Math.floor(place.y), growth: 0,
+        buildings.push({ type, home_id: origin.id, x: Math.floor(place.x), y: Math.floor(place.y), growth: 0,
             harvests: 0, stock: 0, integrity: type === 'castle' ? 300 : type === 'watchtower' ? 160 : 100,
             defense_timer: 0 });
         if (type === 'well' && water_plan.prepaid) water_plan.origin.well_kit -= recipe.wood;
