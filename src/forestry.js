@@ -17,6 +17,11 @@ export function tree_clearings(world) {
             }
         }
     }
+    for (const cemetery of world.cemeteries || []) {
+        for (let dy = -3; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+            if (world.inside(cemetery.x + dx, cemetery.y + dy)) cells[world.index(cemetery.x + dx, cemetery.y + dy)] = 1;
+        }
+    }
     clearings_cache.set(world, { revision: world.revision, cells });
     return cells;
 }

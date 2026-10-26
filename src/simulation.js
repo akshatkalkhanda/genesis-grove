@@ -1,3 +1,4 @@
+import { record_death, advance_funerals, prepare_funerals, funeral_intent, valid_funerals } from './funerals.js';
 import { advance_forestry, valid_stumps, is_tree_site } from './forestry.js';
 import { initialize_traits, valid_character_traits, trait_modifiers, trait_probability, apply_trait } from './character_traits.js';
 import { initialize_diet, valid_diet, valid_food_stores, reconcile_food, pack_food, receive_food, valid_food_cargo } from './diets.js';
@@ -148,6 +149,8 @@ export class World {
         this.events = [];
         this.effects = [];
         this.stumps = new Map();
+        this.remains = [];
+        this.cemeteries = [];
         this.weather = [];
         this.weather_clock = 0;
         this.tsunami_clock = 0;
@@ -815,6 +818,7 @@ export class World {
                 ? this.tile(m.x, m.y) <= T.SHALLOW : this.walkable(m.x, m.y))))
             .map(m => m.crew_id));
         for (const person of this.people) if (person.health <= 0 || (!aboard.has(person.id) && !this.walkable(person.x, person.y))) {
+            record_death(this, person);
             const kingdom = this.villages.find(v => v.id === person.village_id);
             if (kingdom) {
                 kingdom.deaths = (kingdom.deaths || 0) + 1;
@@ -1049,6 +1053,8 @@ export class World {
         const homes = new Map([...this.villages, ...this.colonies].map(site => [site.id, site]));
         prepare_crews(this);
         prepare_medicine(this);
+        advance_funerals(this, dt);
+        prepare_funerals(this);
         const decisions = decision_context(this);
         for (const pile of this.food_piles) pile.age += dt;
         this.food_piles = this.food_piles.filter(pile => pile.amount > 0 && pile.age < 120);
@@ -1090,9 +1096,12 @@ export class World {
             const aboard = this._crew_assignments?.get(p.id)?.crew_aboard;
             const care = aboard ? crew : survival ? null
                 : crew || (v && home ? medical_intent(this, p, v, home, dt) : null);
+            const funeral = !care && !survival && !(enemies && modifiers.aggression === 'aggressive')
+                ? funeral_intent(this, p, dt) : null;
             if (care) { march_target = care.target; holding_position = care.holding; }
             else if (survival) { march_target = survival.x === undefined ? null : survival; holding_position = survival.holding;
                 if (march_target) holding_position = Math.hypot(p.x - march_target.x, p.y - march_target.y) <= 1; }
+            else if (funeral) { march_target = funeral.target; holding_position = funeral.holding; }
             else if (p.role !== 'soldier' && v && home) {
                 const routine = advance_daily_life(this, p, home, v, dt, attributes.max_health);
                 march_target = routine.target; holding_position = routine.holding;
@@ -1154,7 +1163,7 @@ export class World {
             }
             if (survival && !care) p.task = survival.action;
             set_action(this, p, p.task || 'Exploring', survival && !care ? survival.reason
-                : care ? 'Following a crew or medical assignment.' : p.task === 'Fighting' ? 'An enemy is within fighting range.'
+                : funeral ? funeral.reason : care ? 'Following a crew or medical assignment.' : p.task === 'Fighting' ? 'An enemy is within fighting range.'
                     : order ? 'Following the current garrison order.' : 'Following the civilian daily routine.');
             if (p.daily_life && !survival) p.needs.energy = p.daily_life.energy;
             if (p.task === 'Retreating') holding_position = Math.hypot(p.x - home.x, p.y - home.y) <= 2;
@@ -1185,7 +1194,7 @@ export class World {
                 const wood = [T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(this.tile(timber_site.x, timber_site.y)) && p.role !== 'soldier'
                     ? (p.race === 'elf' ? 2 : 1) + (p.job === 'lumberjack' ? 1 : 0) : 0;
                 const production = society_modifiers(v, this.people.find(person => person.id === v.king_id)).production;
-                const goods = crew || p.medical_role || p.recovering ? { food: 0, wood: 0 } : p.role === 'soldier' ? { food, wood: 0 }
+                const goods = funeral || crew || p.medical_role || p.recovering ? { food: 0, wood: 0 } : p.role === 'soldier' ? { food, wood: 0 }
                     : collect_daily_goods(this, p, v, food * production, wood * production);
                 if (this.random() < trait_probability(p, .1)) goods.food *= 1.1;
                 v.food += goods.food; v.wood += goods.wood;
@@ -1420,7 +1429,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), stumps: [...this.stumps].map(([i, s]) => [i, s.biome, s.age]), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), stumps: [...this.stumps].map(([i, s]) => [i, s.biome, s.age]), remains: structuredClone(this.remains), cemeteries: structuredClone(this.cemeteries), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1454,6 +1463,7 @@ export class World {
             || !DAY_LENGTHS.includes(data.lighting.cycle_seconds))) invalid();
         if (data.laws !== undefined && (!data.laws || typeof data.laws.rebellions !== 'boolean' || typeof data.laws.diplomacy !== 'boolean' || (data.laws.expansion !== undefined && typeof data.laws.expansion !== 'boolean'))) invalid();
         if (data.milestone !== undefined && !integer(data.milestone, 0, 4)) invalid();
+        if (!valid_funerals(data, WIDTH, HEIGHT)) invalid();
         const ids = new Set();
         const id = v => { if (!integer(v, 1, data.next_id - 1) || ids.has(v)) invalid(); ids.add(v); };
         for (const v of data.villages) {
@@ -1644,6 +1654,8 @@ export class World {
         for (const kingdom of w.villages) if (kingdom.food_stores === undefined) reconcile_food(kingdom);
         for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); v.research_level ??= (() => { let level = 0; for (let i = 1; i < TECH_AGES.length; i++) if (v.tech_points >= TECH_AGES[i].threshold) level = i; return level; })(); v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0; v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer ||= 0; v.forge_timer ||= 0; v.training_timer ||= 0; v.barracks ||= 0; v.mine_level ||= 0; v.forge_level ||= 0; }
         w.tiles = Uint8Array.from(data.tiles); w.ores = data.ores ? Uint8Array.from(data.ores) : new Uint8Array(size); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
+        w.remains = structuredClone(data.remains || []);
+        w.cemeteries = structuredClone(data.cemeteries || []);
         w.stumps = new Map((data.stumps || []).map(([i, biome, age]) => [i, { biome, age }]));
         w.fire_spread = data.fire_spread ? Int8Array.from(data.fire_spread) : new Int8Array(size).fill(-1);
         w.roads = data.roads ? Uint8Array.from(data.roads) : new Uint8Array(size);

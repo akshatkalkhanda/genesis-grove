@@ -1,6 +1,6 @@
 {
   "name": "genesis-grove",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "description": "An original living-world god sandbox for macOS and Windows",
   "author": "Genesis Grove",
   "license": "MIT",
@@ -30,7 +30,8 @@
     "smoke:review": "electron scripts/smoke-review-fixes.cjs",
     "smoke:menu": "electron scripts/smoke-menu.cjs",
     "smoke:coastal": "electron scripts/smoke-coastal-return.cjs",
-    "smoke:forestry": "electron scripts/smoke-forestry.cjs"
+    "smoke:forestry": "electron scripts/smoke-forestry.cjs",
+    "smoke:funerals": "electron scripts/smoke-funerals.cjs"
   },
   "devDependencies": {
     "electron": "43.7.7",

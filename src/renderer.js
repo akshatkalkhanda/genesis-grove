@@ -1,3 +1,4 @@
+import { draw_cemetery, draw_remains } from './funeral_art.js';
 import { FORESTRY, tree_clearings, tree_variation, TREE_BIOMES } from './forestry.js';
 import { draw_compact, home_populations, settlement_labels, map_detail } from './map_readability.js';
 import { Camera } from './camera.js';
@@ -328,6 +329,7 @@ export class Renderer extends Camera {
                 () => this.animal(c, animal, now));
             else { c.fillStyle = '#bdc5a988'; c.fillRect(animal.x * CELL, animal.y * CELL, 1.5 / s, 1.5 / s); }
         }
+        for (const cemetery of world.cemeteries) if (world.walkable(cemetery.x, cemetery.y)) draw_cemetery(c, cemetery);
         const aboard = new Set(world.machines.filter(m => m.crew_aboard).map(m => m.crew_id));
         for (const p of world.people) {
             if (p.voyage_id || aboard.has(p.id) || !visible(p)) continue;
@@ -344,6 +346,10 @@ export class Renderer extends Camera {
                 draw_compact(c, p.x * CELL, p.y * CELL, this.sprite_factor(0.55),
                 () => draw_daily_activity(c, p, world.time * 1000));
             }
+        }
+        for (const body of world.remains) {
+            draw_compact(c, body.x * CELL, body.y * CELL, this.sprite_factor(0.6),
+                () => draw_remains(c, body, world.time));
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
             draw_compact(c, machine.x * CELL, machine.y * CELL, this.sprite_factor(0.42),
@@ -742,7 +748,10 @@ export class Renderer extends Camera {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = Math.min(e.radius * CELL, 48 / this.scale);
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'tree_fall') {
+        if (e.type === 'funeral') {
+            c.fillStyle = '#d8d4ae';
+            c.fillRect(x - 1, y - 4 - (1 - e.life) * 7, 2, 2);
+        } else if (e.type === 'tree_fall') {
             const progress = 1 - e.life;
             c.translate(x, y); c.rotate(progress * progress * Math.PI / 2);
             draw_tree(c, 0, 0, e.biome, e.variation);

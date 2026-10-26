@@ -31,8 +31,9 @@ Version 0.27.0 adds individual traits, strict diets and survival decisions
 ([simulation phases](simulation-roadmap.md)), followed by the first compact,
 read-only [Ship Inspector](ship-inspector.md).
 The four kingdoms are only the video example; no dedicated setup is planned.
-Next: scoped military transport, followed by deeper character inheritance
-and ecosystem/economy balance. Ship inspection is the prerequisite observation
+Next priority: the [kingdom living-needs progression](kingdom-life-roadmap.md),
+followed by scoped military transport, deeper character inheritance and
+ecosystem/economy balance. Ship inspection is the prerequisite observation
 milestone; it introduces no new combat or troop transport.
 See [nature mechanics](nature.md) for current effects and later hazards.
 
@@ -119,3 +120,6 @@ scoped after transport can complete and return reliably.
 
 Version 0.29.0 connects finite timber harvesting to visible tree removal, saved stumps,
 simulation-time regrowth and nearby sound effects. See [forestry](forestry.md).
+
+Version 0.30.0 adds funeral care and an honest kingdom wellbeing/services overview.
+The requested needs-to-justice progression is scoped in [kingdom life](kingdom-life-roadmap.md).

@@ -35,7 +35,7 @@ export function advance_buildings(world, kingdom, dt, population, age) {
     const mill = buildings.some(building => building.type === 'windmill');
     const farmers = world.people.filter(p => p.village_id === kingdom.id && p.job === 'farmer'
         && p.role !== 'soldier' && !world._crew_assignments?.has(p.id) && !p.medical_role && !p.recovering && !p.prisoner_of
-        && !p.voyage_id && p.health > 0 && p.age / world.year_length >= 18).length;
+        && !world._funeral_assignments?.has(p.id) && !p.voyage_id && p.health > 0 && p.age / world.year_length >= 18).length;
     let staffed = farmers;
     const dust_rate = buildings.reduce((rate, building) => rate
         + ({ observatory: 1, stargate: 3, condenser: 8 }[building.type] || 0), 0);

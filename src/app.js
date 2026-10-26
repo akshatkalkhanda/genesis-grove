@@ -1,3 +1,4 @@
+import { kingdom_services_panel } from './kingdom_services_ui.js';
 import { FORESTRY, is_tree_site } from './forestry.js';
 import { MAP_LAYERS, layer_summary } from './map_layers.js';
 import { army_summary, rebuild_armies } from './army_inspector.js';
@@ -481,6 +482,13 @@ function inspect(p) {
     const people = world.people.filter(u => u.health > 0 && !u.voyage_id && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     const animals = world.animals.filter(u => u.health > 0 && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
+    const cemetery = world.cemeteries.find(c => Math.hypot(c.x - tile.x, c.y - tile.y) < 2.5);
+    const remains = world.remains.find(r => Math.hypot(r.x - tile.x, r.y - tile.y) < 1.5);
+    if (cemetery) {
+        add(`Cemetery · ${cemetery.buried} buried · ${cemetery.cremated} cremated`);
+        for (const record of cemetery.records.slice(0, 2)) add(`${record.name} · ${record.method === 'lost' ? 'unrecovered' : record.method} · year ${record.year}`);
+    }
+    if (remains) add(`${remains.name} · deceased · ${remains.stage === 'waiting' ? 'awaiting a funeral' : remains.stage === 'carry' ? 'being carried to rest' : 'funeral rites'}`);
     const stump = world.stumps.get(world.index(tile.x, tile.y));
     if (stump) add(stump.age < FORESTRY.stump_seconds ? 'Cut stump · regrowth takes time'
         : 'Young sapling · growing before it can be harvested');
@@ -1008,6 +1016,12 @@ function update_diplomacy(preferred_source = null) {
         const military = document.createElement('span');
         military.textContent = `${armies.length} garrisons · ${armies.filter(army => ['march', 'attack'].includes(army.state)).length} campaigning`;
         profile.append(heading, ruler, details, technology, research, resources, arsenal, jobs, logistics, military, relations);
+        profile.append(kingdom_services_panel(world, source, method => {
+            source.funeral_method = method; toast(`Funeral custom: ${method}. Applies when new rites begin.`);
+        }, cemetery => {
+            $('diplomacy-dialog').close(); followed_unit_id = null;
+            renderer.center_on(cemetery.x, cemetery.y); update_zoom();
+        }));
         if (colonies.length) {
             const towns = document.createElement('small'); towns.textContent = `Towns: ${colonies.map(c => c.name).join(', ')}`;
             profile.append(towns);

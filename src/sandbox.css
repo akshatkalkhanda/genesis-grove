@@ -243,3 +243,13 @@ body.presentation #viewport { inset: 0; }
 body.presentation footer { left: 12px; right: auto; bottom: 12px; width: auto; height: auto; gap: 8px; border: 1px solid #4d6748; border-radius: 8px; padding: 5px; }
 body.presentation .time-controls > :not(#pause) { display: none; }
 body.presentation #exit-presentation { font-size: 13px; padding: 6px 10px; }
+
+.kingdom-services{display:grid;gap:6px;border-top:1px solid #52634a;padding-top:10px;margin-top:4px;min-width:0}
+.kingdom-services details{border:1px solid #465640;border-radius:5px;padding:8px;min-width:0}
+.kingdom-services summary{cursor:pointer;color:#d3dfbd;min-height:24px}
+.service-row{display:grid;grid-template-columns:82px minmax(0,1fr);gap:8px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere}
+.service-explanation,.memorial-records{color:#a1b797;line-height:1.5;font-size:11px}
+.funeral-choices{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.funeral-choices button[aria-pressed=true]{background:#809d58;color:#12291e;border-color:#b2ce86}
+.memorial-records{max-height:100px;overflow:auto;margin-top:8px}
+@media(max-width:560px){.service-row{grid-template-columns:70px minmax(0,1fr)}}
