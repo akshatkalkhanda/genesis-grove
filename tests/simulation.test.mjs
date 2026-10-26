@@ -321,6 +321,15 @@ test('race strengths change resources, housing, and population growth', () => {
         }
     }
     const [elf, human, dwarf, orc] = w.villages;
+    for (const [town, x] of [[elf, 20], [human, 60]]) {
+        const logger = w.people.find(p => p.village_id === town.id && p.job === 'lumberjack');
+        const tree_x = x + 9;
+        w.set_tile(tree_x, 50, T.FOREST);
+        logger.x = tree_x + 0.5; logger.y = 50.5;
+        logger.daily_life = { phase: 'work', energy: 80, timer: 0,
+            site: { x: tree_x + 0.5, y: 50.5, kind: 'forest' }, cargo: { food: 0, wood: 0 },
+            delivered: 0, cycles: 0, partner_id: null };
+    }
     w.step(0.125);
     const elf_logger = w.people.find(p => p.village_id === elf.id && p.job === 'lumberjack');
     const human_logger = w.people.find(p => p.village_id === human.id && p.job === 'lumberjack');

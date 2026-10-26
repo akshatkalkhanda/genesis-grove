@@ -1,3 +1,4 @@
+import { FORESTRY, tree_clearings, tree_variation, TREE_BIOMES } from './forestry.js';
 import { draw_compact, home_populations, settlement_labels, map_detail } from './map_readability.js';
 import { Camera } from './camera.js';
 import { draw_map_layer } from './map_layers.js';
@@ -79,14 +80,7 @@ export class Renderer extends Camera {
     cache(world) {
         const c = this.tc;
         const mini_image = this.mini.createImageData(WIDTH, HEIGHT);
-        const clearings = new Uint8Array(WIDTH * HEIGHT);
-        for (const site of [...world.villages.filter(v => v.alive), ...world.colonies]) {
-            for (const place of [site, ...site.houses, ...(site.buildings || [])]) {
-                for (let dy = -3; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-                    if (world.inside(place.x + dx, place.y + dy)) clearings[world.index(place.x + dx, place.y + dy)] = 1;
-                }
-            }
-        }
+        const clearings = tree_clearings(world);
         for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
             const t = world.tiles[y * WIDTH + x], h = tile_hash(x, y), px = x * CELL, py = y * CELL;
             c.fillStyle = PALETTE[t]; c.fillRect(px, py, CELL, CELL);
@@ -167,6 +161,18 @@ export class Renderer extends Camera {
                 || world.roads[i] || world.roads[i - WIDTH] || world.roads[i + WIDTH]
                 || world.roads[i - 1] || world.roads[i + 1]) continue;
             draw_tree(c, x * CELL + Math.floor(h * 5), y * CELL + 3, biome, h);
+        }
+        for (const [i, stump] of world.stumps) {
+            if (world.tiles[i] !== T.GRASS || clearings[i] || world.roads[i]) continue;
+            const x = i % WIDTH, y = Math.floor(i / WIDTH), h = tree_variation(x, y);
+            const px = x * CELL + Math.floor(h * 5), py = y * CELL + 3;
+            if (stump.age < FORESTRY.stump_seconds) {
+                c.fillStyle = '#60462f'; c.fillRect(px - 1, py - 2, 3, 3);
+                c.fillStyle = '#ceac73'; c.fillRect(px - 1, py - 2, 3, 1);
+            } else {
+                c.save(); c.translate(px, py); c.scale(0.35, 0.35);
+                draw_tree(c, 0, 0, TREE_BIOMES[stump.biome], h); c.restore();
+            }
         }
         this.mini.putImageData(mini_image, 0, 0);
         for (const v of world.villages.filter(v => v.alive)) { this.mini.fillStyle = v.color; this.mini.fillRect(v.x - 1, v.y - 1, 3, 3); }
@@ -336,7 +342,7 @@ export class Renderer extends Camera {
             }
             if (p.age >= world.year_length * 18 && ((detail.activities && counts.activities < 24) || selected)) { counts.activities++;
                 draw_compact(c, p.x * CELL, p.y * CELL, this.sprite_factor(0.55),
-                () => draw_daily_activity(c, p, now));
+                () => draw_daily_activity(c, p, world.time * 1000));
             }
         }
         for (const machine of world.machines.filter(m => ['balloon', 'plane', 'airship'].includes(m.kind))) {
@@ -736,7 +742,17 @@ export class Renderer extends Camera {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = Math.min(e.radius * CELL, 48 / this.scale);
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'shell') {
+        if (e.type === 'tree_fall') {
+            const progress = 1 - e.life;
+            c.translate(x, y); c.rotate(progress * progress * Math.PI / 2);
+            draw_tree(c, 0, 0, e.biome, e.variation);
+        } else if (e.type === 'tree_chop') {
+            c.fillStyle = '#dbbd81';
+            for (let n = 0; n < 4; n++) {
+                const progress = 1 - e.life, side = n % 2 ? 1 : -1;
+                c.fillRect(x + side * (2 + n * progress * 3), y - 2 - Math.sin(progress * Math.PI) * 4, 1, 1);
+            }
+        } else if (e.type === 'shell') {
             const progress = 1 - e.life;
             const px = x + (e.target_x * CELL - x) * progress;
             const py = y + (e.target_y * CELL - y) * progress - Math.sin(progress * Math.PI) * Math.min(26, 42 / this.scale);

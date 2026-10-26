@@ -23,6 +23,8 @@ npm start
 
 If a macOS build has already been made, open `dist/mac-arm64/Genesis Grove.app` (Apple silicon) or `dist/mac/Genesis Grove.app` (Intel). Desktop packages include their own runtime; players do not need Node.js.
 
+Version 0.29.0 adds [finite visible tree cutting, stumps, regrowth and nearby harvesting sounds](docs/forestry.md).
+
 Version 0.28.0 refreshes the main menu, repairs coastal catch delivery, and exposes creature needs near Health,
 keeps inspector headings visible, corrects child work and clarifies blocked
 garrisons. Extreme zoom retains map anchors while capping moving artwork. See

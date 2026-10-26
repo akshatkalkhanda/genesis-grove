@@ -55,11 +55,11 @@ test('actual births retain adult partners, inherited identity and save continuit
 test('a logger working beside a forest harvests the assigned source tile', () => {
     const { world, kingdom } = town();
     const logger = world.people.find(p => p.job === 'lumberjack');
-    const source = world.index(41, 40);
+    const source = world.index(51, 40);
     world.tiles[source] = T.FOREST;
-    logger.x = 40.5; logger.y = 40.5; logger.gather = 3;
+    logger.x = 50.5; logger.y = 40.5; logger.gather = 3;
     logger.daily_life = { phase: 'work', energy: 80, timer: 0,
-        site: { x: 41.5, y: 40.5, kind: 'forest' }, cargo: { food: 0, wood: 0 },
+        site: { x: 51.5, y: 40.5, kind: 'forest' }, cargo: { food: 0, wood: 0 },
         delivered: 0, cycles: 0, partner_id: null };
     const before = world.fertility[source];
     world.step(0.125);

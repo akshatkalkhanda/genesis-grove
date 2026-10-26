@@ -1,3 +1,4 @@
+import { FORESTRY, is_tree_site } from './forestry.js';
 import { MAP_LAYERS, layer_summary } from './map_layers.js';
 import { army_summary, rebuild_armies } from './army_inspector.js';
 import { ship_summary, ship_position } from './ship_inspector.js';
@@ -480,6 +481,11 @@ function inspect(p) {
     const people = world.people.filter(u => u.health > 0 && !u.voyage_id && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     const animals = world.animals.filter(u => u.health > 0 && Math.hypot(u.x - tile.x, u.y - tile.y) < 5).length;
     add(`${people} people · ${animals} animals nearby`);
+    const stump = world.stumps.get(world.index(tile.x, tile.y));
+    if (stump) add(stump.age < FORESTRY.stump_seconds ? 'Cut stump · regrowth takes time'
+        : 'Young sapling · growing before it can be harvested');
+    else if (is_tree_site(world, tile.x, tile.y)) add(`Standing timber · ${(world.fertility[world.index(tile.x, tile.y)] * FORESTRY.wood_per_fertility).toFixed(1)} wood remaining`);
+
     const machine = world.machines.find(m => Math.hypot(m.x - tile.x, m.y - tile.y) < 2);
     const vehicle = world.vehicles.find(v => Math.hypot(v.x - tile.x, v.y - tile.y) < 2);
     if (machine) {
@@ -1402,6 +1408,9 @@ function frame(now) {
         ? { home_id: inspected_unit.id, kingdom_id: inspected_unit.kingdom_id } : null;
     renderer.selected_ship = inspected_unit?.kind === 'ship' ? inspected_unit : null;
     renderer.render(world, now);
+    audio.observe_resources(world.effects, { origin: renderer.origin, scale: renderer.scale,
+        width: renderer.width, height: renderer.height,
+        active: !paused && !document.hidden && !dialog_open && $('start-screen').hidden });
     ui_elapsed += dt;
     if (ui_elapsed > 0.5) { update_ui(); ui_elapsed = 0; }
     requestAnimationFrame(frame);

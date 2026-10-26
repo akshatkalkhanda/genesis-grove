@@ -2,6 +2,7 @@ export const AUDIO_KEY = 'genesis-grove-audio-v1';
 export const AUDIO_DEFAULTS = Object.freeze({ enabled: false, effects: 0.65, ambience: 0.18,
     voice: 0.75, narration: true, voice_uri: '' });
 export const SOUND_PROFILES = Object.freeze({
+    chop: [210, 85, .12, 'triangle', .6], tree_fall: [170, 38, .7, 'triangle', .8],
     ui: [640, 480, .045, 'sine', 0], select: [420, 680, .09, 'sine', 0],
     inspect: [540, 810, .12, 'sine', 0], paint: [180, 130, .07, 'triangle', .35],
     water: [500, 260, .16, 'sine', .6], plant: [300, 540, .12, 'triangle', .2],
@@ -100,7 +101,7 @@ export class GameAudio {
         let saved; try { saved = JSON.parse(storage?.getItem(AUDIO_KEY) || 'null'); } catch { /* Safe defaults. */ }
         this.settings = audio_settings(saved); this.last = new Map(); this.active = [];
         this.pending = null; this.speaking = false; this.generation = 0;
-        this.metrics = { effects: 0, spoken: 0, started: 0, finished: 0, dropped: 0 }; this.previous_event = null;
+        this.metrics = { effects: 0, spoken: 0, started: 0, finished: 0, dropped: 0 }; this.previous_event = null; this.resource_seen = new WeakSet();
         this.suspended = false; this.speech_error = '';
     }
     voices() { return (this.speech?.getVoices() || []).filter(v => v.localService); }
@@ -186,6 +187,17 @@ export class GameAudio {
         return true;
     }
     feedback(kind, text, options = {}) { this.play(kind, options); if (text) this.speak(text, options); }
+    observe_resources(effects, { origin, scale, width, height, active = true }) {
+        for (const effect of effects) {
+            if (!['tree_chop', 'tree_fall'].includes(effect.type) || this.resource_seen.has(effect)) continue;
+            this.resource_seen.add(effect);
+            const x = origin.x + effect.x * 6 * scale, y = origin.y + effect.y * 6 * scale;
+            if (!active || x < 0 || y < 0 || x > width || y > height) continue;
+            const kind = effect.type === 'tree_chop' ? 'chop' : 'tree_fall';
+            this.play(kind, { key: kind, interval: kind === 'chop' ? 450 : 1000,
+                pan: x / Math.max(1, width) * 2 - 1 });
+        }
+    }
     reset_events(events) { this.previous_event = events[0] || null; this.stop_speech(); }
     observe_events(events) {
         if (events[0] === this.previous_event) return;

@@ -1,3 +1,4 @@
+import { harvest_tree, is_tree_site } from './forestry.js';
 import { has_trait } from './character_traits.js';
 import { find_path } from './pathfinding.js';
 import { socialize, adjust_relationship } from './society.js';
@@ -41,7 +42,7 @@ function select_site(world, person, home, kingdom) {
         const x = Math.floor(home.x) + dx, y = Math.floor(home.y) + dy;
         if (!reachable({ x, y }) || world.fire[world.index(x, y)] > 0) continue;
         const tile = world.tile(x, y);
-        const match = person.job === 'lumberjack' ? WOODED.has(tile) && world.fertility[world.index(x, y)] > 0.05
+        const match = person.job === 'lumberjack' ? is_tree_site(world, x, y)
             : person.job === 'miner' ? world.ores[world.index(x, y)] > 0 || tile === 5 || tile === 14
                 : person.job === 'farmer' ? world.fertility[world.index(x, y)] > 0.2 : false;
         if (!match) continue;
@@ -65,7 +66,8 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
     const vanished_building = state.site && WORK_BUILDINGS.has(state.site.kind)
         && !(kingdom.buildings || []).some(building => building.type === state.site.kind
             && building.x === state.site.x && building.y === state.site.y);
-    if (state.site && (vanished_building || !world.walkable(state.site.x, state.site.y)
+    const vanished_tree = state.site?.kind === 'forest' && !is_tree_site(world, state.site.x, state.site.y);
+    if (state.site && (vanished_building || vanished_tree || !world.walkable(state.site.x, state.site.y)
         || world.fire[world.index(state.site.x, state.site.y)] > 0)) {
         state.phase = 'return'; state.timer = 0; state.site = null;
     }
@@ -187,8 +189,7 @@ export function collect_daily_goods(world, person, kingdom, food, wood) {
     }
     state.cargo.food += harvest;
     if (state.site.kind === 'forest' && WOODED.has(world.tile(state.site.x, state.site.y))) {
-        const timber = Math.min(wood, 8 - state.cargo.wood, world.fertility[i] * 20);
-        world.fertility[i] = Math.max(0, world.fertility[i] - timber / 20);
+        const timber = harvest_tree(world, state.site.x, state.site.y, Math.min(wood, 8 - state.cargo.wood));
         state.cargo.wood += timber;
     }
     return result;

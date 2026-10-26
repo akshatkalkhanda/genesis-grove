@@ -66,3 +66,7 @@ Rain, blizzard, drought, falling stars and the nuclear flash use their respectiv
 effect families. Automatic world announcements still have a five-second real-time
 limit: suppressed events are dropped and never replayed as a backlog at high speed.
 New regression checks cover bursts and priority announcements with late callbacks.
+
+Forestry (0.29.0): visible nearby cuts play throttled chop effects; a depleted tree
+plays a creak/thud. These are effects only, with no routine narration or delayed
+replay after pause, mute or offscreen activity. See [forestry](forestry.md).

@@ -32,13 +32,15 @@ test('farm goods are removed from finite stock and credited only after a return 
 
 test('finite forest harvest fills cargo without duplicate treasury credit', () => {
     const { world, home, person, state } = setup();
-    person.job = 'lumberjack'; world.tiles[world.index(40, 50)] = T.FOREST;
-    world.fertility[world.index(40, 50)] = 0.1;
-    state.phase = 'work'; state.site = { x: 40, y: 50, kind: 'forest' };
+    person.job = 'lumberjack'; person.x = 51;
+    world.tiles[world.index(51, 50)] = T.FOREST;
+    world.fertility[world.index(51, 50)] = 0.1;
+    state.phase = 'work'; state.site = { x: 51, y: 50, kind: 'forest' };
     const before = home.wood;
     collect_daily_goods(world, person, home, 3, 10);
     assert.ok(state.cargo.wood > 1.9 && state.cargo.wood < 2.1);
-    assert.equal(home.wood, before); assert.equal(world.fertility[world.index(40, 50)], 0);
+    assert.equal(home.wood, before); assert.equal(world.fertility[world.index(51, 50)], 0);
+    assert.equal(world.tile(51, 50), T.GRASS, 'depleted anchor fells the mature tree');
     const carried = state.cargo.wood;
     collect_daily_goods(world, person, home, 3, 10);
     assert.equal(state.cargo.wood, carried);

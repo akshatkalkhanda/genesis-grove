@@ -1,3 +1,4 @@
+import { advance_forestry, valid_stumps, is_tree_site } from './forestry.js';
 import { initialize_traits, valid_character_traits, trait_modifiers, trait_probability, apply_trait } from './character_traits.js';
 import { initialize_diet, valid_diet, valid_food_stores, reconcile_food, pack_food, receive_food, valid_food_cargo } from './diets.js';
 import { initialize_needs, needs_intent, decision_context, neighbors, set_action, note_event, food_drop, valid_needs } from './needs.js';
@@ -146,6 +147,7 @@ export class World {
         this.milestone = 0;
         this.events = [];
         this.effects = [];
+        this.stumps = new Map();
         this.weather = [];
         this.weather_clock = 0;
         this.tsunami_clock = 0;
@@ -181,6 +183,7 @@ export class World {
         const i = this.index(x, y);
         const before = this.walkable(x, y);
         this.tiles[i] = type;
+        this.stumps.delete(i);
         if (before !== this.walkable(x, y)) this.navigation_revision++;
         if (!this.walkable(x, y)) this.roads[i] = 0;
         if (type <= T.SHALLOW) this.fire[i] = 0;
@@ -875,12 +878,11 @@ export class World {
         const native = { wolfkin: T.SNOW, catfolk: T.DESERT, frogfolk: T.JUNGLE,
             hyenafolk: T.SAVANNA, foxfolk: T.MUSHROOM, harefolk: T.MAPLE,
             beetlefolk: T.CRYSTAL, dwarf: T.HILL }[person.race];
-        for (let dy = -radius; dy <= radius; dy += 2) for (let dx = -radius; dx <= radius; dx += 2) {
+        for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
             const x = Math.floor(home.x) + dx, y = Math.floor(home.y) + dy;
             if (!this.walkable(x, y) || this.fire[this.index(x, y)] > 0) continue;
             const terrain = this.tile(x, y);
-            const wooded = [T.FOREST, T.JUNGLE, T.MAPLE, T.MUSHROOM, T.CELESTIAL].includes(terrain);
-            const useful = seeking_wood ? wooded : FLAMMABLE.has(terrain) || terrain === native;
+            const useful = seeking_wood ? is_tree_site(this, x, y) : FLAMMABLE.has(terrain) || terrain === native;
             if (!useful) continue;
             const value = 12 - Math.hypot(person.x - x, person.y - y)
                 + (terrain === native ? 2 : 0);
@@ -1389,10 +1391,11 @@ export class World {
         advance_machines(this, dt, technology_level, RESEARCH_COSTS);
         if (this.tick % 240 === 0) this.schedule_trades();
         advance_weather(this, dt);
+        advance_forestry(this, dt);
         // Sample ecological growth; active fires are updated together to keep spread rate stable.
         for (let n = 0; n < 80; n++) {
             const i = Math.floor(this.random() * this.tiles.length), t = this.tiles[i];
-            if (t === T.GRASS && this.fertility[i] > 0.6 && this.random() < dt * 0.25) {
+            if (t === T.GRASS && !this.stumps.has(i) && this.fertility[i] > 0.6 && this.random() < dt * 0.25) {
                 const x = i % WIDTH, y = Math.floor(i / WIDTH);
                 if (DIRECTIONS.some(([dx, dy]) => this.tile(x + dx, y + dy) === T.FOREST)) { this.tiles[i] = T.FOREST; this.revision++; }
             }
@@ -1417,7 +1420,7 @@ export class World {
         return { population: this.people.length, soldiers: this.people.filter(p => p.role === 'soldier').length, wildlife: this.animals.length, villages: kingdoms, towns: kingdoms + this.colonies.length, trees, land: Math.round(land / this.tiles.length * 100) };
     }
     serialize() {
-        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
+        return { format: 'genesis-grove', version: 1, name: this.name, seed: this.seed, rng: this.rng, time: this.time, tick: this.tick, next_id: this.next_id, scenario: this.scenario, year_length: this.year_length, laws: { ...this.laws }, lighting: { ...this.lighting }, weather: structuredClone(this.weather), weather_clock: this.weather_clock, tsunami_clock: this.tsunami_clock, milestone: this.milestone, tiles: Array.from(this.tiles), ores: Array.from(this.ores), strata: Array.from(this.strata), roads: Array.from(this.roads), vehicles: structuredClone(this.vehicles), machines: structuredClone(this.machines), fire: Array.from(this.fire), fire_spread: Array.from(this.fire_spread), fertility: Array.from(this.fertility), stumps: [...this.stumps].map(([i, s]) => [i, s.biome, s.age]), people: structuredClone(this.people), animals: structuredClone(this.animals), food_piles: structuredClone(this.food_piles), villages: structuredClone(this.villages), colonies: structuredClone(this.colonies), voyages: structuredClone(this.voyages), trades: structuredClone(this.trades), relations: structuredClone(this.relations), army_orders: structuredClone(this.army_orders), events: structuredClone(this.events) };
     }
     static deserialize(data) {
         const invalid = () => { throw new Error('This is not a valid Genesis Grove world file.'); };
@@ -1441,6 +1444,7 @@ export class World {
         if (data.fire_spread !== undefined && (!array(data.fire_spread, size)
             || data.fire_spread.length !== size
             || !data.fire_spread.every(n => integer(n, -1, MAX_FIRE_SPREAD)))) invalid();
+        if (!valid_stumps(data.stumps, size)) invalid();
         if (!array(data.fertility, size) || data.fertility.length !== size || !data.fertility.every(n => num(n, 0, 1))) invalid();
         if (!num(data.time) || !integer(data.tick, 0, 1e10) || !integer(data.rng, 1, 4294967295) || !integer(data.next_id, 1, 1e9)) invalid();
         if (!array(data.villages, MAX_VILLAGES) || !array(data.people, MAX_PEOPLE) || !array(data.animals, 350) || !array(data.events, 200) || (data.relations !== undefined && !array(data.relations, 2000)) || (data.colonies !== undefined && !array(data.colonies, MAX_SAVED_COLONIES)) || (data.voyages !== undefined && !array(data.voyages, MAX_VOYAGES)) || (data.trades !== undefined && !array(data.trades, MAX_TRADES))) invalid();
@@ -1640,6 +1644,7 @@ export class World {
         for (const kingdom of w.villages) if (kingdom.food_stores === undefined) reconcile_food(kingdom);
         for (const v of w.villages) { v.race ||= 'human'; v.deaths ||= 0; v.founded_year ||= 1; v.siege ||= 0; v.tech_points ??= Math.min(1000, v.age / w.year_length); v.research_level ??= (() => { let level = 0; for (let i = 1; i < TECH_AGES.length; i++) if (v.tech_points >= TECH_AGES[i].threshold) level = i; return level; })(); v.ore ||= { copper: 0, tin: 0, iron: 0, coal: 0, stardust: 0 }; v.ore.stardust ??= 0; v.weapons ||= 0; v.armor_stock ||= 0; v.mine_timer ||= 0; v.forge_timer ||= 0; v.training_timer ||= 0; v.barracks ||= 0; v.mine_level ||= 0; v.forge_level ||= 0; }
         w.tiles = Uint8Array.from(data.tiles); w.ores = data.ores ? Uint8Array.from(data.ores) : new Uint8Array(size); w.fire = Float32Array.from(data.fire); w.fertility = Float32Array.from(data.fertility);
+        w.stumps = new Map((data.stumps || []).map(([i, biome, age]) => [i, { biome, age }]));
         w.fire_spread = data.fire_spread ? Int8Array.from(data.fire_spread) : new Int8Array(size).fill(-1);
         w.roads = data.roads ? Uint8Array.from(data.roads) : new Uint8Array(size);
         w.strata = data.strata ? Uint8Array.from(data.strata) : new Uint8Array(size);

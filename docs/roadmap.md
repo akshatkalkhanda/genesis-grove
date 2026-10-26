@@ -116,3 +116,6 @@ and identity conservation, interruption at each stage, missing vessels, changed
 ownership, pause/speed, deterministic mid-stage save/resume and compact native UI.
 This milestone does not require implementing ship combat; combat is separately
 scoped after transport can complete and return reliably.
+
+Version 0.29.0 connects finite timber harvesting to visible tree removal, saved stumps,
+simulation-time regrowth and nearby sound effects. See [forestry](forestry.md).
