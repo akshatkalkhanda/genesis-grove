@@ -1,7 +1,7 @@
 import { trait_modifiers } from './character_traits.js';
 
 export const DAMAGE_CAUSES = Object.freeze({
-    starvation: 'Food shortage', infection: 'Infection', combat: 'Combat wound',
+    dehydration: 'Dehydration', starvation: 'Food shortage', infection: 'Infection', combat: 'Combat wound',
     fire: 'Burn injury', aging: 'Age-related decline', predation: 'Animal attack',
     meteor: 'Meteor impact', nuke: 'Nuclear blast', lightning: 'Lightning strike',
     tsunami: 'Tsunami impact', cold: 'Blizzard exposure', acid: 'Acid exposure', erase: 'Divine removal'
@@ -25,6 +25,8 @@ export function apply_damage(world, unit, amount, cause) {
 
 export function health_risks(world, unit, kingdom) {
     const risks = [], modifiers = trait_modifiers(unit);
+    if (!unit.species && (unit.needs?.hydration ?? 100) <= 15) risks.push('Severely dehydrated');
+    else if (!unit.species && (unit.needs?.hydration ?? 100) <= 55) risks.push('Needs drinking water');
     if (unit.infection > 0) risks.push('Infected');
     if (world.weather?.some(e => e.kind === 'blizzard' && Math.hypot(e.x - unit.x, e.y - unit.y) <= e.radius)) risks.push('In a blizzard');
     if (world.fire[world.index(unit.x, unit.y)] > 0) risks.push('Burning');

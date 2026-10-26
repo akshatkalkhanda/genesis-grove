@@ -1,3 +1,4 @@
+import { WATER, water_topology } from './drinking_water.js';
 import { kingdom_services_panel } from './kingdom_services_ui.js';
 import { FORESTRY, is_tree_site } from './forestry.js';
 import { MAP_LAYERS, layer_summary } from './map_layers.js';
@@ -509,6 +510,13 @@ function inspect(p) {
         const deposit = world.ores[world.index(tile.x, tile.y)];
         if (deposit && !building) add(['', 'Copper vein', 'Tin vein', 'Iron vein', 'Coal seam', 'Stardust deposit'][deposit]);
     }
+    const well = world.villages.flatMap(k => k.buildings || []).find(b => b.type === 'well' && Math.hypot(b.x - tile.x, b.y - tile.y) < 1.5);
+    if (well) add(`Drinking water · ${(well.water_stock ?? 0).toFixed(1)}/${WATER.well_capacity} rations`);
+    if (world.tile(tile.x, tile.y) <= T.SHALLOW) {
+        const lake = water_topology(world).find(l => l.cells.has(world.index(tile.x, tile.y)));
+        const stock = lake && world.water_sources.find(s => s.anchor === lake.anchor);
+        add(lake ? `Freshwater pond · ${(stock?.stock ?? 0).toFixed(1)}/${lake.capacity} rations` : 'Seawater or tiny pool · not a drinking source');
+    }
     if (world.fire[world.index(tile.x, tile.y)] > 0) add('Burning · use rain');
     add('Click life or ships to inspect · Kingdoms for town details');
     box.hidden = false;
@@ -792,22 +800,27 @@ function update_entity_card() {
     health.setAttribute('aria-valuemin', '0'); health.setAttribute('aria-valuemax', String(attributes.max_health)); health.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(unit.health))));
     const meter = document.createElement('span'); meter.style.width = `${Math.max(0, Math.min(100, unit.health / attributes.max_health * 100))}%`; health.append(meter); card.append(health);
     const needs = document.createElement('section'); needs.className = 'entity-needs';
-    needs.setAttribute('aria-label', 'Hunger, energy and diet');
+    needs.setAttribute('aria-label', 'Hunger, thirst, energy and diet');
     const supernatural = ['angel', 'demon'].includes(unit.species);
-    for (const [label, raw] of [['Hunger', Number.isFinite(unit.needs?.nutrition) ? 100 - unit.needs.nutrition : null], ['Energy', unit.needs?.energy]]) {
+    for (const [label, raw] of [['Hunger', Number.isFinite(unit.needs?.nutrition) ? 100 - unit.needs.nutrition : null], ['Thirst', !unit.species && Number.isFinite(unit.needs?.hydration) ? 100 - unit.needs.hydration : null], ['Energy', unit.needs?.energy]]) {
         if (supernatural || !Number.isFinite(raw)) continue;
         const value = Math.max(0, Math.min(100, raw));
         const field = document.createElement('label'); field.className = 'character-need';
         const text = document.createElement('span'); text.textContent = `${label} · ${Math.round(value)}/100`;
         const gauge = document.createElement('meter'); gauge.min = 0; gauge.max = 100; gauge.value = value;
-        gauge.setAttribute('aria-label', label); gauge.setAttribute('aria-valuetext', label === 'Hunger'
-            ? `${Math.round(value)} out of 100; higher means hungrier` : `${Math.round(value)} out of 100 energy remaining`);
-        gauge.low = label === 'Hunger' ? 25 : 30; gauge.high = 65; gauge.optimum = label === 'Hunger' ? 0 : 100;
+        const depletion = label === 'Hunger' || label === 'Thirst';
+        gauge.setAttribute('aria-label', label); gauge.setAttribute('aria-valuetext', depletion
+            ? `${Math.round(value)} out of 100; higher means ${label === 'Thirst' ? 'thirstier' : 'hungrier'}` : `${Math.round(value)} out of 100 energy remaining`);
+        gauge.low = depletion ? 25 : 30; gauge.high = 65; gauge.optimum = depletion ? 0 : 100;
         field.append(text, gauge); needs.append(field);
     }
     const diet = document.createElement('span'); diet.className = 'entity-diet';
     diet.textContent = supernatural ? 'Supernatural · ordinary hunger does not apply'
         : `Diet · ${DIET_CATALOG.find(diet => diet.id === (unit.diet_id || 'omnivore'))?.label || 'Omnivore'}`;
+    if (!unit.species) {
+        const bottle = document.createElement('span'); bottle.className = 'entity-diet';
+        bottle.textContent = `Carried water · ${unit.water_carried ?? 0}/${WATER.carry_capacity} rations`; needs.append(bottle);
+    }
     needs.append(diet); card.append(needs);
     const line = (label, value) => { const row = document.createElement('div'); row.className = 'entity-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('b'); val.textContent = String(value); row.append(key, val); card.append(row); };
     line('Species', `${inspected_unit.kind === 'person' ? RACES[unit.race]?.label || 'Human' : unit.species} · #${unit.id}`);

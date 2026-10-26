@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, T } from '../src/simulation.js';
+import { initialize_water_world } from '../src/drinking_water.js';
 import { creature_stats } from '../src/creatures.js';
 import { kingdom_wellbeing, WELLBEING } from '../src/kingdom_wellbeing.js';
 
@@ -20,10 +21,12 @@ function setup() {
     return { world, kingdom, add_person };
 }
 
-test('wellbeing uses the declared food, housing, health, and safety weights', () => {
+test('wellbeing uses the declared food, water, housing, health, and safety weights', () => {
     const { world, kingdom, add_person } = setup();
     const person = add_person();
     const healthy = kingdom_wellbeing(world, kingdom.id);
+    assert.deepEqual([WELLBEING.food_weight, WELLBEING.water_weight, WELLBEING.housing_weight,
+        WELLBEING.health_weight, WELLBEING.safety_weight], [30, 15, 25, 20, 10]);
     assert.deepEqual([healthy.happiness, healthy.happy, healthy.happy_percent], [100, 1, 100]);
     assert.deepEqual([healthy.beds, healthy.housed, healthy.homeless], [WELLBEING.beds_per_house, 1, 0]);
 
@@ -31,8 +34,8 @@ test('wellbeing uses the declared food, housing, health, and safety weights', ()
     person.needs.nutrition = 35;
     person.health_history = [{ cause: 'combat', time: world.time }];
     const affected = kingdom_wellbeing(world, kingdom.id);
-    assert.equal(affected.happiness, 58);
-    assert.equal(affected.happy_percent, 0);
+    assert.equal(affected.happiness, 65);
+    assert.equal(affected.happy_percent, 100);
     assert.equal(affected.hungry, 1);
     assert.equal(affected.injured, 1);
 });
@@ -51,6 +54,16 @@ test('five beds per house are allocated across the capital and its colonies', ()
     assert.equal(m.housed, 10);
     assert.equal(m.homeless, 1);
     assert.equal(m.homeless_percent, 9);
+});
+
+test('water need lowers the estimate and contributes thirsty, dehydrated, and carried-water counts', () => {
+    const { world, kingdom, add_person } = setup();
+    const person = add_person();
+    person.needs.hydration = 0;
+    person.water_carried = 2;
+    const m = kingdom_wellbeing(world, kingdom.id);
+    assert.equal(m.happiness, 85);
+    assert.deepEqual([m.thirsty, m.dehydrated, m.water_carried], [1, 1, 2]);
 });
 
 test('service counts reflect school attendance, health staff, detention, and active buildings', () => {
@@ -73,13 +86,24 @@ test('service counts reflect school attendance, health staff, detention, and act
     assert.deepEqual([m.sick, m.prisons, m.prison_capacity, m.prisoners, m.garrisons], [1, 1, 8, 1, 1]);
 });
 
-test('unmodeled services remain unknown instead of being reported as zero', () => {
+test('water access and thirst are measured while unmodeled services remain unknown', () => {
     const { world, kingdom } = setup();
     const m = kingdom_wellbeing(world, kingdom.id);
-    for (const key of ['tax_rate', 'tax_collected', 'drinking_water', 'clothing', 'clean_air', 'police', 'advocates', 'courts']) {
+    assert.deepEqual(m.drinking_water, { ponds: 0, pond_stock: 0, stored: 0, served: 0, unserved: 0 });
+    assert.deepEqual([m.thirsty, m.dehydrated, m.water_carried], [0, 0, 0]);
+    for (const key of ['tax_rate', 'tax_collected', 'clothing', 'clean_air', 'police', 'advocates', 'courts']) {
         assert.equal(m[key], null, `${key} is not modeled`);
     }
     assert.equal(kingdom_wellbeing(world, -1), null);
+});
+
+test('reachable freshwater ponds and their finite stock appear in kingdom services', () => {
+    const { world, kingdom, add_person } = setup();
+    add_person();
+    for (let y = 54; y < 56; y++) for (let x = 54; x < 56; x++) world.set_tile(x, y, T.OCEAN);
+    initialize_water_world(world, true);
+    const m = kingdom_wellbeing(world, kingdom.id);
+    assert.deepEqual(m.drinking_water, { ponds: 1, pond_stock: 16, stored: 0, served: 1, unserved: 0 });
 });
 
 test('repeated estimates do not mutate the world and legacy saves receive safe defaults', () => {

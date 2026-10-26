@@ -44,11 +44,20 @@ Opening the overview, reading graves and focusing the cemetery do not advance
 paused simulation state. Clicking a funeral-custom button is an explicit saved
 policy change for rites that have not begun. Existing rites retain their method.
 
+## 0.31 update: drinking water
+
+[Drinking-water needs](drinking-water.md) now include finite wells/inland ponds,
+thirst, fetching and carried supplies, dehydration, saved reserves, and water
+service statistics. Happiness weights are now food 30%, water 15%, housing 25%,
+health 20%, safety 10%. The 0.30 observations below describe that earlier release;
+clothing, clean air, taxation and civilian justice remain planned.
+
 ## Phase A: basic living needs
 
 - Food: expose compatible nutrition, reserve days and distribution shortfalls.
-- Drinking water: freshwater/well supplies, finite safe storage, drinking trips,
-  drought and contamination. Wells require reachable service capacity.
+- Drinking water: initial finite supplies, fetching, thirst, drought and reachable
+  service are implemented in 0.31. Contamination, dedicated porter roles and more
+  detailed water infrastructure remain later work.
 - Clothing: fibre/leather gathering, tailoring, finite garments, wear, weather
   protection and shortages; armor does not stand in for clothing.
 - Homes: named household/bed assignment, overcrowding, relocation and shelter

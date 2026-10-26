@@ -20,7 +20,7 @@ export function kingdom_services_panel(world, kingdom, on_policy, on_focus) {
     };
     row('Food', `${Math.floor(m.food)} shared food · ${m.hungry} hungry residents`);
     row('Housing', `${m.housed}/${m.population} have housing capacity; five beds per house`);
-    row('Water', `${m.wells} wells for farms/firefighting. Drinking-water needs are not modeled yet.`);
+    row('Water', `${m.wells} wells · ${m.drinking_water.stored.toFixed(1)} well rations · ${m.drinking_water.ponds} reachable freshwater ponds (${m.drinking_water.pond_stock.toFixed(1)} rations) · ${m.water_carried} carried · ${m.thirsty} thirsty / ${m.dehydrated} severely dehydrated. ${m.drinking_water.served}/${m.population} residents have a reachable well/pond from home; ${m.drinking_water.unserved} underserved. Access does not guarantee stock.`);
     row('Clothing', 'Clothing production and individual clothing needs are not modeled yet.');
     row('Clean air', 'Air quality and pollution exposure are not modeled yet.');
     row('Education', `${m.schools} schools · ${m.attending}/${m.school_age} school-age children attending now`);
@@ -30,7 +30,7 @@ export function kingdom_services_panel(world, kingdom, on_policy, on_focus) {
     row('Justice', 'Advocates, trials and civilian courts are planned. War detention is not a criminal trial.');
     row('Taxes', 'No tax rate or tax collection is modeled. Town resources currently use shared stores.');
     const explanation = document.createElement('p'); explanation.className = 'service-explanation';
-    explanation.textContent = 'Happiness is a needs-based estimate: food 40%, housing 25%, health 25%, recent safety 10%. Satisfied means 65/100 or above. Housing shortfall estimates capacity; individual homes are not assigned.';
+    explanation.textContent = 'Happiness is a needs-based estimate: food 30%, water 15%, housing 25%, health 20%, recent safety 10%. Satisfied means 65/100 or above. Housing shortfall estimates capacity; individual homes are not assigned.';
     detail.append(explanation); panel.append(detail);
     const funeral = document.createElement('details'), funeral_summary = document.createElement('summary');
     funeral_summary.textContent = 'Cemetery & funeral custom'; funeral.append(funeral_summary);

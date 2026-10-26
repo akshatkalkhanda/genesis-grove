@@ -8,6 +8,7 @@ const ready = (world, person) => person.health > 50 && person.role !== 'soldier'
     && person.age / world.year_length >= 18 && !person.voyage_id && !person.prisoner_of
     && !person.medical_role && !person.recovering && !world._crew_assignments?.has(person.id)
     && !world.machines.some(m => m.crew_id === person.id)
+    && (person.needs?.hydration ?? 100) > 55
     && (person.needs?.nutrition ?? 100) > 40 && (person.needs?.energy ?? 100) > 25
     && world.walkable(person.x, person.y) && !world.fire[world.index(person.x, person.y)];
 const safe = (world, point) => world.walkable(point.x, point.y)

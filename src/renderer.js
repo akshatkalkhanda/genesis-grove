@@ -748,7 +748,9 @@ export class Renderer extends Camera {
     effect(c, e, now) {
         const x = e.x * CELL, y = e.y * CELL, r = Math.min(e.radius * CELL, 48 / this.scale);
         c.save(); c.globalAlpha = e.life;
-        if (e.type === 'funeral') {
+        if (e.type === 'drink') {
+            c.fillStyle = '#a5e3e7'; c.fillRect(x, y - 7 - (1 - e.life) * 3, 2, 3);
+        } else if (e.type === 'funeral') {
             c.fillStyle = '#d8d4ae';
             c.fillRect(x - 1, y - 4 - (1 - e.life) * 7, 2, 2);
         } else if (e.type === 'tree_fall') {

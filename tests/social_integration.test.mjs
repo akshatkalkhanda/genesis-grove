@@ -75,11 +75,11 @@ test('peaceful forging reserves construction timber and stops stockpiling spare 
     kingdom.research_level = 1; kingdom.tech_points = 8;
     kingdom.ore.copper = 100;
     kingdom.barracks = 1;
-    kingdom.wood = 15; kingdom.forge_timer = 10;
+    kingdom.wood = 14; kingdom.forge_timer = 10;
     for (const person of world.people) person.gather = 0;
     for (let i = 0; i < 5; i++) world.add_person(40, 40, kingdom.id);
     world.step(0.125);
-    assert.equal(kingdom.wood, 15);
+    assert.equal(kingdom.wood, 14);
     assert.equal(kingdom.ore.copper, 100);
     kingdom.houses = [{ x: 40, y: 40 }];
     for (const person of world.people) person.weapon_level = 1;

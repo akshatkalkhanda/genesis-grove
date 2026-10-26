@@ -123,3 +123,6 @@ simulation-time regrowth and nearby sound effects. See [forestry](forestry.md).
 
 Version 0.30.0 adds funeral care and an honest kingdom wellbeing/services overview.
 The requested needs-to-justice progression is scoped in [kingdom life](kingdom-life-roadmap.md).
+
+Version 0.31.0 implements [drinking-water needs](drinking-water.md). Clothing and
+individual household assignments are the next living-needs priorities.

@@ -13,7 +13,8 @@ function ward(type = 'clinic', stock = 10) {
     for (let i = 0; i < 8; i++) { world.add_person(52, 50, kingdom.id); world.people.at(-1).gather = 0; }
     kingdom.food = 100; kingdom.wood = 0;
     const clinic = { type, x: 52, y: 50, growth: 0, harvests: 0, stock };
-    kingdom.buildings = [clinic, { type: 'camp', x: 56, y: 50, growth: 0, harvests: 0 }];
+    kingdom.buildings = [clinic, { type: 'camp', x: 56, y: 50, growth: 0, harvests: 0 },
+        { type: 'well', x: 51, y: 50, growth: 0, harvests: 0, water_stock: 60 }];
     const patient = world.people[2]; patient.role = 'soldier'; patient.health = 20;
     return { world, kingdom, clinic, patient };
 }

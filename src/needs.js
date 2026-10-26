@@ -1,3 +1,4 @@
+import { WATER, initialize_water, water_intent, service_water } from './drinking_water.js';
 import { creature_stats } from './creatures.js';
 import { trait_modifiers, trait_probability } from './character_traits.js';
 import { initialize_diet, consume_food, diet_food_available } from './diets.js';
@@ -18,6 +19,7 @@ export function initialize_needs(unit) {
     initialize_diet(unit);
     unit.needs ||= { nutrition: 85, energy: unit.daily_life?.energy ?? 90,
         decision_timer: 0, resting: false, intent: null };
+    initialize_water(unit);
     unit.current_action ||= unit.task || 'Exploring';
     unit.action_reason ||= 'Looking for useful activity.';
     unit.recent_events ||= [];
@@ -106,17 +108,23 @@ const target = (unit, point, action, reason) => ({ x: point.x, y: point.y, route
 export function needs_intent(world, unit, dt, context, kingdom = null, home = null) {
     const needs = initialize_needs(unit), balance = NEEDS_BALANCE;
     const modifiers = trait_modifiers(unit);
+    if (!unit.species) needs.hydration = clamp(needs.hydration - dt * WATER.thirst_rate);
     needs.nutrition = clamp(needs.nutrition - dt * (unit.species ? balance.wildlife_hunger_rate : balance.hunger_rate));
     if (unit.daily_life) needs.energy = unit.daily_life.energy;
     else needs.energy = clamp(needs.energy - dt * balance.idle_energy_per_second);
     needs.decision_timer = Math.max(0, needs.decision_timer - dt);
     if (needs.nutrition <= 0) apply_damage(world, unit, dt * balance.starvation_per_second, 'starvation');
-    if (modifiers.regen > 0 && needs.nutrition > 0) unit.health = Math.min(
+    if (!unit.species && needs.hydration <= 0) apply_damage(world, unit, dt * WATER.dehydration_per_second, 'dehydration');
+    if (modifiers.regen > 0 && needs.nutrition > 0 && (unit.species || needs.hydration > 0)) unit.health = Math.min(
         creature_stats(unit, world.year_length).max_health, unit.health + dt * modifiers.regen);
     if (unit.health <= 0) return null;
     if (unit.voyage_id || unit.prisoner_of || world._crew_assignments?.get(unit.id)?.crew_aboard) {
         if (needs.nutrition <= balance.hungry && kingdom) eat(world, unit, kingdom,
             (unit.role === 'soldier' ? 1.7 : .9) * modifiers.meal);
+        if (!unit.species && needs.hydration <= WATER.thirsty && needs.decision_timer <= 0) {
+            if (service_water(world, unit, kingdom)) note_event(world, unit, 'Drank a finite water ration.');
+            needs.decision_timer = balance.decision_seconds;
+        }
         return null;
     }
     const fire = world.fire[world.index(unit.x, unit.y)] > 0;
@@ -143,6 +151,9 @@ export function needs_intent(world, unit, dt, context, kingdom = null, home = nu
             needs.intent = escape ? target(unit, escape, 'Escaping danger', reason)
                 : { action: 'Escaping danger', reason: `${reason} No safe route is available.`, holding: false };
         } else needs.intent = null;
+        if (!needs.intent && !unit.species && needs.hydration <= WATER.critical && needs.nutrition > 25) {
+            needs.intent = water_intent(world, unit);
+        }
         if (!needs.intent && needs.nutrition <= balance.hungry) {
             const meal = (unit.role === 'soldier' ? 1.7 : .9) * modifiers.meal;
             if (kingdom && diet_food_available(kingdom, unit) >= meal && eat(world, unit, kingdom, meal)) {
@@ -184,6 +195,7 @@ export function needs_intent(world, unit, dt, context, kingdom = null, home = nu
                 }
             }
         }
+        if (!needs.intent && !unit.species && needs.hydration <= WATER.thirsty) needs.intent = water_intent(world, unit);
         if(!needs.intent && (needs.energy<=balance.tired || needs.resting)) {
             needs.resting=needs.energy<balance.rested;
             if(needs.resting) needs.intent={action:'Resting',reason:'Energy is low; recovering before work.',holding:true};
@@ -200,7 +212,8 @@ export function needs_intent(world, unit, dt, context, kingdom = null, home = nu
 }
 export function valid_needs(unit, time) {
     const n=unit.needs,number=(value,max)=>Number.isFinite(value)&&value>=0&&value<=max;
-    if(n!==undefined && (!n || !number(n.nutrition,100) || !number(n.energy,100)
+    if (unit.water_carried !== undefined && (!Number.isInteger(unit.water_carried) || !number(unit.water_carried, WATER.carry_capacity))) return false;
+    if(n!==undefined && (!n || (n.hydration !== undefined && !number(n.hydration,100)) || !number(n.nutrition,100) || !number(n.energy,100)
         || !number(n.decision_timer,2) || typeof n.resting!=='boolean'
         || (n.intent!==null && (!n.intent || typeof n.intent.action!=='string' || n.intent.action.length>60
             || typeof n.intent.reason!=='string' || n.intent.reason.length>160 || typeof n.intent.holding!=='boolean'

@@ -5,7 +5,7 @@ export const farm_target = population => Math.min(32, Math.max(1, Math.ceil(popu
 export const food_reserve = population => Math.max(8, population * 4);
 export const CIVIC_TYPES = new Set(['well', 'granary', 'school', 'church', 'temple', 'market']);
 export const CIVIC_DESCRIPTIONS = Object.freeze({
-    well: 'Waters nearby farms and helps extinguish nearby fires.',
+    well: 'Provides finite replenishing drinking water, irrigates nearby farms and helps extinguish nearby fires.',
     granary: 'Stores surplus grain and releases it when shared food runs low.',
     school: 'Children attend lessons and gain experience before adulthood.',
     church: 'A place of worship that improves nearby rest and social recovery.',
