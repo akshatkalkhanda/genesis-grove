@@ -147,7 +147,7 @@ export class World {
         this.relations = [];
         this.scenario = scenario === 'hundred' ? 'hundred' : 'sandbox';
         this.year_length = this.scenario === 'hundred' ? 2 : 20;
-        this.laws = { natural_events: false, rebellions: false, diplomacy: this.scenario === 'hundred', expansion: this.scenario === 'hundred' };
+        this.laws = { natural_events: false, rebellions: false, diplomacy: this.scenario === 'hundred', expansion: true };
         this.milestone = 0;
         this.events = [];
         this.effects = [];

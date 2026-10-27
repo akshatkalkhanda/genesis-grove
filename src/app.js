@@ -260,6 +260,7 @@ function set_pause(value) {
 }
 $('pause').onclick = () => set_pause(!paused);
 function set_speed(value) {
+    if (value !== speed) accumulator = 0;
     speed = value;
     audio.feedback('resume', `Time speed ${value} times`, { key: 'speed', interval: 150 });
     for (const button of document.querySelectorAll('[data-speed]')) button.classList.toggle('active', Number(button.dataset.speed) === speed);
@@ -1203,7 +1204,7 @@ function update_world_guidance(stats = world.stats()) {
     } else if (wars) {
         icon = '⚔'; kicker = `${wars} ACTIVE ${wars === 1 ? 'WAR' : 'WARS'}`; title = 'Conflict is reshaping the world'; detail = `${stats.soldiers} soldiers are serving across ${stats.villages} kingdoms.`;
     } else {
-        icon = '✦'; title = 'The world is evolving'; detail = `${stats.population} people in ${stats.villages} ${stats.villages === 1 ? 'kingdom' : 'kingdoms'} · ${stats.wildlife} wildlife.`;
+        icon = '✦'; title = 'The world is evolving'; detail = `${stats.population} people in ${stats.villages} ${stats.villages === 1 ? 'kingdom' : 'kingdoms'} · ${stats.towns} towns · ${stats.wildlife} wildlife.`;
     }
     $('world-state-icon').textContent = icon;
     $('world-state-kicker').textContent = kicker;
@@ -1429,7 +1430,13 @@ function frame(now) {
             advance_daylight(world.lighting, dt, speed);
             accumulator += dt * speed;
             let steps = 0;
-            while (accumulator >= 0.125 && steps < 16) { world.step(0.125); accumulator -= 0.125; steps++; }
+            // Experimental acceleration keeps fixed simulation steps and yields for input/rendering.
+            const experimental = speed === 200;
+            const step_limit = experimental ? 256 : 16;
+            const deadline = experimental ? performance.now() + 12 : Infinity;
+            while (accumulator >= 0.125 && steps < step_limit && performance.now() < deadline) {
+                world.step(0.125); accumulator -= 0.125; steps++;
+            }
             accumulator = Math.min(accumulator, 2);
         }
         if (pointer_down && last_pointer) { paint_elapsed += dt; if (paint_elapsed > 0.085) { paint(last_pointer, true); paint_elapsed = 0; } }

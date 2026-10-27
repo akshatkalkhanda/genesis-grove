@@ -130,7 +130,12 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
                 && companion.village_id === person.village_id
                 && Math.hypot(person.x - companion.x, person.y - companion.y) < 4) {
                 socialize(person, companion, 2);
-                attempt_theft(world, person, companion);
+                const theft = attempt_theft(world, person, companion);
+                if (theft) {
+                    const amount = Number(theft.amount.toFixed(1));
+                    const good = theft.good === 'wood' ? 'timber' : theft.good;
+                    world.log(`${person.name} steals ${amount} ${good} from ${companion.name}.`, 'life', person);
+                }
             }
             state.phase = 'travel'; state.timer = 0; state.partner_id = null;
         }

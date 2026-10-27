@@ -160,3 +160,8 @@ See the [sandbox mechanics and UI plan](docs/video-analysis/README.md) for the
 See the [video comparison](docs/video-comparison.md) for the reference features and current gaps.
 
 See [validation results](docs/validation.md) for the checks performed on the first build.
+
+Experimental acceleration: the time controls include **200× · EXP** for quick experiments.
+It uses the same fixed simulation steps and yields between batches so Pause remains
+responsive. Actual speed depends on CPU and world population; choose 1× to return
+to ordinary play.

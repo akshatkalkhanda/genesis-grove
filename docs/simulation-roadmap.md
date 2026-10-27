@@ -83,6 +83,36 @@ bounded fire/tsunamis, configurable laws, god powers, history and population sta
 Develop ecosystem carrying capacity, disease depth, richer world ages and hazards,
 more laws, unit possession, richer historical records and population analysis.
 
+## Next milestone — lively towns and outward growth
+
+The settlement voyage system already sends people to found towns, but expansion
+was unchecked in new sandbox setup, so ordinary worlds stayed clustered around
+their starting kingdoms. New worlds now enable expansion by default; players can
+still turn it off in the world laws. Older saves retain their saved law setting.
+The world overview reports both kingdoms and towns so settlement growth is visible.
+
+Build the next civic-life milestone in small, behavior-backed steps:
+
+1. Add town exploration as a visible, bounded outing, with discoveries and new
+   settlement sites recorded in the chronicle. Reuse existing settler voyages,
+   travel routes, and town ownership.
+2. Extend the working Thief trait into a crime record and add civilian police
+   patrols, evidence-based arrests, and a distinct criminal jail system. Keep
+   current war-captive prisons separate and preserve resource/person accounting.
+3. Add safe social events: nonlethal boxing/sparring and foot races first, then
+   bicycles with actual routes, movement, and equipment. Events should consume
+   simulation time, use local spatial buckets, and show their current action and
+   outcome in the chronicle and person inspector.
+4. Add murder only with clear causes, witnesses/evidence, investigation, and
+   consequences. It should be rare, configurable, and never a random population
+   wipe; ordinary sparring must not be lethal.
+
+Progression note: the displayed year is elapsed simulation time, while the age
+is governed by research points, required ore, and age-gated institutions. The
+Kingdom Inspector's “Next” research line identifies each missing material and
+building. Expand into mineral-rich land and maintain miners to support later
+ages; keep this blocker visible as part of future kingdom guidance.
+
 ## Verification and release
 
 Run focused Node tests, then the full suite and syntax lint. Check actual movement
