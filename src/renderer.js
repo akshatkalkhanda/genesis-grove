@@ -14,6 +14,7 @@ import { draw_tree, draw_weapon, draw_vehicle, draw_landmark } from './world_art
 import { draw_flag } from './heraldry.js';
 import { draw_machine, draw_fortification } from './machine_art.js';
 import { draw_daily_activity } from './daily_life_art.js';
+import { draw_clothing } from './clothing.js';
 import { draw_medical_building, draw_medical_person } from './medical_art.js';
 import { CIVIC_TYPES } from './civic.js';
 import { draw_civic_building } from './civic_art.js';
@@ -604,9 +605,7 @@ export class Renderer extends Camera {
             ? ['Receiving treatment', 'Waiting for treatment', 'Recovering at home', 'Tending patients', 'Awaiting medicinal herbs'].includes(person.task) || person.medical_work?.timer > 0
             : person.role !== 'soldier' && ['work', 'rest', 'social'].includes(person.daily_life?.phase);
         const stride = stationary ? 0 : Math.round(Math.sin(now / 140 + person.id));
-        c.fillStyle = '#3f443c'; c.fillRect(x - 2, y + 1 + stride, 2, 4); c.fillRect(x + 1, y + 1 - stride, 2, 4);
-        c.fillStyle = kingdom?.color || '#e4dfb2'; c.fillRect(x - 3, y - 4, 6, 6);
-        c.fillStyle = '#213129'; c.fillRect(x - 3, y, 6, 1);
+        draw_clothing(c, person, x, y, kingdom?.color || '#e4dfb2', stride);
         c.fillStyle = skin; c.fillRect(x - 2, y - 8, 4, 4);
         c.fillStyle = person.race === 'elf' ? '#e5d9a2' : person.race === 'orc' ? '#344330' : ['frogfolk', 'beetlefolk'].includes(person.race) ? '#426b60' : '#493d32';
         c.fillRect(x - 2, y - 9, 4, 2);

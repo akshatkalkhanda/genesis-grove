@@ -1,4 +1,5 @@
 import { migrate_farmland, valid_land } from './settlement_land.js';
+import { valid_clothing } from './clothing.js';
 import { MINING, extract_mineral } from './mining.js';
 import { WATER, advance_water, initialize_water_world, invalidate_water, valid_water } from './drinking_water.js';
 import { record_death, advance_funerals, prepare_funerals, funeral_intent, valid_funerals } from './funerals.js';
@@ -1577,6 +1578,7 @@ export class World {
         }
         for (const kingdom of data.villages) if (!validate_culture(kingdom)) invalid();
         for (const p of data.people) {
+            if (!valid_clothing(p)) invalid();
             if (!valid_medicine(p, point)) invalid();
             if (!validate_society_person(p, data.next_id) || !valid_daily_life(p.daily_life, WIDTH, HEIGHT)) invalid();
             if ((p.prisoner_of !== undefined && p.prisoner_of !== null && !villages.has(p.prisoner_of))

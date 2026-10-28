@@ -165,3 +165,8 @@ Experimental acceleration: the time controls include **200× · EXP** for quick 
 It uses the same fixed simulation steps and yields between batches so Pause remains
 responsive. Actual speed depends on CPU and world population; choose 1× to return
 to ordinary play.
+
+People have persistent male/female clothing styles, visible in the map and inspector
+portrait. Male outfits use short tunics and trousers; female outfits use longer
+tunics with flared skirts and leggings. Both retain kingdom colors and profession
+overlays. Older saves receive stable defaults, without changing simulation RNG.

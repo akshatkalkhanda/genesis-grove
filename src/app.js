@@ -1,4 +1,5 @@
 import { farm_operational, local_mill } from './settlement_land.js';
+import { OUTFITS, outfit_style } from './clothing.js';
 import { deposit_at, mine_resource } from './mining.js';
 import { WATER, water_topology } from './drinking_water.js';
 import { kingdom_services_panel } from './kingdom_services_ui.js';
@@ -868,6 +869,8 @@ function update_entity_card() {
     line('Terrain', TERRAIN_NAMES[world.tile(unit.x, unit.y)]);
     if (inspected_unit.kind === 'person') {
         const kingdom = world.villages.find(v => v.id === unit.village_id);
+        const outfit = OUTFITS[outfit_style(unit)];
+        line('Outfit', `${outfit.label} · ${outfit.description}`);
         line('Kingdom', kingdom?.name || 'No kingdom');
         line('Food supply', kingdom ? `${Math.floor(kingdom.food)} shared · ${kingdom.food < 5 ? 'Food shortage' : 'Available'}` : 'No shared stores');
         if (kingdom?.king_id === unit.id) {

@@ -1,4 +1,5 @@
 import { initialize_traits, trait_modifiers } from './character_traits.js';
+import { initialize_clothing } from './clothing.js';
 
 const GIVEN_NAMES = ['Ari', 'Fenn', 'Luma', 'Orin', 'Pip', 'Rowan', 'Sora', 'Tavi',
     'Wren', 'Neri', 'Kira', 'Bram', 'Mira', 'Cedar', 'Eira', 'Sol'];
@@ -6,6 +7,7 @@ const FAMILY_NAMES = ['Moss', 'Reed', 'Ash', 'Vale', 'Thorn', 'Fern', 'Dawn', 'B
 export const TRAITS = ['brave', 'careful', 'curious', 'hardy', 'industrious'];
 
 export function initialize_creature(unit) {
+    initialize_clothing(unit);
     initialize_traits(unit);
     unit.xp ??= 0;
     unit.kills ??= 0;

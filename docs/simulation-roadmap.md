@@ -203,3 +203,13 @@ state. Compact layouts at 1024 and 1366 pixels were reviewed. Both final platfor
 ZIPs passed integrity checks; their bundled code/assets match the final source.
 Interactive Windows gameplay was not tested. See the [Ship Inspector runbook](ship-inspector.md)
 and [military transport scope](roadmap.md#naval-milestones).
+
+### Clothing appearance (0.34.0)
+
+People now save an `outfit_style` (`male` or `female`) independently of traits,
+jobs, family pairing and health. Both styles retain the kingdom palette; short
+tunics/trousers and long tunics/flared skirts/leggings differ by silhouette.
+The same drawing code renders the map and inspection portrait. Legacy people
+receive stable defaults derived from their IDs without advancing RNG. This is
+visual clothing only; production, warmth, durability and clothing needs remain
+in the economy roadmap.
