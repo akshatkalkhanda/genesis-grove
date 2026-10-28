@@ -1,10 +1,11 @@
+import { justice_busy } from './justice.js';
 import { find_path } from './pathfinding.js';
 
 export const FUNERALS = Object.freeze({ max_remains: 128, max_records: 12,
     decay_seconds: 180, burial_seconds: 4, cremation_seconds: 8, cremation_wood: 2 });
 const METHODS = new Set(['burial', 'cremation']);
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const ready = (world, person) => person.health > 50 && person.role !== 'soldier'
+const ready = (world, person) => !justice_busy(world, person) && person.health > 50 && person.role !== 'soldier'
     && person.age / world.year_length >= 18 && !person.voyage_id && !person.prisoner_of
     && !person.medical_role && !person.recovering && !world._crew_assignments?.has(person.id)
     && !world.machines.some(m => m.crew_id === person.id)

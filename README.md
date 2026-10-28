@@ -170,3 +170,16 @@ People have persistent male/female clothing styles, visible in the map and inspe
 portrait. Male outfits use short tunics and trousers; female outfits use longer
 tunics with flared skirts and leggings. Both retain kingdom colors and profession
 overlays. Older saves receive stable defaults, without changing simulation RNG.
+
+Civilian justice: constabularies become buildable at 16 residents in the Copper
+Age (22 timber plus construction reserve). Up to three healthy adult civilians
+patrol reachable nearby land. Witnessed theft can lead to nonlethal pursuit, an
+escort, finite restitution and a short civilian jail sentence. Inspect a person
+or open Kingdoms → public services / theft cases for the actual records.
+See [civilian justice](docs/civilian-justice.md) for rules and a reproducible demo.
+
+Settlement growth now uses independent town birth timers, viable household
+resettlement, local essential jobs and research timber budgets. Kingdoms with
+verified food surpluses can build institutions and recruit without an impossible
+farm-count quota. The overview distinguishes inhabited towns from empty ones.
+See [settlement growth and progression](docs/settlement-growth.md).

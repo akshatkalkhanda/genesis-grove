@@ -1,3 +1,4 @@
+import { justice_busy } from './justice.js';
 import { creature_stats } from './creatures.js';
 
 export const MEDICAL_BUILDINGS = new Set(['clinic', 'hospital']);
@@ -18,7 +19,7 @@ export function prepare_medicine(world) {
         const sites = (kingdom.buildings || []).filter(b => MEDICAL_BUILDINGS.has(b.type)
             && world.walkable(b.x, b.y) && !world.fire[world.index(b.x, b.y)]);
         if (!sites.length) continue;
-        const adults = world.people.filter(p => p.village_id === kingdom.id && available(p) && !world._crew_assignments?.has(p.id)
+        const adults = world.people.filter(p => !justice_busy(world, p) && p.village_id === kingdom.id && available(p) && !world._crew_assignments?.has(p.id)
             && p.role !== 'soldier' && p.age / world.year_length >= 18);
         const slots = sites.flatMap(site => site.type === 'hospital' ? [site, site] : [site]);
         const candidates = adults.filter(p => !p.recovering && !p.infection
@@ -129,7 +130,7 @@ export function advance_medicine(world, dt) {
                 && world._medical_doctors.get(p.id) === site && !p.recovering
                 && p.task === 'Tending patients' && distance(p, site) <= 2.5);
             if (!doctors.length || !site.stock || kingdom.food <= 1) continue;
-            const patients = world.people.filter(p => p.village_id === kingdom_id && available(p)
+            const patients = world.people.filter(p => !justice_busy(world, p) && p.village_id === kingdom_id && available(p)
                 && p.recovering && distance(p, site) <= 2.5)
                 .sort((a, b) => a.health / creature_stats(a, world.year_length).max_health
                     - b.health / creature_stats(b, world.year_length).max_health || a.id - b.id)

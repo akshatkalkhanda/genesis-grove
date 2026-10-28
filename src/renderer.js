@@ -15,6 +15,7 @@ import { draw_flag } from './heraldry.js';
 import { draw_machine, draw_fortification } from './machine_art.js';
 import { draw_daily_activity } from './daily_life_art.js';
 import { draw_clothing } from './clothing.js';
+import { draw_constabulary, draw_justice_person } from './justice_art.js';
 import { draw_medical_building, draw_medical_person } from './medical_art.js';
 import { CIVIC_TYPES } from './civic.js';
 import { draw_civic_building } from './civic_art.js';
@@ -347,7 +348,7 @@ export class Renderer extends Camera {
             if (p.voyage_id || aboard.has(p.id) || !visible(p)) continue;
             const selected = p.id === this.selected_unit_id;
             if (detail.people || selected) { counts.people++; draw_compact(c, p.x * CELL, p.y * CELL, this.sprite_factor(0.55),
-                () => this.person(c, p, kingdoms.get(p.village_id), now, world.year_length));
+                () => this.person(c, p, kingdoms.get(p.village_id), now, world.year_length, world));
             } else {
                 counts.markers++;
                 c.fillStyle = kingdoms.get(p.village_id)?.king_id === p.id ? '#f0ca65'
@@ -596,7 +597,7 @@ export class Renderer extends Camera {
         c.fillStyle = '#2e302b'; c.fillRect(x + face * 6 - 1, y - 4, 1, 1);
         c.fillStyle = '#473b2e'; c.fillRect(x - 3, y + 2, 1, 3); c.fillRect(x + 2, y + 2, 1, 3);
     }
-    person(c, person, kingdom, now, year_length = 20) {
+    person(c, person, kingdom, now, year_length = 20, world = null) {
         const x = Math.round(person.x * CELL), y = Math.round(person.y * CELL);
         const level = person.weapon_level || 0, armor = person.armor_level || 0, face = person.dx < 0 ? -1 : 1;
         const skin = { orc: '#8fbc6c', dwarf: '#d69b75', foxfolk: '#d88953', harefolk: '#e7d6be', catfolk: '#d5b078', frogfolk: '#78c991', wolfkin: '#aab9c4', hyenafolk: '#b99566', beetlefolk: '#68aaa1' }[person.race] || '#f0c9a0';
@@ -638,6 +639,7 @@ export class Renderer extends Camera {
             c.fillStyle = '#a8bcb0'; c.fillRect(x - 2, y - 10, 3, 1);
         }
         draw_medical_person(c, person);
+        draw_justice_person(c, person, world, x, y);
         if (kingdom?.king_id === person.id) {
             c.fillStyle = '#f0ca65'; c.fillRect(x - 4, y - 13, 8, 3);
             c.fillRect(x - 4, y - 16, 2, 4); c.fillRect(x - 1, y - 15, 2, 3); c.fillRect(x + 2, y - 16, 2, 4);
@@ -697,7 +699,9 @@ export class Renderer extends Camera {
     }
     building(c, building, color, now, kingdom = null) {
         const x = building.x * CELL, y = building.y * CELL;
-        if (CIVIC_TYPES.has(building.type)) {
+        if (building.type === 'police_station') {
+            draw_constabulary(c, building, color, CELL);
+        } else if (CIVIC_TYPES.has(building.type)) {
             draw_civic_building(c, building, color);
         } else if (['clinic', 'hospital'].includes(building.type)) {
             draw_medical_building(c, building, color);

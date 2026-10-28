@@ -1,3 +1,4 @@
+import { record_theft, justice_busy } from './justice.js';
 import { farm_operational, local_farms } from './settlement_land.js';
 import { mining_site, mine_resource } from './mining.js';
 import { harvest_tree, is_tree_site } from './forestry.js';
@@ -157,7 +158,7 @@ export function advance_daily_life(world, person, home, kingdom, dt, max_health)
 export function attempt_theft(world, person, companion) {
     const eligible = unit => unit && unit.health > 0 && unit.role !== 'soldier'
         && unit.age / world.year_length >= 18 && !unit.prisoner_of && !unit.voyage_id
-        && !unit.recovering && !unit.medical_role
+        && !justice_busy(world, unit) && !unit.recovering && !unit.medical_role
         && !world.machines.some(machine => machine.crew_id === unit.id);
     if (!has_trait(person, 'thief') || has_trait(person, 'honest') || !eligible(person)
         || !eligible(companion) || person.id === companion.id
@@ -174,6 +175,7 @@ export function attempt_theft(world, person, companion) {
         const amount = Math.min(1, Math.max(0, carried[good]), Math.max(0, capacity - cargo[good]));
         if (!amount) continue;
         carried[good] -= amount; cargo[good] += amount;
+        record_theft(world, person, companion, good, amount);
         person.trait_thefts = Math.min(1e6, (person.trait_thefts || 0) + 1);
         adjust_relationship(companion, person, -5);
         const quantity = Number(amount.toFixed(2)) || 'a little';

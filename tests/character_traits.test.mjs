@@ -67,18 +67,25 @@ test('legacy traits remain empty while new common defaults are deterministic, sa
             name: 'Existing Citizen', trait: 'careful', heritage_trait: 'hardy' });
         assert.deepEqual(legacy.trait_ids, []);
         assert.equal(legacy.name, 'Existing Citizen'); assert.equal(legacy.trait, 'careful');
-        for (let id = 1; id <= 100; id++) {
+        let generated_thieves = 0;
+        for (let id = 1; id <= 1000; id++) {
             const first = initialize_traits({ id }, { new_person: true });
             const second = initialize_traits({ id }, { new_person: true });
             assert.deepEqual(first, second);
-            assert.ok(first.trait_ids.length >= 1 && first.trait_ids.length <= 2);
+            assert.ok(first.trait_ids.length >= 1 && first.trait_ids.length <= 3);
             assert.ok(valid_character_traits(first));
-            assert.ok(first.trait_ids.every(key => TRAIT_CATALOG.find(trait => trait.id === key).safe_auto));
-            assert.ok(!first.trait_ids.some(key => ['regeneration', 'thief', 'aggressive'].includes(key)));
+            assert.ok(first.trait_ids.filter(key => key !== 'thief')
+                .every(key => TRAIT_CATALOG.find(trait => trait.id === key).safe_auto));
+            assert.ok(!first.trait_ids.some(key => ['regeneration', 'aggressive'].includes(key)));
+            if (has_trait(first, 'thief')) generated_thieves++;
+            assert.ok(!(has_trait(first, 'honest') && has_trait(first, 'thief')),
+                'rare auto-thieves never conflict with Honest');
             const before = structuredClone(first); initialize_traits(first, { new_person: true });
             trait_modifiers(first); trait_probability(first, 0.2);
             assert.deepEqual(first, before);
         }
+        assert.ok(generated_thieves > 0 && generated_thieves <= 40,
+            `rare auto-thieves are present but bounded (${generated_thieves}/1000)`);
         const animal = initialize_traits({ id: 8, species: 'wolf' }, { new_person: true });
         assert.deepEqual(animal.trait_ids, []);
     } finally { Math.random = original_random; }

@@ -1,5 +1,6 @@
 import { WATER, water_access, freshwater_access } from './drinking_water.js';
 import { creature_stats } from './creatures.js';
+import { justice_summary } from './justice.js';
 
 export const WELLBEING = Object.freeze({ beds_per_house: 5, happy_threshold: 65,
     food_weight: 30, water_weight: 15, housing_weight: 25, health_weight: 20, safety_weight: 10 });
@@ -32,10 +33,11 @@ export function kingdom_wellbeing(world, kingdom_id) {
         && p.daily_life.site?.kind === 'school'
         && schools.some(s => Math.hypot(p.x - s.x, p.y - s.y) < 2)).length;
     let total = 0, happy = 0, hungry = 0, thirsty = 0, dehydrated = 0, sick = 0, injured = 0;
+    const recent_victims = new Set((world.justice?.cases || []).filter(c => world.time - c.time < 30).map(c => c.victim_id));
     for (const p of residents) {
         const health = clamp(p.health / creature_stats(p, world.year_length).max_health);
         const food = clamp((p.needs?.nutrition ?? 100) / 70);
-        const exposed = p.health_history?.some(h => ['combat', 'fire', 'starvation', 'dehydration'].includes(h.cause)
+        const exposed = recent_victims.has(p.id) || p.health_history?.some(h => ['combat', 'fire', 'starvation', 'dehydration'].includes(h.cause)
             && world.time - h.time < 10) || world.fire[world.index(p.x, p.y)] > 0;
         const hydration = p.needs?.hydration ?? WATER.initial_hydration;
         const score = food * WELLBEING.food_weight + clamp(hydration / 70) * WELLBEING.water_weight + (housed.has(p.id) ? WELLBEING.housing_weight : 0)
@@ -48,6 +50,7 @@ export function kingdom_wellbeing(world, kingdom_id) {
         if (health < 0.75) injured++;
     }
     const percent = n => residents.length ? Math.round(n / residents.length * 100) : null;
+    const justice = justice_summary(world, kingdom_id);
     return { population: residents.length, happiness: residents.length ? Math.round(total / residents.length) : null,
         happy_percent: percent(happy), happy, beds, housed: housed.size,
         homeless: residents.length - housed.size, homeless_percent: percent(residents.length - housed.size),
@@ -63,5 +66,5 @@ export function kingdom_wellbeing(world, kingdom_id) {
         prisoners: world.people.filter(p => p.prisoner_of === kingdom_id && p.health > 0).length,
         garrisons: world.armies.filter(a => a.kingdom_id === kingdom_id).length,
         tax_rate: null, tax_collected: null, clothing: null,
-        clean_air: null, police: null, advocates: null, courts: null };
+        clean_air: null, police: justice.officers, justice, advocates: null, courts: null };
 }

@@ -24,7 +24,7 @@ function water_near(world, site) {
     return null;
 }
 
-export function advance_machines(world, dt, level_of, research_costs) {
+export function advance_machines(world, dt, level_of, research_costs, budget_of = () => 0) {
     world.machines = world.machines.filter(machine => machine.health > 0
         && world.villages.some(v => v.id === machine.kingdom_id && v.alive)
         && (MACHINES[machine.kind].domain !== 'water' || world.tile(machine.x, machine.y) <= 1)
@@ -35,7 +35,7 @@ export function advance_machines(world, dt, level_of, research_costs) {
         if (kingdom.food < food_reserve(population) || kingdom.machine_timer < 20 || world.machines.length >= MAX_MACHINES) continue;
         const level = level_of(kingdom), reserve = research_costs[level + 1] || {};
         for (const [kind, recipe] of Object.entries(MACHINES)) {
-            if (level < recipe.age || kingdom.wood < recipe.wood + 20
+            if (level < recipe.age || kingdom.wood < recipe.wood + Math.max(20, budget_of(kingdom))
                 || world.machines.some(machine => machine.kingdom_id === kingdom.id && machine.kind === kind)) continue;
             const building = kingdom.buildings.find(b => b.type === recipe.building);
             if (!building) continue;

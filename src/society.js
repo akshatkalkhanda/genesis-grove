@@ -1,3 +1,4 @@
+import { justice_busy } from './justice.js';
 import { trait_modifiers, valid_character_traits } from './character_traits.js';
 import { initialize_creature, TRAITS } from './creatures.js';
 
@@ -50,7 +51,7 @@ function known_ancestors(person, people) {
     return ancestors;
 }
 
-function related(a, b, people) {
+export function related(a, b, people) {
     // A founding clan or inherited surname is not a permanent mating ban.
     // Use the known parent/grandparent links rather than family identity.
     const first = known_ancestors(a, people), second = known_ancestors(b, people);
@@ -66,7 +67,7 @@ function available(person, year_length) {
 export function rebellion_cohort(world, kingdom_id) {
     const crew = new Set(world.machines.map(machine => machine.crew_id));
     const adults = world.people.filter(p => p.village_id === kingdom_id
-        && available(p, world.year_length) && p.health >= 60 && !p.recovering
+        && !justice_busy(world, p) && available(p, world.year_length) && p.health >= 60 && !p.recovering
         && !p.medical_role && p.role !== 'soldier' && !crew.has(p.id))
         .sort((a, b) => a.age - b.age || a.id - b.id);
     const eligible = new Map(adults.map(p => [p.id, p]));
@@ -146,8 +147,8 @@ export function advance_society(world) {
         const citizens = world.people.filter(p => p.village_id === kingdom.id && p.health > 0);
         for (const p of citizens) initialize_society_person(p, kingdom);
         for (const p of citizens) {
-            if (!available(p, world.year_length)) continue;
-            const neighbours = citizens.filter(q => q.id !== p.id && available(q, world.year_length)
+            if (world._justice_custody?.has(p.id) || !available(p, world.year_length)) continue;
+            const neighbours = citizens.filter(q => q.id !== p.id && !world._justice_custody?.has(q.id) && available(q, world.year_length)
                 && q.home_id === p.home_id && Math.hypot(p.x - q.x, p.y - q.y) <= 8)
                 .sort((a, b) => Math.hypot(p.x - a.x, p.y - a.y)
                     - Math.hypot(p.x - b.x, p.y - b.y) || a.id - b.id).slice(0, 3);
@@ -166,13 +167,13 @@ export function advance_society(world) {
 export function select_parents(world, kingdom_id, home_id) {
     const by_id = new Map(world.people.map(p => [p.id, p]));
     const candidates = world.people.filter(p => p.village_id === kingdom_id
-        && p.home_id === home_id && available(p, world.year_length)
+        && !world._justice_custody?.has(p.id) && p.home_id === home_id && available(p, world.year_length)
         && trait_modifiers(p).fertility > 0 && p.partner_id && world.year - (p.last_child_year ?? -100) >= 2)
         .sort((a, b) => (a.children_count || 0) - (b.children_count || 0) || a.id - b.id);
     for (const p of candidates) {
         const q = by_id.get(p.partner_id);
         if (q && q.partner_id === p.id && q.village_id === kingdom_id && q.home_id === home_id
-            && available(q, world.year_length) && trait_modifiers(q).fertility > 0 && !related(p, q, by_id)
+            && !world._justice_custody?.has(q.id) && available(q, world.year_length) && trait_modifiers(q).fertility > 0 && !related(p, q, by_id)
             && world.year - (q.last_child_year ?? -100) >= 2) return [p, q];
     }
     return null;

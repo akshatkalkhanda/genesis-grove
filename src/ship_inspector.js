@@ -94,7 +94,13 @@ export function ship_summary(world, selection) {
         summary.origin = endpoint(vessel, 'Departure point', owner?.id);
         summary.destination = endpoint({ x: vessel.target_x, y: vessel.target_y }, 'Proposed settlement', owner?.id);
         summary.activity = 'Sailing to settle';
-        summary.reason = 'The settlers attempt to found a town on arrival; an invalid landing returns them home.';
+        if (vessel.destination_id !== undefined) {
+            const home = [...world.villages, ...world.colonies].find(h => h.id === vessel.destination_id);
+            summary.category = 'Household relocation';
+            summary.destination = endpoint({ x: vessel.target_x, y: vessel.target_y }, home?.name || 'Former destination town', owner?.id);
+            summary.activity = 'Sailing to resettle';
+            summary.reason = 'An existing household is relocating to an owned town. A lost destination returns it to its origin.';
+        } else summary.reason = 'The settlers attempt to found a town on arrival; an invalid landing returns them home.';
     } else if (collection === 'trades') {
         const recipient = kingdom_of(world, vessel.to_id);
         summary.title = 'Trade ship'; summary.category = 'Trade shipment';

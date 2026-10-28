@@ -96,9 +96,10 @@ Build the next civic-life milestone in small, behavior-backed steps:
 1. Add town exploration as a visible, bounded outing, with discoveries and new
    settlement sites recorded in the chronicle. Reuse existing settler voyages,
    travel routes, and town ownership.
-2. Extend the working Thief trait into a crime record and add civilian police
-   patrols, evidence-based arrests, and a distinct criminal jail system. Keep
-   current war-captive prisons separate and preserve resource/person accounting.
+2. Implemented in 0.35.0: witnessed theft records, civilian police patrols,
+   nonlethal arrests and escorts, finite restitution, and separate civilian holding
+   cells. Deeper investigations and courts remain later work. See
+   [civilian justice](civilian-justice.md).
 3. Add safe social events: nonlethal boxing/sparring and foot races first, then
    bicycles with actual routes, movement, and equipment. Events should consume
    simulation time, use local spatial buckets, and show their current action and
@@ -213,3 +214,12 @@ The same drawing code renders the map and inspection portrait. Legacy people
 receive stable defaults derived from their IDs without advancing RNG. This is
 visual clothing only; production, warmth, durability and clothing needs remain
 in the economy roadmap.
+
+### 0.35 progression recovery
+
+[Settlement growth and research recovery](settlement-growth.md) fixes surplus-food
+farm-quota deadlocks, capital-only building plots, kingdom-wide birth throttling,
+empty legacy outposts, unsuitable settler cohorts and research timber starvation.
+Population is generated through existing family/food/housing rules; research
+still requires real institutions and ore. Private copied-world verification is
+kept outside the public source.

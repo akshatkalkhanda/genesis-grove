@@ -50,7 +50,8 @@ policy change for rites that have not begun. Existing rites retain their method.
 thirst, fetching and carried supplies, dehydration, saved reserves, and water
 service statistics. Happiness weights are now food 30%, water 15%, housing 25%,
 health 20%, safety 10%. The 0.30 observations below describe that earlier release;
-clothing, clean air, taxation and civilian justice remain planned.
+clothing production, clean air and taxation remain planned. Initial civilian
+justice is implemented in 0.35; appearance-only outfits arrived in 0.34.
 
 ## Phase A: basic living needs
 
@@ -79,8 +80,10 @@ before reporting graduation, literacy or lifetime access percentages.
 
 ## Phase C: public safety and detention
 
-Add civilian patrol roles, witnessed incidents, evidence and arrests distinct
-from military combat. Police must not instantly know every crime. Separate
+Initial implementation in 0.35: civilian patrols, actual witnessed theft
+records, nonlethal arrests/escorts, restitution and short summary sentences.
+See [civilian justice](civilian-justice.md). Extend these beyond witnessed theft
+with deeper investigations and distinct pretrial detention. Police must not instantly know every crime. Separate
 pretrial detention and sentenced inmates from prisoners of war. Model capacity,
 conditions, food and release; do not treat accusations as automatic guilt.
 

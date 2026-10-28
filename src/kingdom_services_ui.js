@@ -25,9 +25,10 @@ export function kingdom_services_panel(world, kingdom, on_policy, on_focus) {
     row('Clean air', 'Air quality and pollution exposure are not modeled yet.');
     row('Education', `${m.schools} schools · ${m.attending}/${m.school_age} school-age children attending now`);
     row('Healthcare', `${m.clinics} clinics · ${m.hospitals} hospitals · ${m.medical_staff} medical staff · ${m.sick} infected / ${m.injured} injured`);
-    row('Safety', `${m.garrisons} military garrisons. Civilian police are not modeled yet.`);
+    row('Safety', `${m.garrisons} military garrisons · ${m.police} civilian police officers · ${m.justice.coverage}% of residents live in homes within reachable station service range.`);
+    row('Civilian jail', `${m.justice.stations} constabularies · ${m.justice.jailed}/${m.justice.capacity} holding places occupied · ${m.justice.pending} witnessed cases awaiting completion.`);
     row('Detention', `${m.prisons} prisons · ${m.prisoners}/${m.prison_capacity} war-detention places occupied`);
-    row('Justice', 'Advocates, trials and civilian courts are planned. War detention is not a criminal trial.');
+    row('Justice', 'Police respond to witnessed theft with nonlethal escort and short summary sentences. Advocates, trials and civilian courts remain planned. War detention is separate.');
     row('Taxes', 'No tax rate or tax collection is modeled. Town resources currently use shared stores.');
     const explanation = document.createElement('p'); explanation.className = 'service-explanation';
     explanation.textContent = 'Happiness is a needs-based estimate: food 30%, water 15%, housing 25%, health 20%, recent safety 10%. Satisfied means 65/100 or above. Housing shortfall estimates capacity; individual homes are not assigned.';
@@ -67,5 +68,17 @@ export function kingdom_services_panel(world, kingdom, on_policy, on_focus) {
         }
         funeral.append(records);
     }
-    panel.append(funeral); return panel;
+    panel.append(funeral);
+    const crimes = document.createElement('details'), crimes_title = document.createElement('summary');
+    crimes_title.textContent = 'Theft cases & police'; crimes.append(crimes_title);
+    const totals_crime = document.createElement('p');
+    totals_crime.textContent = `${m.justice.pending} pending · ${m.justice.unreported} unreported · ${m.justice.recovered.toFixed(1)} goods recovered in retained records. Police do not know about unreported cases.`;
+    crimes.append(totals_crime);
+    for (const c of m.justice.recent) {
+        const text = document.createElement('p');
+        text.textContent = `#${c.id}: ${c.suspect_name} → ${c.victim_name} · ${c.amount} ${c.good} · ${c.status} · ${c.witnesses.length} witnesses · ${c.recovered} recovered${c.outcome ? ` · ${c.outcome}` : ''}`;
+        crimes.append(text);
+    }
+    if (!m.justice.recent.length) { const text = document.createElement('p'); text.textContent = 'No thefts recorded yet.'; crimes.append(text); }
+    panel.append(crimes); return panel;
 }

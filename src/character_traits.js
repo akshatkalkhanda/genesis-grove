@@ -1,5 +1,6 @@
 // Additional character traits are independent of the five legacy personality traits.
 export const MAX_CHARACTER_TRAITS = 12;
+export const TRAIT_BALANCE = Object.freeze({ rare_thief_period: 31 });
 const aliases = Object.freeze({ long_liver: 'long_lived' });
 const canonical = id => aliases[id] || id;
 const definition = (id, label, group, description, effects, conflicts = [], probability = 0.3,
@@ -93,6 +94,8 @@ export function initialize_traits(unit, { new_person = false } = {}) {
             apply_trait(unit, safe_traits[(hash + offset * 7) % safe_traits.length].id);
         }
     }
+    if (new_person && !unit.species && !has_trait(unit, 'honest')
+        && ((Math.imul(unit.id || 1, 0x27d4eb2d) >>> 0) % TRAIT_BALANCE.rare_thief_period === 0)) apply_trait(unit, 'thief');
     return unit;
 }
 

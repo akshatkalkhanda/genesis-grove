@@ -312,7 +312,8 @@ test('corrupt and untrusted saves are rejected before replacing a world', () => 
 test('world populations remain bounded during repeated spawning', () => {
     const w = blank(); w.apply('grass', 50, 50, 12);
     for (let i = 0; i < 700; i++) { w.apply('human', 50, 50, 1); w.apply('sheep', 50, 50, 1); }
-    assert.equal(w.people.length, 600); assert.equal(w.animals.length, 350);
+    assert.equal(w.people.length, w.max_people); assert.equal(w.add_person(50, 50, w.villages[0].id), false);
+    assert.equal(w.animals.length, 350);
 });
 test('race strengths change resources, housing, and population growth', () => {
     const w = blank();

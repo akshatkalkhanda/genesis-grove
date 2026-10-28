@@ -9,7 +9,7 @@ export const VEHICLES = Object.freeze({
 });
 export const MAX_VEHICLES = 120;
 
-export function advance_roads(world, kingdom, dt, level) {
+export function advance_roads(world, kingdom, dt, level, timber_budget = 0) {
     kingdom.road_timer = Math.min(8, (kingdom.road_timer || 0) + dt);
     if (kingdom.road_timer < 8 || kingdom.houses.length < 2) return;
     kingdom.road_timer = 0;
@@ -23,13 +23,13 @@ export function advance_roads(world, kingdom, dt, level) {
     const cells = [kingdom, ...route].map(point => world.index(point.x, point.y))
         .filter(index => world.roads[index] < grade);
     const cost = Math.ceil(cells.length / 8);
-    if (!cells.length || kingdom.wood < cost + 10) return;
+    if (!cells.length || kingdom.wood < cost + Math.max(10, timber_budget)) return;
     kingdom.wood -= cost;
     for (const index of cells) world.roads[index] = grade;
     world.revision++; world.navigation_revision++;
 }
 
-export function advance_transport(world, dt, level_of, research_costs = []) {
+export function advance_transport(world, dt, level_of, research_costs = [], budget_of = () => 0) {
     world.vehicles = world.vehicles.filter(vehicle => {
         const kingdom = world.villages.find(v => v.id === vehicle.kingdom_id && v.alive);
         return kingdom && world.walkable(kingdom.x, kingdom.y) && world.walkable(vehicle.x, vehicle.y)
@@ -46,7 +46,7 @@ export function advance_transport(world, dt, level_of, research_costs = []) {
         const materials = level >= 9 ? { iron: 1, stardust: 2 } : kind === 'cart' ? {} : { iron: 2, coal: 1 };
         const affordable = Object.entries(materials).every(([ore, amount]) =>
             (kingdom.ore[ore] || 0) - amount >= (reserve[ore] || 0));
-        if (kingdom.vehicle_timer < 24 || level < 2 || kingdom.wood < 18
+        if (kingdom.vehicle_timer < 24 || level < 2 || kingdom.wood < 8 + Math.max(10, budget_of(kingdom))
             || !kingdom.buildings?.some(b => b.type === 'windmill')) continue;
         const outdated = fleet.find(vehicle => vehicle.kind !== kind);
         if (outdated && affordable) {

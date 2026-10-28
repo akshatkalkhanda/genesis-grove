@@ -91,9 +91,11 @@ test('water access and thirst are measured while unmodeled services remain unkno
     const m = kingdom_wellbeing(world, kingdom.id);
     assert.deepEqual(m.drinking_water, { ponds: 0, pond_stock: 0, stored: 0, served: 0, unserved: 0 });
     assert.deepEqual([m.thirsty, m.dehydrated, m.water_carried], [0, 0, 0]);
-    for (const key of ['tax_rate', 'tax_collected', 'clothing', 'clean_air', 'police', 'advocates', 'courts']) {
+    for (const key of ['tax_rate', 'tax_collected', 'clothing', 'clean_air', 'advocates', 'courts']) {
         assert.equal(m[key], null, `${key} is not modeled`);
     }
+    assert.equal(m.police, 0, 'modeled police count is zero before a patrol is staffed');
+    assert.equal(m.justice.officers, 0);
     assert.equal(kingdom_wellbeing(world, -1), null);
 });
 

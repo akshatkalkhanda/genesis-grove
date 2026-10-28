@@ -1,3 +1,4 @@
+import { justice_busy } from './justice.js';
 import { creature_stats } from './creatures.js';
 
 export function prepare_crews(world) {
@@ -15,7 +16,7 @@ export function prepare_crews(world) {
             const boarding = machine.kind === 'boat' ? world.land_near(machine.x, machine.y, 5) : machine;
             if (!boarding) continue;
             const mass = world._army_masses?.[world.index(boarding.x, boarding.y)];
-            const adults = world.people.filter(p => p.village_id === kingdom.id && p.health > 0
+            const adults = world.people.filter(p => !justice_busy(world, p) && p.village_id === kingdom.id && p.health > 0
                 && !p.prisoner_of && !p.voyage_id && !p.recovering && !p.medical_role
                 && !used.has(p.id) && p.age / world.year_length >= 18
                 && p.health >= creature_stats(p, world.year_length).max_health * 0.6

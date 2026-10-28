@@ -189,7 +189,9 @@ export function water_intent(world, unit) {
 export function service_water(world, unit, kingdom) {
     if (drink_carried(unit, world)) return true;
     if (!kingdom || unit.voyage_id) return false;
-    let point = unit.prisoner_of ? (kingdom.buildings || []).find(b => b.type === 'prison') : null;
+    const custody = world._justice_custody?.get(unit.id);
+    let point = custody?.case.status === 'jailed' ? custody.station
+        : unit.prisoner_of ? (kingdom.buildings || []).find(b => b.type === 'prison') : null;
     if (!point) {
         const machine = world._crew_assignments?.get(unit.id);
         if (!machine?.crew_aboard) return false;
@@ -201,7 +203,7 @@ export function service_water(world, unit, kingdom) {
     const source = water_points(world, point).filter(p => p.kind === 'well'
         && (p.source[p.stock_key] ?? 0) >= 1).slice(0, WATER.route_candidates)
         .find(p => route(world, point, p));
-    return source ? drink_source(world, unit, source, !unit.prisoner_of) : false;
+    return source ? drink_source(world, unit, source, !unit.prisoner_of && !custody) : false;
 }
 
 export function water_access(world, point) {

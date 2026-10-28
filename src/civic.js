@@ -3,6 +3,9 @@ import { develop_creature } from './creatures.js';
 export const MAX_BUILDINGS = 64;
 export const farm_target = population => Math.min(32, Math.max(1, Math.ceil(population / 20)));
 export const food_reserve = population => Math.max(8, population * 4);
+// Farm counts are a development target, not a veto on using demonstrated surplus.
+export const food_secure = (kingdom, population, farms) => kingdom.food >= food_reserve(population)
+    && (farms >= farm_target(population) || kingdom.food >= food_reserve(population) * 2);
 export const CIVIC_TYPES = new Set(['well', 'granary', 'school', 'church', 'temple', 'market']);
 export const CIVIC_DESCRIPTIONS = Object.freeze({
     well: 'Provides finite replenishing drinking water, irrigates nearby farms and helps extinguish nearby fires.',

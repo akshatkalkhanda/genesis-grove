@@ -118,7 +118,7 @@ export function needs_intent(world, unit, dt, context, kingdom = null, home = nu
     if (modifiers.regen > 0 && needs.nutrition > 0 && (unit.species || needs.hydration > 0)) unit.health = Math.min(
         creature_stats(unit, world.year_length).max_health, unit.health + dt * modifiers.regen);
     if (unit.health <= 0) return null;
-    if (unit.voyage_id || unit.prisoner_of || world._crew_assignments?.get(unit.id)?.crew_aboard) {
+    if (unit.voyage_id || unit.prisoner_of || world._justice_custody?.has(unit.id) || world._crew_assignments?.get(unit.id)?.crew_aboard) {
         if (needs.nutrition <= balance.hungry && kingdom) eat(world, unit, kingdom,
             (unit.role === 'soldier' ? 1.7 : .9) * modifiers.meal);
         if (!unit.species && needs.hydration <= WATER.thirsty && needs.decision_timer <= 0) {

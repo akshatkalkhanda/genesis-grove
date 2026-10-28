@@ -322,7 +322,7 @@ function research_status(kingdom) {
         `${Math.floor(Math.min(amount, kingdom.ore?.[ore] || 0))}/${amount} ${ore}`).join(' · ');
     const institution = RESEARCH_BUILDINGS[next_level];
     const building = institution && !kingdom.buildings?.some(b => b.type === institution)
-        ? ` · needs ${BUILDINGS[institution].label.toLowerCase()}` : '';
+        ? ` · needs ${BUILDINGS[institution].label.toLowerCase()} · timber ${Math.floor(kingdom.wood || 0)}/${BUILDINGS[institution].wood + 10} budget` : '';
     return `Next: ${next.name} · knowledge ${Math.floor(kingdom.tech_points || 0)}/${next.threshold} · ${resources}${building}`;
 }
 $('technology').onclick = () => {
@@ -792,7 +792,7 @@ function update_entity_card() {
     heading.append(name, close); card.append(heading);
     const portrait = document.createElement('canvas'); portrait.width = 64; portrait.height = 64; portrait.className = 'entity-portrait';
     const art = portrait.getContext('2d'); art.imageSmoothingEnabled = false; art.setTransform(3, 0, 0, 3, 32, 47);
-    if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now(), world.year_length);
+    if (inspected_unit.kind === 'person') renderer.person(art, { ...unit, x: 0, y: 0 }, world.villages.find(v => v.id === unit.village_id), performance.now(), world.year_length, world);
     else renderer.animal(art, { ...unit, x: 0, y: 0 });
     card.append(portrait);
     const activity = document.createElement('div'); activity.className = 'entity-activity';
@@ -888,7 +888,11 @@ function update_entity_card() {
             line('Royal policy', `${policy} · ${effect}`);
         }
         const vessel = world.machines.find(m => m.crew_id === unit.id);
-        line('Role', child ? 'Child' : vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        line('Role', child ? 'Child' : world._police_ids?.has(unit.id) ? 'Police officer · civilian'
+            : world._justice_custody?.has(unit.id) ? 'Civilian detention · witnessed theft'
+                : vessel ? `${vessel.kind === 'boat' ? 'Sailor' : vessel.kind === 'artillery' ? 'Gunner' : 'Pilot'} · ${MACHINES[vessel.kind].label}` : unit.medical_role === 'doctor' ? 'Doctor' : unit.role === 'soldier' ? 'Soldier' : `${unit.job || 'civilian'} · civilian`);
+        const cases = world.justice.cases.filter(c => c.suspect_id === unit.id || c.victim_id === unit.id).slice(-3);
+        if (cases.length) line('Theft records', cases.map(c => `#${c.id} · ${c.suspect_id === unit.id ? 'suspect' : 'victim'} · ${c.status} · ${c.recovered}/${c.amount} ${c.good} recovered`).join('; '));
         if (child && unit.job) line('Future aptitude', `${unit.job} · adult work begins at 18`);
         if (unit.recovering || unit.medical_role) {
             const clinics = kingdom?.buildings?.filter(b => MEDICAL_BUILDINGS.has(b.type)) || [];
@@ -1207,7 +1211,7 @@ function update_world_guidance(stats = world.stats()) {
     } else if (wars) {
         icon = '⚔'; kicker = `${wars} ACTIVE ${wars === 1 ? 'WAR' : 'WARS'}`; title = 'Conflict is reshaping the world'; detail = `${stats.soldiers} soldiers are serving across ${stats.villages} kingdoms.`;
     } else {
-        icon = '✦'; title = 'The world is evolving'; detail = `${stats.population} people in ${stats.villages} ${stats.villages === 1 ? 'kingdom' : 'kingdoms'} · ${stats.towns} towns · ${stats.wildlife} wildlife.`;
+        icon = '✦'; title = 'The world is evolving'; detail = `${stats.population} people in ${stats.villages} ${stats.villages === 1 ? 'kingdom' : 'kingdoms'} · ${stats.inhabited_towns}/${stats.towns} towns inhabited · ${stats.wildlife} wildlife.`;
     }
     $('world-state-icon').textContent = icon;
     $('world-state-kicker').textContent = kicker;
@@ -1226,6 +1230,8 @@ function update_ui() {
     const stats = world.stats();
     update_world_guidance(stats);
     for (const id of ['population', 'soldiers', 'wildlife', 'villages', 'towns', 'trees']) $(id).textContent = stats[id].toLocaleString();
+    $('population').title = `Simulation population limit: ${stats.population_limit.toLocaleString()}; growth also requires families, food and housing.`;
+    $('towns').title = `${stats.inhabited_towns} inhabited; ${stats.towns - stats.inhabited_towns} currently empty.`;
     $('civ-count').textContent = stats.villages; $('land-percent').textContent = `${stats.land}% land`;
     $('survival').hidden = world.scenario !== 'hundred';
     const founders = world.villages.slice(0, 100).filter(v => v.alive).length;
