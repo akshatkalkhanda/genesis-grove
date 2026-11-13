@@ -49,7 +49,15 @@ jobs:
           gh run download "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --dir artifacts
           test -n "$(find artifacts -name '*.zip' -print -quit)"
           test -n "$(find artifacts -name '*.exe' -print -quit)"
-          (cd artifacts && find . -type f \( -name '*.zip' -o -name '*.exe' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          mkdir release
+          while IFS= read -r -d '' package; do
+            filename=$(basename "$package")
+            filename=${filename// /.}
+            [[ "$filename" =~ ^[A-Za-z0-9._-]+$ ]]
+            test ! -e "release/$filename"
+            cp "$package" "release/$filename"
+          done < <(find artifacts -type f \( -name '*.zip' -o -name '*.exe' \) -print0)
+          (cd release && sha256sum -- *.zip *.exe > SHA256SUMS)
       - name: Publish the verified packages
         shell: bash
         run: |
@@ -63,7 +71,7 @@ jobs:
 
           SHA256SUMS is attached for download verification.
           NOTES
-          mapfile -d '' packages < <(find artifacts -type f \( -name '*.zip' -o -name '*.exe' \) -print0)
+          mapfile -d '' packages < <(find release -type f \( -name '*.zip' -o -name '*.exe' \) -print0)
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Genesis Grove $TAG — security update" --notes-file notes.md \
-            "${packages[@]}" artifacts/SHA256SUMS
+            "${packages[@]}" release/SHA256SUMS
