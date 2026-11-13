@@ -1,0 +1,69 @@
+name: Publish verified release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable release tag
+        required: true
+        type: string
+      build_run:
+        description: Successful Desktop builds run ID for this exact tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      BUILD_RUN: ${{ inputs.build_run }}
+    steps:
+      - name: Verify tag and successful build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)
+          gh run view "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" \
+            --json status,conclusion,event,headSha,headBranch,workflowName > build.json
+          jq -e --arg sha "$tag_sha" --arg tag "$TAG" \
+            '.status == "completed" and .conclusion == "success" and .event == "push" and .headSha == $sha and .headBranch == $tag and .workflowName == "Desktop builds"' build.json
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'This release already exists; existing versioned assets will not be overwritten.' >&2
+            exit 1
+          fi
+      - name: Download immutable CI artifacts and checksum packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --dir artifacts
+          test -n "$(find artifacts -name '*.zip' -print -quit)"
+          test -n "$(find artifacts -name '*.exe' -print -quit)"
+          (cd artifacts && find . -type f \( -name '*.zip' -o -name '*.exe' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - name: Publish the verified packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTES'
+          Security maintenance release: updated Electron and desktop packaging dependencies.
+
+          Mac and Windows packages passed their platform CI builds, tests, and lint.
+          Local Mac Electron smoke checks also passed. Windows gameplay was not manually tested.
+          Packages are unsigned. Saved-world formats and simulation behavior are unchanged.
+
+          SHA256SUMS is attached for download verification.
+          NOTES
+          mapfile -d '' packages < <(find artifacts -type f \( -name '*.zip' -o -name '*.exe' \) -print0)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Genesis Grove $TAG — security update" --notes-file notes.md \
+            "${packages[@]}" artifacts/SHA256SUMS
