@@ -183,3 +183,5 @@ resettlement, local essential jobs and research timber budgets. Kingdoms with
 verified food surpluses can build institutions and recruit without an impossible
 farm-count quota. The overview distinguishes inhabited towns from empty ones.
 See [settlement growth and progression](docs/settlement-growth.md).
+
+Dependency maintenance: [security update notes](docs/dependency-security.md).

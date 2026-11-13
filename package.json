@@ -1,6 +1,6 @@
 {
   "name": "genesis-grove",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "description": "An original living-world god sandbox for macOS and Windows",
   "author": "Genesis Grove",
   "license": "MIT",
@@ -39,8 +39,8 @@
     "smoke:justice": "electron scripts/smoke-justice.cjs"
   },
   "devDependencies": {
-    "electron": "43.7.7",
-    "electron-builder": "26.15.3"
+    "electron": "43.8.10",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "io.genesisgrove.sandbox",
@@ -72,5 +72,11 @@
       "allowToChangeInstallationDirectory": true
     },
     "icon": "assets/icon.png"
+  },
+  "overrides": {
+    "@electron/universal": "3.0.6",
+    "app-builder-lib": {
+      "minimatch": "11.0.8"
+    }
   }
 }
