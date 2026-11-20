@@ -39,7 +39,7 @@
     "smoke:justice": "electron scripts/smoke-justice.cjs"
   },
   "devDependencies": {
-    "electron": "43.8.10",
+    "electron": "45.3.3",
     "electron-builder": "26.18.0"
   },
   "build": {
